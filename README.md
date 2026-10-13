@@ -46,13 +46,30 @@ SbW는 핸들과 바퀴 사이에 기계적 연결 없이 전기 신호와 액�
 
 > MPC → LQR은 양산차의 표준 조합이 아니라 **연구·시험용 예시 제어기**입니다. 알고리즘 백업은 센서·전원·모터·ECU의 물리적 고장을 해결하지 못하며, 하드웨어 이중화를 의미하지 않습니다.
 
-![Controller handover](assets/handover.svg)
+```mermaid
+flowchart LR
+    MPC["Primary MPC<br/>정상 횡방향 명령"] --> SUP["Supervisor<br/>고장 감지 + 중재"]
+    LQR["Backup LQR<br/>백업 명령"] --> SUP
+    SUP --> ACT["적용 조향 명령<br/>→ SbW (또는 EPS) 액추에이터"]
+```
 
 ## 3. 시스템 구조
 
-<p align="center">
-  <img src="docs/architecture.png" alt="SIL 시스템 구조" width="720">
-</p>
+```mermaid
+flowchart TD
+    A["개발자 입력<br/>제어기 코드 + 테스트 스펙"] --> B
+    B["Nemotron 에이전트<br/>Token Factory · 시나리오 생성"] --> C
+    C["시나리오 검증기<br/>스키마 · 물리 제약 · 중복"] --> D
+    D["병렬 SIL 워커<br/>Cloud 컨테이너 N개 동시 실행"] --> E
+    E["평가기 · 결과 DB<br/>지표 계산 · 실패 분류"] --> F
+    E -- "실패 요약 → 다음 라운드" --> B
+    F["캠페인 리포트<br/>실패 사례 · 랜덤 대비 비교"]
+
+    classDef nebius fill:#e3f5ee,stroke:#2e8b6a,color:#0b4f3a
+    classDef orch fill:#eeeefe,stroke:#6b5fd3,color:#3a2f9e
+    class B,D nebius
+    class C,E orch
+```
 
 🟩 **Nebius 위에서 실행** · 🟪 **오케스트레이터에서 실행**
 
@@ -159,10 +176,7 @@ LLM이 "안전하다"고 추측하지 않도록, 실행 로그로 수치를 계�
 ```text
 SIL_HACKATHON/
 ├── README.md
-├── assets/
-│   └── handover.svg               # 제어기 전환과 EPS / SbW 관계
 ├── docs/
-│   ├── architecture.png           # 시스템 구조도
 │   ├── ARCHITECTURE.md            # 모듈 · 데이터 흐름 · 인터페이스
 │   ├── RESEARCH.md                # 가설 · 지표 · 베이스라인 · 한계
 │   ├── ROADMAP.md                 # 구현 단계 체크리스트
