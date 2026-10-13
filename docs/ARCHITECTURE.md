@@ -4,7 +4,7 @@
 
 1. **Intelligence plane:** Nemotron 모델을 사용해 테스트 후보를 추천한다. LLM 출력은 신뢰할 수 없는 제안으로 취급한다.
 2. **Control plane:** 시나리오 스키마 검증, 실험 ID, queue, 워커 할당, 재시도, 상태 추적, 비용 예산 처리.
-3. **Simulation plane:** SIL 우선, CARLA 추후 도입. `world state → MPC (or LQR) → steering command → actuator/plant → state` 구조.
+3. **Simulation plane:** SIL 우선, CARLA 추후 도입. `world state → MPC (or LQR) → steering command → SbW actuator model → plant → state` 구조. SbW 액추에이터는 응답 지연(1차 지연) · 조향 속도 제한 · 조향각 포화를 가진 단순 모델로 둔다.
 4. **Evaluation plane:** 로그로부터 기준 위반 판정 및 시각화. 동일 로그·동일 기준이면 동일 결과가 나와야 한다.
 
 ## Fault injection 위치
@@ -17,17 +17,19 @@ flowchart LR
   MPC --> FI[Fault Injector]
   FI --> Supervisor[Health Monitor + Supervisor]
   LQR --> Supervisor
-  Supervisor --> Actuator[Steering Actuator Model]
+  Supervisor --> Actuator[SbW Actuator Model]
+  FI2[Actuator / Sensor Fault Injector] -.-> Actuator
+  FI2 -.-> Obs
   Actuator --> Plant
   FI -.-> Events[Timestamped Fault Events]
   Supervisor -.-> Events
 ```
 
-Fault injector는 제어기 실행 중단, 출력값 왜곡, output stale, 계산 deadline miss를 모델링한다. `Supervisor`는 정해진 fault-detection policy에 따라 실제 applied command source를 전환한다. **오류를 감지하는 조건이 테스트에서 변경되면 전환 지연과 실패 라벨도 함께 기록**한다.
+Fault injector는 제어기 실행 중단, 출력값 왜곡, output stale, 계산 deadline miss를 모델링한다. 조합 고장 단계에서는 SbW 액추에이터 지연 증가 · 속도 제한 · 포화와 각도 센서 노이즈 · 드롭아웃 · 고착을 MPC 고장과 **동시에** 주입한다. `Supervisor`는 정해진 fault-detection policy에 따라 실제 applied command source를 전환한다. **오류를 감지하는 조건이 테스트에서 변경되면 전환 지연과 실패 라벨도 함께 기록**한다.
 
 ## 최소 데이터 계약
 
-`Scenario`: `scenario_id`, `seed`, `initial_speed_mps`, `road_curvature_inv_m`, `fault.type`, `fault.start_s`, `fault.duration_s`, `fault.magnitude`, `detection_delay_s`, `controller_config_hash`, `simulator_version`.
+`Scenario`: `scenario_id`, `seed`, `initial_speed_mps`, `road_curvature_inv_m`, `fault.type`, `fault.start_s`, `fault.duration_s`, `fault.magnitude`, `detection_delay_s`, `actuator.time_constant_s`, `actuator.rate_limit_rad_s`, `actuator.max_angle_rad`, `secondary_faults[]`, `controller_config_hash`, `simulator_version`.
 
 `StepLog`: `time_s`, `x_m`, `y_m`, `yaw_rad`, `speed_mps`, `reference_path`, `lateral_error_m`, `primary_command_rad`, `backup_command_rad`, `applied_steering_rad`, `active_controller`, `fault_active`, `fault_detected`, `switch_event`.
 

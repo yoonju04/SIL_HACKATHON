@@ -12,6 +12,11 @@ fault:
   start_s: 5.0
   duration_s: 1.0
   magnitude: null
+secondary_faults: []          # combined-fault stage, e.g. [{type: actuator_lag, start_s: 4.0, magnitude: 2.0}]
+actuator:                     # simplified SbW actuator model
+  time_constant_s: 0.1        # illustrative first-order lag
+  rate_limit_rad_s: null      # set from chosen vehicle model
+  max_angle_rad: null         # set from chosen vehicle model
 supervisor:
   detection_delay_s: 0.15    # injected experimental delay, not a measured ECU latency
   fallback_controller: lqr

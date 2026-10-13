@@ -4,6 +4,7 @@
 
 ## Milestone 1 — Controllable dynamics
 - [ ] Define reference path and lateral bicycle dynamics with units.
+- [ ] Add simplified SbW actuator model (first-order lag, rate limit, saturation) between supervisor and plant.
 - [ ] Add LQR baseline and choose/control-check state-space model.
 - [ ] Implement MPC with constraints, deadline/failure hooks.
 - [ ] Implement supervisor (fault criteria, debounce/hysteresis, safe fallback policy).
@@ -37,14 +38,14 @@
 
 **Exit criterion:** two or more distinct scenarios complete concurrently without result collisions.
 
-## Milestone 5 — CARLA / demonstration
-- [ ] Decide CARLA release and Python API / OS/GPU requirements.
-- [ ] Connect steering controller and synchronized simulation ticks.
-- [ ] Define tracking path / lane geometry; ensure correct units and command mappings.
-- [ ] Capture video, telemetry plot, failure replay and summary dashboard.
+## Milestone 5 — Combined faults / demonstration
+- [ ] Inject SbW actuator faults (lag increase, rate limit, saturation) together with MPC faults.
+- [ ] Inject SbW angle-sensor faults (noise, dropout, stuck) affecting both controllers.
+- [ ] Capture SIL animation, telemetry plot, failure replay and summary report.
+- [ ] (Optional) CARLA / Isaac Sim integration with synchronized ticks and correct command mappings.
 - [ ] Run evaluation protocol and publish only measured results.
 
 **Exit criterion:** demonstrable failure scenario + telemetry + comparison figure (if successful).
 
 ## Non-goals for first demo
-- Physical actuator diagnosis/redundancy certification; real-car deployment; validating ISO 26262 compliance; claiming collision avoidance guarantees; comprehensive multi-sensor perception failures.
+- SbW redundant motor/ECU verification; physical actuator diagnosis/redundancy certification; real-car deployment; validating ISO 26262 compliance; claiming collision avoidance guarantees; comprehensive multi-sensor perception failures.
