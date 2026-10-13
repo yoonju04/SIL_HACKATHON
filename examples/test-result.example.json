@@ -1,0 +1,16 @@
+{
+  "_notice": "ILLUSTRATIVE FIELD SHAPE ONLY. NOT A REAL SIMULATION RESULT.",
+  "scenario_id": "demo-fault-timeout-001",
+  "run_id": "placeholder-run-id",
+  "simulation_status": "not_executed",
+  "fault_onset_s": null,
+  "fault_detected_s": null,
+  "handover_s": null,
+  "active_controller_after_handover": null,
+  "max_lateral_error_m": null,
+  "lane_boundary_violation": null,
+  "max_steering_jump_rad": null,
+  "recovery_time_s": null,
+  "failure_labels": [],
+  "criteria_version": "unset"
+}

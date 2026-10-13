@@ -1,0 +1,21 @@
+# Conceptual schema only; no executable runner is included.
+scenario_id: demo-fault-timeout-001
+seed: 42
+simulator: sil-bicycle-model  # placeholder
+initial_speed_mps: 15.0      # illustrative, not validated safe envelope
+road_curvature_inv_m: 0.005  # illustrative
+initial_lateral_error_m: 0.0
+simulation_duration_s: 15.0
+control_dt_s: 0.05           # illustrative sampling time
+fault:
+  type: mpc_timeout           # e.g. mpc_timeout, process_stop, command_bias, stale_command
+  start_s: 5.0
+  duration_s: 1.0
+  magnitude: null
+supervisor:
+  detection_delay_s: 0.15    # injected experimental delay, not a measured ECU latency
+  fallback_controller: lqr
+criteria:
+  allowed_lateral_error_m: null  # MUST justify and set before evaluation
+  max_steering_rate_rad_s: null  # MUST justify and set before evaluation
+  recovery_hold_s: null         # MUST justify and set before evaluation
