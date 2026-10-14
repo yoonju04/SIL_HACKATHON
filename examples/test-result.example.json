@@ -7,6 +7,16 @@
   "fault_detected_s": null,
   "handover_s": null,
   "active_controller_after_handover": null,
+  "state_at_switch": {
+    "yaw_rate_rad_s": null,
+    "lat_accel_mps2": null,
+    "sideslip_rad": null,
+    "steering_rad": null,
+    "steering_rate_rad_s": null,
+    "lateral_error_m": null,
+    "heading_error_rad": null,
+    "mpc_lqr_command_gap_rad": null
+  },
   "max_lateral_error_m": null,
   "lane_boundary_violation": null,
   "max_steering_jump_rad": null,

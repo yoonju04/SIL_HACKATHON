@@ -15,7 +15,7 @@ Can a feedback-guided Nemotron scenario agent identify **more unique safety-crit
 ## Controlled experiment protocol
 
 1. 동일 plant/dynamics, controller gains, initial-state envelope, simulator and criteria versions 고정.
-2. 주입 범위·변수 사전 등록: speed, curvature, onset, duration, detection delay, magnitude, and (combined-fault stage) SbW actuator lag/rate limit/saturation and angle-sensor fault parameters.
+2. 주입 범위·변수 사전 등록: speed, curvature, onset, duration, detection delay, magnitude, supervisor threshold/debounce. Faults are injected into the MPC only.
 3. **Identical query budget** (예: simulation calls); 시간·GPU 사용량은 별도 측정. LLM 추론 비용도 함께 보고.
 4. Random, grid/stratified, one-shot agent(optional), feedback agent 비교.
 5. 사전 고정된 여러 시드에 걸쳐 반복하고 평균·분산/신뢰구간 보고; 테스트 결과로 기준·임계값 사후 조정 금지.
@@ -39,6 +39,7 @@ Can a feedback-guided Nemotron scenario agent identify **more unique safety-crit
 - `Unique failure coverage = count of predeclared failure categories / clusters detected`. Define taxonomy **before** experiments.
 - `Trials to first failure = smallest valid run index yielding a verified failure`; if none, right-censored at budget.
 - `Simulation efficiency = verified unique failures / simulation-hour` (also GPU-hour and full inference cost if available).
+- `State-at-switch coverage`: coverage of predefined bins over vehicle state at handover (yaw rate, steering angle, lateral error, MPC−LQR command gap).
 - `Diversity`: coverage over predefined bins of speed, curvature, onset, fault type; this differs from count of invalid/duplicated candidates.
 
 ## What qualifies as a failure?
@@ -53,7 +54,7 @@ Other validation dimensions: baseline controller tracking performance without fa
 - Grid and random must receive equivalent valid ranges and budget. Agent's invalid proposals count as cost.
 - LLM does not itself estimate vehicle safety metrics or replace certified safety assessment.
 - MPC timeout generated in simulated time does not prove worst-case execution time of a real CPU/ECU.
-- SbW is the motivating platform and is represented only by a simplified actuator model (lag, rate limit, saturation). Results cannot assert SbW hardware redundancy (dual motors/ECUs) or real actuator behavior.
+- Only MPC computation/execution faults are injected; sensor, actuator and communication faults are out of scope. The steering actuator is a simplified plant model (lag, rate limit, saturation), so results cannot assert SbW hardware redundancy or real actuator behavior.
 - Single failure discovery does not prove production prevalence. No failures discovered does not prove absence of failures.
 
 ## Planned figures in final experiment report
@@ -61,7 +62,8 @@ Other validation dimensions: baseline controller tracking performance without fa
 1. **Unique failures vs. number of simulator runs** (all methods, multiple seeds).
 2. **Time/trials-to-first-failure** (distributions, censoring indicated).
 3. **Speed × curvature** heatmap: failure locations / scenario coverage.
-4. **Handover trace**: MPC/LQR/applied command, lateral error, fault onset, detection, switch timestamps.
-5. **Failure replay** synchronized with trace and scenario manifest.
+4. **State-at-switch failure map**: e.g. yaw rate × MPC−LQR command gap at handover, colored by violation.
+5. **Handover trace**: MPC/LQR/applied command, lateral error, fault onset, detection, switch timestamps.
+6. **Failure replay** synchronized with trace and scenario manifest.
 
 **No measured plots are included in the current repository.**

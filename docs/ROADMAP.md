@@ -4,11 +4,11 @@
 
 ## Milestone 1 — Controllable dynamics
 - [ ] Define reference path and lateral bicycle dynamics with units.
-- [ ] Add simplified SbW actuator model (first-order lag, rate limit, saturation) between supervisor and plant.
+- [ ] Add simplified steering actuator model (first-order lag, rate limit, saturation) as part of the plant.
 - [ ] Add LQR baseline and choose/control-check state-space model.
 - [ ] Implement MPC with constraints, deadline/failure hooks.
 - [ ] Implement supervisor (fault criteria, debounce/hysteresis, safe fallback policy).
-- [ ] Implement deterministic injection, logging and reproducible seeds.
+- [ ] Implement deterministic MPC fault injection, logging (incl. state at switch) and reproducible seeds.
 
 **Exit criterion:** baseline completes no-fault tracks, force MPC failure and observe a logged LQR handover in SIL.
 
@@ -38,9 +38,9 @@
 
 **Exit criterion:** two or more distinct scenarios complete concurrently without result collisions.
 
-## Milestone 5 — Combined faults / demonstration
-- [ ] Inject SbW actuator faults (lag increase, rate limit, saturation) together with MPC faults.
-- [ ] Inject SbW angle-sensor faults (noise, dropout, stuck) affecting both controllers.
+## Milestone 5 — Analysis / demonstration
+- [ ] Build state-at-switch failure maps (e.g. yaw rate × MPC−LQR command gap).
+- [ ] Characterize which switch timing / vehicle-state regions produce safety violations.
 - [ ] Capture SIL animation, telemetry plot, failure replay and summary report.
 - [ ] (Optional) CARLA / Isaac Sim integration with synchronized ticks and correct command mappings.
 - [ ] Run evaluation protocol and publish only measured results.
@@ -48,4 +48,4 @@
 **Exit criterion:** demonstrable failure scenario + telemetry + comparison figure (if successful).
 
 ## Non-goals for first demo
-- SbW redundant motor/ECU verification; physical actuator diagnosis/redundancy certification; real-car deployment; validating ISO 26262 compliance; claiming collision avoidance guarantees; comprehensive multi-sensor perception failures.
+- Sensor / actuator / communication fault injection; SbW redundant motor/ECU verification; physical actuator diagnosis/redundancy certification; real-car deployment; validating ISO 26262 compliance; claiming collision avoidance guarantees; comprehensive multi-sensor perception failures.
