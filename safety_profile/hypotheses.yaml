@@ -1,133 +1,113 @@
-# hypotheses.yaml — 취약 가설 + 판정 규칙
-# 코드 관측 사실(safety_profile.yaml)에서 출발한 "추론"만 담는다.
-# 이 파일의 어떤 항목도 코드 사실로 인용하지 않는다.
+# hypotheses.yaml — 코드마다 자동 생성되는 결과물 (손으로 편집하지 않음)
+# vulnerability_patterns.yaml(틀) + safety_profile.yaml(값) → 이 파일
+# 아래 값은 "코드 A: 고정 gain LQR, 설계 속도 15 m/s, 복귀 로직 있음"을 가정한 형식 예시다.
+# 실제 코드가 들어오면 생성기가 이 파일 전체를 다시 쓴다.
 
 meta:
   schema_version: '1.0'
-  profile_id: sp-code-aware-mpc-lqr        # safety_profile.yaml과 동일
-  source_commit: null                        # 프로필 추출에 쓴 커밋
-  status: template_unverified
+  generated_by: hypothesis_generator       # 패턴 적용 + Nemotron 추가 제안
+  profile_id: sp-code-aware-mpc-lqr
+  source_commit: null                       # 생성에 쓴 제어기 코드 커밋
+  catalog_version: '1.0'                    # vulnerability_patterns.yaml 버전
+  generated_at: null
+  frozen_at_commit: null                    # 판정 런 시작 전 이 파일을 커밋하고 기록
+  status: example_only
 
+# 실행 중 가설 내용은 바뀌지 않고 status만 바뀐다.
 status_values:
-  proposed: "Nemotron 또는 사람이 제안, 아직 실험 없음"
-  blocked: "required_profile_fields 중 null이 있어 검증 불가"
-  testing: "짝 실행이 min_paired_runs 미만"
+  proposed: "생성됨, 아직 판정 런 없음"
+  blocked: "needs 중 null이 있어 검증 불가"
+  testing: "판정 런이 첫 checkpoint 미만"
   supported: "decision_rule.support_if 충족"
   refuted: "decision_rule.refute_if 충족"
-  inconclusive: "예산 소진, 어느 쪽도 충족 못 함"
+  inconclusive: "최대 checkpoint 도달, 어느 쪽도 충족 못 함"
 
-# 프로필의 design_assumptions를 이쪽으로 이동
-design_assumptions:
-  - id: A-01
-    statement: "C-LQR은 설계 속도 근처에서만 추종 성능이 유지된다"
-    based_on: []                             # O-xxx (gain_type, design_speed_mps 관측 id)
-    provenance: llm_inference
-    verified: false
-  - id: A-02
-    statement: "C-LQR은 소곡률(직선 근처)에서 설계되었다"
-    based_on: []                             # O-xxx (design_curvature_per_m)
-    provenance: llm_inference
-    verified: false
-  - id: A-03
-    statement: "MPC→LQR 전환은 드물고 단발적으로 일어난다"
-    based_on: []                             # O-xxx (return_to_mpc, minimum_dwell_s)
-    provenance: llm_inference
-    verified: false
+# 카탈로그 패턴별 적용 결과 (생성되지 않은 패턴도 사유와 함께 기록)
+pattern_application:
+  - {pattern_id: P-OFF-DESIGN,     applies: true,  reason: "gain_type == fixed (O-001)"}
+  - {pattern_id: P-DELAYED-SWITCH, applies: true,  reason: "failure_detection_period_ms = 20 (O-007)"}
+  - {pattern_id: P-CHATTERING,     applies: true,  reason: "return_to_mpc.enabled == true (O-010)"}
 
-# 공통 판정 규칙 (가설별로 덮어쓸 수 있음). 실험 전에 고정하고 사후 변경 금지.
-default_decision_rule:
-  metric: margin_delta_m                     # experiment.yaml의 탐색 타깃
-  failure_event: "margin_delta_m < 0"        # 고장 런이 baseline보다 여유가 줄어듦
-  min_paired_runs_per_arm: 10
-  support_if: "P(event | condition) - P(event | control) >= 0.3"
-  refute_if: "P(event | condition) - P(event | control) < 0.1"
-  else: inconclusive
-  note: "임계값 0.3 / 0.1은 예시. 실험 시작 전에 확정하고 기록"
-
-vulnerability_hypotheses:
+hypotheses:
   - id: H-01
-    title: backup_gain_off_design_point
-    mechanism: "C-LQR이 고정 gain이면, 설계점에서 먼 속도·곡률에서 전환될 때 복구 성능이 떨어진다"
-    based_on_assumptions: [A-01, A-02]
-    required_profile_fields:
-      - controllers.lqr.feedback_design.gain_type
-      - controllers.lqr.feedback_design.design_speed_mps
-      - controllers.lqr.feedback_design.design_curvature_per_m
-    applicable_if: "gain_type == fixed"      # scheduled/online이면 blocked 또는 변형 가설
-    prediction:
-      condition:
-        derived:
-          DF-01_speed_offset_from_design_mps: {abs_gt: 5.0}
-          DF-02_curvature_offset_from_design: {gt: 0.01}
-        fault_types: [F-01, F-02]
-        onset_event: [curve_entry, curve_apex]
-      control_condition:
-        derived:
-          DF-01_speed_offset_from_design_mps: {abs_le: 2.0}
-          DF-02_curvature_offset_from_design: {le: 0.005}
-        fault_types: [F-01, F-02]
-      expected: {metric: margin_delta_m, direction: negative}
+    from_pattern: P-OFF-DESIGN
+    provenance: pattern_instantiation
+    based_on: [O-001, O-002, O-003]          # gain_type, design_speed_mps, design_curvature_per_m
+    filled_values:
+      design_speed_mps: 15.0
+      design_curvature_per_m: 0.0
+    condition:
+      speed_offset_mps: "abs(speed_mps - 15.0) > 5.0"
+      curvature_offset: "road_curvature_per_m - 0.0 > 0.01"
+      fault_types: [F-01, F-02]
+      onset_event: [curve_entry, curve_apex]
+    control:
+      speed_offset_mps: "abs(speed_mps - 15.0) <= 2.0"
+      curvature_offset: "road_curvature_per_m - 0.0 <= 0.005"
+      fault_types: [F-01, F-02]
+      onset_event: [curve_entry, curve_apex]
+    prediction: {metric: margin_delta_m, direction: negative}
     decision_rule: default
-    linked_questions: []                     # 계산 가능하므로 Nemotron 질문 불필요
     status: proposed
-    priority: 1
 
   - id: H-02
-    title: delayed_switch_during_curve
-    mechanism: "감지 지연 동안 MPC 명령이 유지·정지되면, 곡선 진입 후 전환되어 횡오차가 누적된다"
-    based_on_assumptions: []
-    required_profile_fields:
-      - controllers.mpc.solver_runtime.configured_time_limit_ms
-      - switching.triggers
-      - switching.failure_detection_period_ms
-      - switching.command_during_detection_delay
-    prediction:
-      condition:
-        derived:
-          DF-04_expected_switch_after_curve_entry: {eq: true}
-        fault_types: [F-01]
-      control_condition:
-        derived:
-          DF-04_expected_switch_after_curve_entry: {eq: false}
-        fault_types: [F-01]
-      expected: {metric: margin_delta_m, direction: negative}
-      secondary_expected:
-        - {metric: pre_switch_max_lateral_error_m, direction: positive}
-    decision_rule: default
-    linked_questions: [Q-B1]                 # 지연 중 명령 처리 해석
+    from_pattern: P-DELAYED-SWITCH
+    provenance: pattern_instantiation
+    based_on: [O-005, O-006, O-007, O-008]
+    filled_values:
+      configured_time_limit_ms: 20
+      failure_detection_period_ms: 20
+      command_during_detection_delay: hold_last
+    condition:
+      expected_switch_after_curve_entry: "onset_time + 0.02 > curve_entry_time"
+      fault_types: [F-01]
+    control:
+      expected_switch_after_curve_entry: "onset_time + 0.02 <= curve_entry_time"
+      fault_types: [F-01]
+    prediction: {metric: margin_delta_m, direction: negative}
+    secondary_prediction:
+      - {metric: pre_switch_max_lateral_error_m, direction: positive}
+    decision_rule: {inherit: default, from_pattern: P-DELAYED-SWITCH}
     status: proposed
-    priority: 1
 
   - id: H-03
-    title: repeated_switching_discontinuity
-    mechanism: "solver 시간이 임계값 근처에서 진동하고 복귀 로직이 이를 허용하면 반복 전환으로 조향 불연속이 생긴다"
-    based_on_assumptions: [A-03]
-    required_profile_fields:
-      - switching.return_to_mpc.enabled
-      - switching.return_to_mpc.hysteresis
-      - switching.return_to_mpc.minimum_dwell_s
-      - switching.handover.steering_blending
-    applicable_if: "return_to_mpc.enabled == true"
-    prediction:
-      condition:
-        fault_types: [F-03]
-        fault_params: {center_ms: "near(configured_time_limit_ms, 3)"}
-      control_condition:
-        fault_types: [F-01]                  # 단발 지연
-      expected: {metric: switch_count, direction: positive}
-      secondary_expected:
-        - {metric: max_steering_rate_dps, direction: positive}
-        - {metric: margin_delta_m, direction: negative}
-    decision_rule:
-      inherit: default
-      override:
-        failure_event: "switch_count >= 3 and margin_delta_m < 0"
-    linked_questions: [Q-B2]                 # 복귀 로직 해석은 코드 이해 필요
+    from_pattern: P-CHATTERING
+    provenance: pattern_instantiation
+    based_on: [O-005, O-010, O-011, O-012, O-013]
+    filled_values:
+      configured_time_limit_ms: 20
+      minimum_dwell_s: 0.2
+      steering_blending: none
+    condition:
+      fault_types: [F-03]
+      fault_params: {center_ms: "near(20, 3)"}
+    control:
+      fault_types: [F-01]
+      fault_params: {delay_ms: "near(20, 3)"}
+    prediction: {metric: switch_count, direction: positive}
+    secondary_prediction:
+      - {metric: max_steering_rate_dps, direction: positive}
+      - {metric: margin_delta_m, direction: negative}
+    decision_rule: {inherit: default, from_pattern: P-CHATTERING}
     status: proposed
-    priority: 2
+
+  # Nemotron이 카탈로그 밖에서 제안하고 자동 검사(llm_proposed_hypothesis_gate)를 통과한 가설
+  # - id: H-04
+  #   from_pattern: null
+  #   provenance: llm_inference
+  #   mechanism: "..."
+  #   based_on: [O-0xx]
+  #   condition: {...}
+  #   control: {...}
+  #   prediction: {metric: ..., direction: ...}
+  #   decision_rule: default
+  #   status: proposed
+
+# 검사에서 탈락한 Nemotron 제안 (재현성·디버깅용)
+rejected_proposals: []
 
 # Orchestrator가 실행 중 채움
-hypothesis_tracking:
-  - {id: H-01, linked_scenarios: [], runs_condition: 0, runs_control: 0, status_history: []}
-  - {id: H-02, linked_scenarios: [], runs_condition: 0, runs_control: 0, status_history: []}
-  - {id: H-03, linked_scenarios: [], runs_condition: 0, runs_control: 0, status_history: []}
+tracking:
+  - {id: H-01, runs_condition: 0, runs_control: 0, d_estimate: null, ci: null, status_history: []}
+  - {id: H-02, runs_condition: 0, runs_control: 0, d_estimate: null, ci: null, status_history: []}
+  - {id: H-03, runs_condition: 0, runs_control: 0, d_estimate: null, ci: null, status_history: []}
