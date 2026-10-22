@@ -54,23 +54,11 @@ flowchart LR
 
 ## 3. 시스템 구조
 
-```mermaid
-flowchart TD
-    A["개발자 입력<br/>제어기 코드 + 테스트 스펙"] --> B
-    B["Nemotron 에이전트<br/>Token Factory · 시나리오 생성"] --> C
-    C["시나리오 검증기<br/>스키마 · 물리 제약 · 중복"] --> D
-    D["병렬 SIL 워커<br/>Cloud 컨테이너 N개 동시 실행"] --> E
-    E["평가기 · 결과 DB<br/>지표 계산 · 실패 분류"] --> F
-    E -- "실패 요약 → 다음 라운드" --> B
-    F["캠페인 리포트<br/>실패 사례 · 랜덤 대비 비교"]
+<p align="center">
+  <img src="docs/images/system_pipeline.png" alt="시스템 구조: Safety profile → Hypotheses → Nemotron A → 타당성 검사 + 후보 확장 → 결정론적 feature / Nemotron B → GP surrogate → Orchestrator 선택 → CARLA 짝 실행 → Monitor → Error table" width="640">
+</p>
 
-    classDef nebius fill:#e3f5ee,stroke:#2e8b6a,color:#0b4f3a
-    classDef orch fill:#eeeefe,stroke:#6b5fd3,color:#3a2f9e
-    class B,D nebius
-    class C,E orch
-```
-
-🟩 **Nebius 위에서 실행** · 🟪 **오케스트레이터에서 실행**
+단계별 설정 파일은 [pipeline/README.md](pipeline/README.md)에 정리되어 있습니다.
 
 | 구성요소 | 역할 | 경계 |
 |---|---|---|
@@ -197,6 +185,18 @@ SIL_HACKATHON/
 │   ├── RESEARCH.md                # 가설 · 지표 · 베이스라인 · 한계
 │   ├── ROADMAP.md                 # 구현 단계 체크리스트
 │   └── REFERENCES.md              # 공식 문서 · 출처
+├── pipeline/                      # code-aware 탐색 파이프라인 (단계별 설정, pipeline/README.md 참고)
+│   ├── 01_safety_profile/         # 코드 관측 사실
+│   ├── 02_hypotheses/             # 취약 패턴 카탈로그 + 가설 H-01~03
+│   ├── 03_nemotron_a/             # Nemotron A: 시나리오 생성
+│   ├── 04_feasibility_expansion/  # 타당성 검사 G-01~04 + 후보 확장, scenario space
+│   ├── 05a_deterministic_features/# DF-01~05
+│   ├── 05b_nemotron_b/            # Nemotron B: 코드 질문
+│   ├── 06_gp_surrogate/           # GP (margin_delta_m)
+│   ├── 07_orchestrator/           # LCB 선택 · 예산
+│   ├── 08_carla_paired_run/       # baseline vs fault 짝 실행
+│   ├── 09_monitor/                # safety spec P-01~03 + error table
+│   └── evaluation/                # ablation X-1~5
 ├── configs/
 │   └── scenario.example.yaml      # 시나리오 스펙 예시 (실행 설정 아님)
 ├── examples/

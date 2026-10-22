@@ -1,0 +1,23 @@
+# error_table.yaml — Monitor → Error table (robustness, 결과 5분류)
+# 입력: 08 짝 실행 시계열 + safety_spec.yaml
+# 출력(피드백 3종):
+#   run_record    → 06 GP 재학습 (all_valid_paired_results)
+#   failure_table → 03 Nemotron A 실패 few-shot (verified_failures_top_k)
+#   run_record    → 02 hypotheses.yaml tracking (가설 상태 갱신)
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+  linked_files: [safety_spec.yaml]
+
+results_schema:
+  run_record: [run_id, scenario_id, seed_scenario_id, round, selector, profile_id,
+               source_commit, feature_schema_version, hypothesis_ids, parameters,
+               planned_fault_onset, actual_fault_onset, trigger_time, switch_time,
+               switch_count, outcome_category, P01, P02, P03, margin_delta_m,
+               gp_mean, gp_std, sim_status, invalid_reason]
+  failure_table: [scenario_id, violated_property, originating_evidence_ids,
+                  hypothesis_ids, environment, fault, onset_event,
+                  observed_switch_behavior, robustness, reproduction_count]
+  timeseries_store: results/timeseries/

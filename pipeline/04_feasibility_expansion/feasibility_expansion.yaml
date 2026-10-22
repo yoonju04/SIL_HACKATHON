@@ -1,0 +1,35 @@
+# feasibility_expansion.yaml — 타당성 검사 + 후보 확장
+# 입력: 03 Nemotron A 후보, scenario_space.yaml (ODD × 고장)
+# 출력: 통과한 후보 + 시드당 섭동 후보 → 05a 결정론적 feature, 05b Nemotron B
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+  linked_files: [scenario_space.yaml]
+
+feasibility_gate:
+  checks:
+    - id: G-01
+      rule: "route가 onset_event를 실제로 포함"
+      on_fail: reject
+    - id: G-02
+      rule: "모든 파라미터가 CARLA API로 매핑 가능"
+      on_fail: reject
+    - id: G-03
+      rule: "nominal_lateral_acc = speed^2 * curvature <= lateral_acc_threshold"
+      on_fail: tag_stress_test                # 버리지 않고 별도 태그
+    - id: G-04
+      rule: "baseline 런이 시뮬 오류 없이 완료"
+      on_fail: reject_pair
+  keep_stress_tests_separate_in_analysis: true
+
+candidate_generation:
+  sources: [nemotron_a, space_filling, local_perturbation]
+  local_perturbation:
+    per_seed: 10
+    perturb: [speed_mps, weather_precipitation, tire_friction_scale, offset_s, fault_params]
+    keep_fixed: [route_id, fault_type, onset_event]   # 질문 답변 재사용 가능하도록
+  dedup:
+    space: normalized_feature_space
+    min_distance: 0.05                         # 예시

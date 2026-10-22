@@ -1,18 +1,10 @@
-# scenario_space.yaml — 실행 가능한 탐색 공간 (환경 ODD × 고장 주입)
+# scenario_space.yaml — 탐색 공간 (환경 ODD × 고장 주입). 04 타당성 검사의 측면 입력
 # 수치 범위는 전부 example_only. CARLA 맵·차량에 맞춰 보정할 것.
 
 meta:
   schema_version: '1.0'
   profile_id: sp-code-aware-mpc-lqr
   status: template_unverified
-
-carla:
-  version: null
-  map_name: null
-  routes: []                                 # [{route_id, waypoints, contains_events: [...]}]
-  ego_vehicle_blueprint: null
-  fixed_delta_seconds: null                  # 동기 모드 스텝, 제어 주기와 맞출 것
-  synchronous_mode: true
 
 environment:
   speed_mps:              {type: float, range: [5, 30],    range_status: example_only}
@@ -64,29 +56,3 @@ fault_timing:
     lane_change_start: {method: null}
     steady_state:      {method: null, note: "예: 속도 오차 < 0.5 m/s 유지 2초"}
   record_actual_onset_time: true              # 계획 시점과 실제 주입 시점을 모두 기록
-
-feasibility_gate:
-  checks:
-    - id: G-01
-      rule: "route가 onset_event를 실제로 포함"
-      on_fail: reject
-    - id: G-02
-      rule: "모든 파라미터가 CARLA API로 매핑 가능"
-      on_fail: reject
-    - id: G-03
-      rule: "nominal_lateral_acc = speed^2 * curvature <= lateral_acc_threshold"
-      on_fail: tag_stress_test                # 버리지 않고 별도 태그
-    - id: G-04
-      rule: "baseline 런이 시뮬 오류 없이 완료"
-      on_fail: reject_pair
-  keep_stress_tests_separate_in_analysis: true
-
-candidate_generation:
-  sources: [nemotron_a, space_filling, local_perturbation]
-  local_perturbation:
-    per_seed: 10
-    perturb: [speed_mps, weather_precipitation, tire_friction_scale, offset_s, fault_params]
-    keep_fixed: [route_id, fault_type, onset_event]   # 질문 답변 재사용 가능하도록
-  dedup:
-    space: normalized_feature_space
-    min_distance: 0.05                         # 예시

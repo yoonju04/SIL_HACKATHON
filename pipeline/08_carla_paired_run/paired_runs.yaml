@@ -1,0 +1,33 @@
+# paired_runs.yaml — CARLA 짝 실행: baseline(캐시) vs fault, Nebius 병렬
+# 입력: 07 선택 배치. 출력: 시계열 → 09 Monitor
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+carla:
+  version: null
+  map_name: null
+  routes: []                                 # [{route_id, waypoints, contains_events: [...]}]
+  ego_vehicle_blueprint: null
+  fixed_delta_seconds: null                  # 동기 모드 스텝, 제어 주기와 맞출 것
+  synchronous_mode: true
+
+paired_runs:
+  modes: [no_fault_baseline, fault_injected]
+  match: [map, route_id, initial_state, seed, weather, traffic, speed_mps,
+          tire_friction_scale]
+  search_target:
+    id: margin_delta_m
+    formula: "P01_robustness(fault) - P01_robustness(baseline)"
+    negative_means: "고장·전환 때문에 여유가 줄어듦"
+  failure_report_uses: absolute_robustness     # 실패 판정은 절대값(P-01..03)
+  baseline_cache:
+    enabled: true
+    key: match                                 # 같은 key면 baseline 1회만 실행
+  detector_cannot_see_injected_fault: true
+
+execution:
+  backend: nebius_ai_cloud                     # 병렬 워커
+  parallel_workers: null

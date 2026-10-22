@@ -1,0 +1,28 @@
+# safety_spec.yaml — 안전 명세 P-01~03 (라벨 정의). 09 Monitor의 측면 입력
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+safety_specification:
+  properties:
+    - id: P-01
+      description: "차선 경계 유지"
+      robustness: "min_over_window(signed_lane_boundary_margin_m)"
+      failure_if: "robustness < 0"
+    - id: P-02
+      description: "횡가속도 한계"
+      robustness: "lateral_acc_threshold - max_over_window(abs(lateral_acc))"
+      failure_if: "robustness < 0"
+      lateral_acc_threshold_mps2: null         # 근거와 함께 확정
+    - id: P-03
+      description: "충돌 없음"
+      monitor: boolean
+  evaluation_window:
+    start: planned_fault_onset_time            # baseline도 같은 시각부터 자름
+    end: simulation_end
+    align_baseline_to_fault_run: true
+  outcome_categories: [no_trigger, triggered_no_switch, switched_safe,
+                       switched_unsafe, simulation_invalid]
+  simulation_invalid_is_not_safe: true

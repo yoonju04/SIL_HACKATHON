@@ -1,0 +1,37 @@
+# ablations.yaml — 비교 실험 (나머지 루프는 동일, 07 선택기만 교체)
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+ablations:
+  conditions:
+    - id: X-1
+      name: random_space_filling
+    - id: X-2
+      name: nemotron_a_only                     # GP 없이 Nemotron 제안 그대로
+    - id: X-3
+      name: gp_numeric_only                     # DF·질문 feature 없이 수치만
+    - id: X-4
+      name: gp_plus_deterministic_features      # 질문 feature 제외
+    - id: X-5
+      name: full_code_aware                     # Nemotron A + DF + Nemotron B + GP
+  same_budget: true
+  repeats_with_different_seeds: 3
+
+evaluation:
+  metrics:
+    - failures_found_per_simulation
+    - simulations_to_first_failure
+    - unique_failure_conditions               # (fault_type, onset_event, 영역) 기준 중복 제거
+    - hypotheses_supported_refuted
+    - gp_prediction_error_over_rounds
+
+research_scope:
+  implemented: [static_code_extraction, nemotron_hypothesis_and_scenario_generation,
+                deterministic_features, nemotron_question_features,
+                carla_sil_fault_injection, paired_runs, gp_active_search, ablations]
+  future_work: [formal_recoverable_region, reachability_analysis,
+                barrier_certificates, runtime_simplex_guarantees, scenic_dsl]
+  no_formal_guarantee_claim: true

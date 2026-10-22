@@ -1,0 +1,20 @@
+# surrogate.yaml — GP surrogate
+# 입력: 05a 결정론적 feature + 05b 질문 답변 (+ ODD·고장 수치)
+# 타깃: margin_delta_m (08 짝 실행 차이값). 출력: 평균·불확실성 → 07 Orchestrator
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+surrogate:
+  model: gaussian_process_regression
+  kernel: "Matern 5/2 with ARD + WhiteKernel"
+  target: margin_delta_m
+  outputs: [mean_delta_m, std_delta_m]
+  refit: per_batch
+
+# 09 Monitor → GP 재학습
+feedback_in:
+  from: 09_monitor/run_record
+  select: all_valid_paired_results

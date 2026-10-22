@@ -1,0 +1,30 @@
+# nemotron_a.yaml — Nemotron A: 시나리오 생성
+# 입력: 01 safety profile 관측, 02 가설, scenario_space, 이전 실패 사례(few-shot)
+# 출력: 시나리오 후보 + 근거 → 04 타당성 검사
+# 실패 사례는 A만 본다 (B는 결과 비참조).
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+nemotron:
+  model: null                                  # 실제 모델명·엔드포인트 (.env NEMOTRON_MODEL_ID)
+  temperature: 0.7
+  require_json_schema_validation: true
+
+A_scenario_generation:
+  inputs: [safety_profile.verified_observations, hypotheses, scenario_space,
+           prior_failure_examples]
+  outputs:
+    candidate: [scenario_id, route_id, environment, fault, onset_event,
+                onset_offset_s, hypothesis_ids]
+    rationale: [evidence_ids, expected_mechanism, missing_information]
+  per_round: 15
+  must_cite_ids: true
+
+# 09 Monitor → A 피드백 (실패 few-shot)
+feedback_in:
+  from: 09_monitor/error_table
+  select: verified_failures_top_k
+  k: 5

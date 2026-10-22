@@ -1,0 +1,44 @@
+# deterministic_features.yaml — 결정론적 feature (DF-01~05) + GP 입력 구성
+# 프로필 + 시나리오로 코드가 계산한다. LLM을 쓰지 않는다.
+# 출력 → 06 GP surrogate
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+deterministic_features:
+  - id: DF-01
+    name: speed_offset_from_design_mps
+    formula: "speed_mps - lqr.design_speed_mps"
+    requires: [controllers.lqr.feedback_design.design_speed_mps]
+  - id: DF-02
+    name: curvature_offset_from_design
+    formula: "road_curvature_per_m - lqr.design_curvature_per_m"
+    requires: [controllers.lqr.feedback_design.design_curvature_per_m]
+  - id: DF-03
+    name: fault_delay_over_deadline_ms
+    formula: "fault.delay_ms - mpc.configured_time_limit_ms"
+    requires: [controllers.mpc.solver_runtime.configured_time_limit_ms]
+  - id: DF-04
+    name: expected_switch_after_curve_entry
+    formula: "onset_time + detection_latency > curve_entry_time"
+    requires: [switching.failure_detection_period_ms, switching.triggers]
+  - id: DF-05
+    name: nominal_lateral_acc_mps2
+    formula: "speed_mps^2 * road_curvature_per_m"
+    requires: []
+missing_profile_value_policy:
+  action: set_missing_and_add_indicator        # 값 0 대체 금지
+  indicator_suffix: _missing
+  log_blocked_hypotheses: true
+
+feature_engineering:
+  input_groups: [odd_numerics, fault_parameters, fault_type_one_hot,
+                 deterministic_features, question_answers_one_hot]
+  excluded: [hypothesis_ids]                   # 질문·DF와 중복 정보
+  encode_unknown_as_separate_category: true
+  normalization: fit_on_training_data_only
+  output_target_in_features: false
+  post_run_metrics_in_features: false
+  feature_schema_version: '1.0'                # 바뀌면 GP 재학습부터 다시

@@ -1,0 +1,34 @@
+# orchestrator.yaml — Orchestrator 선택 (LCB + 다양성 + 무작위 25%)
+# 입력: 06 GP 평균·불확실성. 출력: 실행 배치 → 08 CARLA 짝 실행
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+cold_start:
+  gp_enabled: false
+  total_runs: 24                                # 예시
+  mix: {nemotron_a: 0.5, space_filling: 0.5}
+
+acquisition:
+  name: lower_confidence_bound
+  formula: "mean_delta_m - beta * std_delta_m"
+  selection: minimize
+  beta_schedule: {start: 2.0, end: 0.5, decay: linear_over_rounds}   # 예시
+  batch_size: 12
+  batch_composition: {lcb: 0.75, random_space_filling: 0.25}
+  diversity:
+    min_normalized_distance: 0.1                # 예시
+    max_per_seed: 2
+  hypothesis_coverage:
+    ensure_each_testing_hypothesis_gets_control_runs: true
+
+budget:
+  sim_seconds_per_run_measured: null            # 1~3일 차에 측정
+  max_simulations: null
+  wall_time_budget_s: null
+  stop_if:
+    - budget_exhausted
+    - "no new unique failure condition for 3 rounds"
+    - "max std_delta_m < threshold"

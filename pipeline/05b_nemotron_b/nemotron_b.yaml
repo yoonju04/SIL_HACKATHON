@@ -1,0 +1,36 @@
+# nemotron_b.yaml — Nemotron B: 코드 질문 (결과 비참조)
+# 입력: 01 safety profile 관측 + 시나리오 후보. 실패 사례·CARLA 결과·GP 예측은 보지 않는다.
+# 출력: 질문 답변 one-hot → 06 GP surrogate
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+nemotron:
+  model: null                                  # 실제 모델명·엔드포인트 (.env NEMOTRON_MODEL_ID)
+  temperature: 0.0
+  require_json_schema_validation: true
+
+B_question_answering:
+  inputs: [safety_profile.verified_observations, scenario_candidate]
+  forbidden_inputs: [prior_failure_examples, carla_results, gp_predictions]
+  scope: "코드를 읽어야만 답할 수 있는 질문만. 계산 가능한 것은 결정론적 feature로."
+  question_bank:
+    - id: Q-B1
+      question: "이 고장 동안 감지 지연 구간에 어떤 조향 명령이 나가는가?"
+      answer: [hold_last, zero, stale_mpc, lqr_early, unknown]
+      refs: [H-02]
+    - id: Q-B2
+      question: "복귀 로직이 이 고장 패턴에서 반복 전환을 허용하는가?"
+      answer: [yes, no, unknown]
+      refs: [H-03]
+    - id: Q-B3
+      question: "전환 순간 LQR 상태 초기화가 조향 불연속을 만들 수 있는가?"
+      answer: [yes, no, unknown]
+      refs: [H-02, H-03]
+  call_once_per: seed_scenario               # 섭동 후보는 시드의 답변 재사용
+  unknown_is_not_false: true
+  logprobs_are_not_failure_probabilities: true
+
+feedback_in: none                            # 결과 피드백을 받지 않는다
