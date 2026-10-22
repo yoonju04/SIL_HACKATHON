@@ -1,0 +1,92 @@
+# scenario_space.yaml — 실행 가능한 탐색 공간 (환경 ODD × 고장 주입)
+# 수치 범위는 전부 example_only. CARLA 맵·차량에 맞춰 보정할 것.
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+
+carla:
+  version: null
+  map_name: null
+  routes: []                                 # [{route_id, waypoints, contains_events: [...]}]
+  ego_vehicle_blueprint: null
+  fixed_delta_seconds: null                  # 동기 모드 스텝, 제어 주기와 맞출 것
+  synchronous_mode: true
+
+environment:
+  speed_mps:              {type: float, range: [5, 30],    range_status: example_only}
+  road_curvature_per_m:   {type: float, range: [0, 0.05],  range_status: example_only,
+                           note: "route 선택으로 결정되는 값. 자유 변수가 아니라 route_id에 종속"}
+  road_geometry:          {type: categorical, values: [straight, curve_entry, s_curve, lane_change]}
+  weather_precipitation:  {type: float, range: [0, 100],   range_status: example_only}
+  tire_friction_scale:    {type: float, range: [0.3, 1.0], range_status: example_only,
+                           note: "CARLA tire_friction 스케일. 물리적 μ와 같다고 가정하지 않음"}
+  lead_vehicle:           {type: bool}
+
+faults:
+  # layer: 주입 위치. 감지기는 주입 신호를 직접 보지 않는다.
+  - id: F-01
+    type: solver_execution_delay
+    layer: solver_wrapper
+    params:
+      delay_ms:   {range: [10, 80],   range_status: example_only}
+      duration_s: {range: [0.1, 3.0], range_status: example_only}
+    targets_hypotheses: [H-01, H-02]
+  - id: F-02
+    type: solver_status_override
+    layer: supervisor_input
+    params:
+      status:     {values: [infeasible, numerical_error]}
+      duration_s: {range: [0.05, 2.0], range_status: example_only}
+    targets_hypotheses: [H-01]
+  - id: F-03
+    type: solver_delay_oscillation
+    layer: solver_wrapper
+    params:
+      center_ms:    {range: [10, 40],  range_status: example_only,
+                     note: "configured_time_limit_ms 근처로 재설정"}
+      amplitude_ms: {range: [2, 10],   range_status: example_only}
+      period_s:     {range: [0.1, 1.0], range_status: example_only}
+    targets_hypotheses: [H-03]
+  # 선택: 시간 여유가 있을 때만
+  # - id: F-04
+  #   type: localization_degradation
+  #   layer: state_input
+  #   params: {extra_latency_ms: [0, 200], noise_std_m: [0.0, 0.5]}
+
+fault_timing:
+  reference_events: [curve_entry, curve_apex, lane_change_start, steady_state]
+  offset_s: {range: [-1.0, 1.0], range_status: example_only}
+  event_detection:                            # 1~3일 차에 반드시 확정
+    curve_entry:       {method: null, note: "예: route 곡률이 임계값을 처음 넘는 waypoint"}
+    curve_apex:        {method: null, note: "예: 곡선 구간 내 곡률 최대 waypoint"}
+    lane_change_start: {method: null}
+    steady_state:      {method: null, note: "예: 속도 오차 < 0.5 m/s 유지 2초"}
+  record_actual_onset_time: true              # 계획 시점과 실제 주입 시점을 모두 기록
+
+feasibility_gate:
+  checks:
+    - id: G-01
+      rule: "route가 onset_event를 실제로 포함"
+      on_fail: reject
+    - id: G-02
+      rule: "모든 파라미터가 CARLA API로 매핑 가능"
+      on_fail: reject
+    - id: G-03
+      rule: "nominal_lateral_acc = speed^2 * curvature <= lateral_acc_threshold"
+      on_fail: tag_stress_test                # 버리지 않고 별도 태그
+    - id: G-04
+      rule: "baseline 런이 시뮬 오류 없이 완료"
+      on_fail: reject_pair
+  keep_stress_tests_separate_in_analysis: true
+
+candidate_generation:
+  sources: [nemotron_a, space_filling, local_perturbation]
+  local_perturbation:
+    per_seed: 10
+    perturb: [speed_mps, weather_precipitation, tire_friction_scale, offset_s, fault_params]
+    keep_fixed: [route_id, fault_type, onset_event]   # 질문 답변 재사용 가능하도록
+  dedup:
+    space: normalized_feature_space
+    min_distance: 0.05                         # 예시

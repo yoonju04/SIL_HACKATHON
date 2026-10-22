@@ -1,0 +1,220 @@
+# experiment.yaml — Nemotron 호출, feature, 명세, 짝 실행, 탐색·학습, 평가
+# 이전 v3 대비 수정: 탐색 타깃을 짝 실행 차이값으로, Nemotron A/B 분리,
+# 결정론적 feature 추가, 배치 다양성, ablation 추가.
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  linked_files: [safety_profile.yaml, hypotheses.yaml, scenario_space.yaml]
+  status: template_unverified
+
+# ---------------------------------------------------------------------
+# 1. Nemotron 호출 (두 호출은 입력이 다르다)
+# ---------------------------------------------------------------------
+nemotron:
+  model: null                                  # 실제 모델명·엔드포인트
+  temperature_a: 0.7
+  temperature_b: 0.0
+  require_json_schema_validation: true
+
+  A_scenario_generation:
+    inputs: [safety_profile.verified_observations, hypotheses, scenario_space,
+             prior_failure_examples]           # 실패 사례는 A만 본다
+    outputs:
+      candidate: [scenario_id, route_id, environment, fault, onset_event,
+                  onset_offset_s, hypothesis_ids]
+      rationale: [evidence_ids, expected_mechanism, missing_information]
+    per_round: 15
+    must_cite_ids: true
+
+  B_question_answering:
+    inputs: [safety_profile.verified_observations, scenario_candidate]
+    forbidden_inputs: [prior_failure_examples, carla_results, gp_predictions]
+    scope: "코드를 읽어야만 답할 수 있는 질문만. 계산 가능한 것은 결정론적 feature로."
+    question_bank:
+      - id: Q-B1
+        question: "이 고장 동안 감지 지연 구간에 어떤 조향 명령이 나가는가?"
+        answer: [hold_last, zero, stale_mpc, lqr_early, unknown]
+        refs: [H-02]
+      - id: Q-B2
+        question: "복귀 로직이 이 고장 패턴에서 반복 전환을 허용하는가?"
+        answer: [yes, no, unknown]
+        refs: [H-03]
+      - id: Q-B3
+        question: "전환 순간 LQR 상태 초기화가 조향 불연속을 만들 수 있는가?"
+        answer: [yes, no, unknown]
+        refs: [H-02, H-03]
+    call_once_per: seed_scenario               # 섭동 후보는 시드의 답변 재사용
+    unknown_is_not_false: true
+    logprobs_are_not_failure_probabilities: true
+
+# ---------------------------------------------------------------------
+# 2. Feature
+# ---------------------------------------------------------------------
+deterministic_features:                        # 프로필 + 시나리오로 코드가 계산
+  - id: DF-01
+    name: speed_offset_from_design_mps
+    formula: "speed_mps - lqr.design_speed_mps"
+    requires: [controllers.lqr.feedback_design.design_speed_mps]
+  - id: DF-02
+    name: curvature_offset_from_design
+    formula: "road_curvature_per_m - lqr.design_curvature_per_m"
+    requires: [controllers.lqr.feedback_design.design_curvature_per_m]
+  - id: DF-03
+    name: fault_delay_over_deadline_ms
+    formula: "fault.delay_ms - mpc.configured_time_limit_ms"
+    requires: [controllers.mpc.solver_runtime.configured_time_limit_ms]
+  - id: DF-04
+    name: expected_switch_after_curve_entry
+    formula: "onset_time + detection_latency > curve_entry_time"
+    requires: [switching.failure_detection_period_ms, switching.triggers]
+  - id: DF-05
+    name: nominal_lateral_acc_mps2
+    formula: "speed_mps^2 * road_curvature_per_m"
+    requires: []
+missing_profile_value_policy:
+  action: set_missing_and_add_indicator        # 값 0 대체 금지
+  indicator_suffix: _missing
+  log_blocked_hypotheses: true
+
+feature_engineering:
+  input_groups: [odd_numerics, fault_parameters, fault_type_one_hot,
+                 deterministic_features, question_answers_one_hot]
+  excluded: [hypothesis_ids]                   # 질문·DF와 중복 정보
+  encode_unknown_as_separate_category: true
+  normalization: fit_on_training_data_only
+  output_target_in_features: false
+  post_run_metrics_in_features: false
+  feature_schema_version: '1.0'                # 바뀌면 GP 재학습부터 다시
+
+# ---------------------------------------------------------------------
+# 3. 안전 명세 (라벨 정의)
+# ---------------------------------------------------------------------
+safety_specification:
+  properties:
+    - id: P-01
+      description: "차선 경계 유지"
+      robustness: "min_over_window(signed_lane_boundary_margin_m)"
+      failure_if: "robustness < 0"
+    - id: P-02
+      description: "횡가속도 한계"
+      robustness: "lateral_acc_threshold - max_over_window(abs(lateral_acc))"
+      failure_if: "robustness < 0"
+      lateral_acc_threshold_mps2: null         # 근거와 함께 확정
+    - id: P-03
+      description: "충돌 없음"
+      monitor: boolean
+  evaluation_window:
+    start: planned_fault_onset_time            # baseline도 같은 시각부터 자름
+    end: simulation_end
+    align_baseline_to_fault_run: true
+  outcome_categories: [no_trigger, triggered_no_switch, switched_safe,
+                       switched_unsafe, simulation_invalid]
+  simulation_invalid_is_not_safe: true
+
+# ---------------------------------------------------------------------
+# 4. 짝 실행
+# ---------------------------------------------------------------------
+paired_runs:
+  modes: [no_fault_baseline, fault_injected]
+  match: [map, route_id, initial_state, seed, weather, traffic, speed_mps,
+          tire_friction_scale]
+  search_target:
+    id: margin_delta_m
+    formula: "P01_robustness(fault) - P01_robustness(baseline)"
+    negative_means: "고장·전환 때문에 여유가 줄어듦"
+  failure_report_uses: absolute_robustness     # 실패 판정은 절대값(P-01..03)
+  baseline_cache:
+    enabled: true
+    key: match                                 # 같은 key면 baseline 1회만 실행
+  detector_cannot_see_injected_fault: true
+
+# ---------------------------------------------------------------------
+# 5. 탐색·학습
+# ---------------------------------------------------------------------
+cold_start:
+  gp_enabled: false
+  total_runs: 24                                # 예시
+  mix: {nemotron_a: 0.5, space_filling: 0.5}
+
+surrogate:
+  model: gaussian_process_regression
+  kernel: "Matern 5/2 with ARD + WhiteKernel"
+  target: margin_delta_m
+  outputs: [mean_delta_m, std_delta_m]
+  refit: per_batch
+
+acquisition:
+  name: lower_confidence_bound
+  formula: "mean_delta_m - beta * std_delta_m"
+  selection: minimize
+  beta_schedule: {start: 2.0, end: 0.5, decay: linear_over_rounds}   # 예시
+  batch_size: 12
+  batch_composition: {lcb: 0.75, random_space_filling: 0.25}
+  diversity:
+    min_normalized_distance: 0.1                # 예시
+    max_per_seed: 2
+  hypothesis_coverage:
+    ensure_each_testing_hypothesis_gets_control_runs: true
+
+budget:
+  sim_seconds_per_run_measured: null            # 1~3일 차에 측정
+  max_simulations: null
+  wall_time_budget_s: null
+  stop_if:
+    - budget_exhausted
+    - "no new unique failure condition for 3 rounds"
+    - "max std_delta_m < threshold"
+
+feedback:
+  to_nemotron_a: verified_failures_top_k        # k = 5
+  to_nemotron_b: none
+  to_gp: all_valid_paired_results
+
+# ---------------------------------------------------------------------
+# 6. 비교 실험 (나머지 루프는 동일, 선택기만 교체)
+# ---------------------------------------------------------------------
+ablations:
+  conditions:
+    - id: X-1
+      name: random_space_filling
+    - id: X-2
+      name: nemotron_a_only                     # GP 없이 Nemotron 제안 그대로
+    - id: X-3
+      name: gp_numeric_only                     # DF·질문 feature 없이 수치만
+    - id: X-4
+      name: gp_plus_deterministic_features      # 질문 feature 제외
+    - id: X-5
+      name: full_code_aware                     # Nemotron A + DF + Nemotron B + GP
+  same_budget: true
+  repeats_with_different_seeds: 3
+
+evaluation:
+  metrics:
+    - failures_found_per_simulation
+    - simulations_to_first_failure
+    - unique_failure_conditions               # (fault_type, onset_event, 영역) 기준 중복 제거
+    - hypotheses_supported_refuted
+    - gp_prediction_error_over_rounds
+
+# ---------------------------------------------------------------------
+# 7. 결과 기록
+# ---------------------------------------------------------------------
+results_schema:
+  run_record: [run_id, scenario_id, seed_scenario_id, round, selector, profile_id,
+               source_commit, feature_schema_version, hypothesis_ids, parameters,
+               planned_fault_onset, actual_fault_onset, trigger_time, switch_time,
+               switch_count, outcome_category, P01, P02, P03, margin_delta_m,
+               gp_mean, gp_std, sim_status, invalid_reason]
+  failure_table: [scenario_id, violated_property, originating_evidence_ids,
+                  hypothesis_ids, environment, fault, onset_event,
+                  observed_switch_behavior, robustness, reproduction_count]
+  timeseries_store: results/timeseries/
+
+research_scope:
+  implemented: [static_code_extraction, nemotron_hypothesis_and_scenario_generation,
+                deterministic_features, nemotron_question_features,
+                carla_sil_fault_injection, paired_runs, gp_active_search, ablations]
+  future_work: [formal_recoverable_region, reachability_analysis,
+                barrier_certificates, runtime_simplex_guarantees, scenic_dsl]
+  no_formal_guarantee_claim: true

@@ -1,0 +1,137 @@
+# safety_profile.yaml — 코드 관측 사실만 담는다 (가설·탐색 공간·실험 설정은 다른 파일)
+# 값이 없으면 null. 모든 관측값은 code_evidence.observations에 근거를 남기고,
+# 각 섹션의 code_refs에는 관측 id(O-xxx)만 적는다.
+# 추론(설계 가정)은 hypotheses.yaml로 이동했다.
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: template_unverified
+  source_revision: {repository: null, commit: null, source_files: []}
+  extraction_methods: [ast, static, llm_inference, human, simulation_measured]
+  verification_states: [unverified, code_checked]   # 코드 사실은 code_checked까지만
+
+system:
+  controller_period_ms: null
+  ego_vehicle_blueprint: null
+  longitudinal_controller: null
+  lateral_controller_chain: [C-MPC, SWITCH, C-LQR]
+
+controllers:
+  mpc:
+    # 1. MPC 구현과 실패 처리 방식을 확인하기 위한 사실
+    id: C-MPC
+    implementation:
+      file: null
+      class_or_function: null
+      prediction_model: null              # kinematic/dynamic bicycle, etc.
+      state_variables: []
+      control_variables: []
+      solver_name: null
+      solver_interface: null
+    planning:
+      horizon_steps: null
+      prediction_dt_s: null
+      reference_inputs: []                # reference path, target speed, curvature, etc.
+      cost_terms: []                      # tracking, steering, smoothness, etc.
+      cost_weights: {}                    # actual weights only if extractable
+    constraints:
+      state_bounds: {}
+      steering_angle_bounds: null
+      steering_rate_bounds: null
+      acceleration_bounds: null
+      other_constraints: []
+    solver_runtime:
+      configured_time_limit_ms: null      # required_for: [DF-03, H-02]
+      maximum_iterations: null
+      convergence_tolerance: null
+      possible_status_codes: []
+      timeout_handling: null              # required_for: [H-02]
+      infeasible_handling: null
+      numerical_error_handling: null
+      warm_start_enabled: null
+      last_valid_command_fallback: null
+    code_refs: []
+
+  lqr:
+    # 2. LQR 자체의 구현 및 동작 가정을 확인하기 위한 사실
+    id: C-LQR
+    implementation:
+      file: null
+      class_or_function: null
+      design_model: null                  # kinematic/dynamic, continuous/discrete
+      state_variables: []
+      control_variables: []
+      system_matrix_A_source: null
+      input_matrix_B_source: null
+    feedback_design:
+      gain_type: null                     # fixed / gain_scheduled / online; don't assume. required_for: [H-01]
+      gain_K_source: null                 # hardcoded / file / online solver
+      Q_source: null
+      R_source: null
+      design_speed_mps: null              # required_for: [DF-01, H-01]
+      design_curvature_per_m: null        # required_for: [DF-02, H-01]
+      scheduling_variables: []
+      feedforward_present: null
+    constraints_and_behavior:
+      steering_saturation: null
+      steering_rate_limit: null
+      state_estimate_inputs: []
+      low_speed_handling: null
+      integrator_or_state_reset: null
+      failure_or_invalid_output_handling: null
+    code_refs: []
+
+switching:
+  # 3. MPC→LQR 및 필요 시 LQR→MPC 전환 규칙
+  supervisor_file: null
+  failure_detector_inputs: []            # only runtime-observable signals (never injected-fault truth)
+  triggers: []
+  # 항목 형태:
+  # - id: T-01
+  #   condition: null                    # e.g. solver_wall_time > deadline
+  #   threshold: null
+  #   consecutive_cycles: null
+  #   evidence_ids: []                   # O-xxx
+  failure_detection_period_ms: null      # required_for: [DF-04, H-02]
+  command_during_detection_delay: null   # required_for: [H-02]
+  handover:
+    state_source_for_lqr: null
+    steering_blending: null              # required_for: [H-03]
+    steering_rate_limit: null
+    reset_behavior: null
+  return_to_mpc:
+    enabled: null                        # required_for: [H-03]
+    conditions: []
+    hysteresis: null
+    minimum_dwell_s: null
+  code_refs: []
+
+dependencies:
+  # Input timing and stale-data handling can affect both controllers.
+  # 지연·주기는 CARLA에서 측정되면 extraction_method: simulation_measured로 기록
+  localization:
+    update_rate_hz: null
+    latency_ms: null
+    stale_data_policy: null
+  reference_path:
+    update_rate_hz: null
+    latency_ms: null
+    stale_data_policy: null
+  vehicle_state_estimator:
+    update_rate_hz: null
+    stale_data_policy: null
+  other_inputs: []
+
+code_evidence:
+  # 관측 사실의 유일한 원본. 위 필드들은 여기의 id를 참조한다.
+  # - id: O-001
+  #   field: controllers.lqr.feedback_design.gain_type
+  #   observed_value: fixed
+  #   source: {file: control/lqr.py, line_start: 20, line_end: 24, symbol: K, commit: abc123}
+  #   extraction_method: static
+  #   verified: false
+  #   note: null
+  observations: []
+  unresolved_questions: []
+  conflicts: []                          # 값 충돌 시 verified 금지
