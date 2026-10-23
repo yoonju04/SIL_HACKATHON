@@ -57,12 +57,12 @@ Start `C:\Users\dongh\Desktop\junwoo\CALRA 0.9.15\WindowsNoEditor\CarlaUE4.exe`
 yourself. Keep SimLingo and other synchronous tick-driving clients stopped.
 
 ```powershell
-cd "C:\Users\dongh\Desktop\junwoo\av_stack"
+cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\av_stack"
 $PY = "C:\Users\dongh\.conda\envs\carla\python.exe"
 $env:OPENBLAS_NUM_THREADS = "1"
 $env:OMP_NUM_THREADS = "1"
 $env:MKL_NUM_THREADS = "1"
-& $PY ..\wait_carla.py
+& $PY tools\wait_carla.py
 
 # Clear route, LQR. End the run before starting another.
 & $PY run_autonomy.py --controller lqr --town Town04 --spawn 10 --speed 5 --route-length 300 --duration 90 --follow --plot --out runs\autonomy_lqr

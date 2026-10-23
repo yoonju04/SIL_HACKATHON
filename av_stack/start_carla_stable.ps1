@@ -1,5 +1,11 @@
 $ErrorActionPreference = 'Stop'
-$carlaProgram = 'C:\Users\dongh\Desktop\junwoo\CALRA 0.9.15\WindowsNoEditor\CarlaUE4.exe'
+# CARLA_ROOT (the WindowsNoEditor folder) if set, else the CARLA folder next to the repository.
+$carlaRoot = $env:CARLA_ROOT
+if (-not $carlaRoot) {
+    $carlaRoot = @('CARLA_0.9.15', 'CALRA 0.9.15') | ForEach-Object { Join-Path $PSScriptRoot "..\..\$_\WindowsNoEditor" } |
+        Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+$carlaProgram = Join-Path $carlaRoot 'CarlaUE4.exe'
 $runningCarla = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'CarlaUE4-Win64-Shipping.exe' }
 if ($runningCarla) {
     throw 'CARLA is already running. Close its window before using this Epic launcher.'

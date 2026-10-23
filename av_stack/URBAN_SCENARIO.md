@@ -43,9 +43,9 @@ Start-Process -FilePath "C:\Users\dongh\Desktop\junwoo\CALRA 0.9.15\WindowsNoEdi
 Then, after the server is ready:
 
 ```powershell
-cd "C:\Users\dongh\Desktop\junwoo\av_stack"
+cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\av_stack"
 $PY = "C:\Users\dongh\.conda\envs\carla\python.exe"
-& $PY ..\wait_carla.py
+& $PY tools\wait_carla.py
 
 # Visible city drive with an RGB movie and native replay recording.
 & $PY run_urban.py --controller mpc --duration 650 --vehicles 30 --walkers 60 --record-video --out runs\urban_mpc
@@ -101,9 +101,9 @@ The stock tool accepts the recorded filename and an actor ID to follow. Use the
 `ego_actor_id` in that run's scenario.json, not a hardcoded ID from another run:
 
 ```powershell
-$RUN = "C:\Users\dongh\Desktop\junwoo\av_stack\runs\urban_mpc"
+$RUN = "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\av_stack\runs\urban_mpc"
 $EGO_ID = (Get-Content "$RUN\scenario.json" -Raw | ConvertFrom-Json).ego_actor_id
-& $PY "..\CALRA 0.9.15\WindowsNoEditor\PythonAPI\examples\start_replaying.py" -f "$RUN\replay.log" -c $EGO_ID --move-spectator
+& $PY "..\..\CALRA 0.9.15\WindowsNoEditor\PythonAPI\examples\start_replaying.py" -f "$RUN\replay.log" -c $EGO_ID --move-spectator
 ```
 
 Replay after the driving script has exited. It reproduces recorded actor motion;

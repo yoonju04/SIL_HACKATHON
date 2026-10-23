@@ -14,10 +14,21 @@ GARAGE = ROOT / "third_party" / "carla_garage"
 BENCH = GARAGE / "Bench2Drive"
 
 
+def carla_root() -> Path:
+    """CARLA_ROOT if set, else the CARLA folder next to the repository (either spelling)."""
+    if os.environ.get("CARLA_ROOT"):
+        return Path(os.environ["CARLA_ROOT"])
+    for name in ("CARLA_0.9.15", "CALRA 0.9.15"):
+        candidate = ROOT.parents[1] / name / "WindowsNoEditor"
+        if candidate.is_dir():
+            return candidate
+    raise FileNotFoundError("Set CARLA_ROOT to the CARLA 0.9.15 WindowsNoEditor folder")
+
+
 def prepare_imports() -> None:
     """Select one consistent upstream leaderboard/scenario-runner package pair."""
     paths = (BENCH / "leaderboard", BENCH / "scenario_runner", GARAGE / "team_code",
-             ROOT.parent / "CALRA 0.9.15/WindowsNoEditor/PythonAPI/carla", ROOT)
+             carla_root() / "PythonAPI" / "carla", ROOT)
     for path in reversed(paths):
         sys.path.insert(0, str(path))
     os.environ["SCENARIO_RUNNER_ROOT"] = str(BENCH / "scenario_runner")
