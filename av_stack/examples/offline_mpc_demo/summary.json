@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "simulator": "offline",
+    "track": "demo",
+    "controller": "mpc",
+    "dt": 0.05,
+    "vehicle_params": {
+      "mass": 1800.0,
+      "iz": 3000.0,
+      "lf": 1.35,
+      "lr": 1.55,
+      "cf": 120000.0,
+      "cr": 140000.0,
+      "max_steer_rad": 0.5235987755982988
+    },
+    "planner": {
+      "planner": "ReferencePlanner (cubic spline centreline + feasible speed profile)",
+      "config": {
+        "ds": 0.5,
+        "knot_spacing_m": 3.0,
+        "v_max": 15.0,
+        "a_lat_max": 3.0,
+        "mu": 0.9,
+        "friction_margin": 0.5,
+        "a_accel": 1.5,
+        "a_decel": 2.5,
+        "v_start": 0.0,
+        "v_end": null,
+        "v_floor_time": 0.5
+      },
+      "lane_changes": [],
+      "max_lateral_offset_m": 0.0,
+      "a_lat_limit": 3.0,
+      "max_lat_acc": 3.000000000000001,
+      "feasible": true,
+      "max_abs_kappa": 0.02704689914616233
+    }
+  },
+  "summary": {
+    "steps": 759,
+    "duration_s": 37.9,
+    "distance_m": 438.4727947838557,
+    "route_completed": true,
+    "max_abs_e_y_m": 0.0970833156156618,
+    "rms_e_y_m": 0.02911948204606853,
+    "max_abs_e_y_lane_m": 0.09708354550588047,
+    "max_steer_deg": 4.6886280129857365,
+    "max_steer_rate_dps": 11.572377697028806,
+    "mean_speed_mps": 11.564739745552657,
+    "not_ok_steps": 0,
+    "solve_ms_mean": 4.222694621869913,
+    "solve_ms_p99": 8.737114960022092,
+    "solve_ms_max": 19.705166999983703,
+    "qp_iterations_mean": 40.96179183135705,
+    "qp_iterations_max": 70
+  }
+}

@@ -1,0 +1,203 @@
+"""Bench2Drive route + PDM-Lite expert, with av_stack MPC/LQR as the only steering owner.
+
+PDM-Lite (DriveLM, Sima et al. ECCV 2024; the expert that generated the CARLA Garage /
+TransFuser++ training data) is used unchanged for route planning, hazard handling
+(IDM car following, traffic lights, stop signs, pedestrians, scenario obstacles) and
+throttle/brake. Only its lateral PID (_get_steer) is replaced: the dense map route it
+plans each tick becomes the reference of our MPC / LQR / supervised switch.
+
+PDM-Lite is privileged (simulator ground truth), so perception is out of scope here.
+"""
+from __future__ import annotations
+
+from contextlib import ExitStack
+import json
+import math
+import os
+from pathlib import Path
+import sys
+from time import perf_counter
+
+import numpy as np
+
+from integration.tfpp_bootstrap import prepare
+
+prepare()
+import carla
+import leaderboard.autoagents as _autoagents
+import leaderboard.autoagents.autonomous_agent as _b2d_autonomous_agent
+
+# PDM-Lite imports leaderboard_autopilot's autonomous_agent_local; Bench2Drive's base class
+# provides the same interface (dense route via set_global_plan, run_step(input_data, timestamp)).
+sys.modules.setdefault('leaderboard.autoagents.autonomous_agent_local', _b2d_autonomous_agent)
+_autoagents.autonomous_agent_local = _b2d_autonomous_agent
+os.environ.pop('SAVE_PATH', None)  # PDM-Lite writes datasets when SAVE_PATH is set
+from autopilot import AutoPilot
+import privileged_route_planner as _route_planner_module
+from integration.tfpp_bootstrap import GARAGE
+
+_upstream_speed_limits = _route_planner_module.PrivilegedRoutePlanner.compute_speed_limits
+
+
+def _speed_limits_from_garage(self, carla_map):
+    # Upstream loads 'team_code/speed_limits/<Town>_speed_limits.npy' relative to the carla_garage root.
+    cwd = os.getcwd()
+    os.chdir(GARAGE)
+    try:
+        return _upstream_speed_limits(self, carla_map)
+    finally:
+        os.chdir(cwd)
+
+
+_route_planner_module.PrivilegedRoutePlanner.compute_speed_limits = _speed_limits_from_garage
+
+from integration.behavior_control import update_reference
+from integration.benchmark_recording import FrontRecorder, SensorFrame
+from integration.carla_io import read_state, to_carla_steer, vehicle_geometry
+from integration.episode import build_controller, step_controller
+from integration.fault_injection import FaultConfig
+from integration.supervised_lateral import SupervisedLateral
+from integration.unprotected_lateral import UnprotectedMPC
+from lqr_controller import LQRConfig
+from planner import Trajectory
+from planner.cubic_spline import CubicSpline2D
+
+REFERENCE_AHEAD_M = 80.0
+REFERENCE_BEHIND_M = 3.0
+# LQR has no preview; PDM-Lite turns junctions at 8-11 m/s, so the curvature feed-forward is read
+# 0.2 s ahead (work/pdm_turn_sweep.py: max path error 0.26-0.70 m -> 0.08-0.12 m on R=6-20 m turns).
+LQR_CONFIG = LQRConfig(preview_time_s=.2)
+
+
+def get_entry_point() -> str:
+    return 'PDMLiteOwnSteerAgent'
+
+
+def route_to_reference(route_xy: np.ndarray, speed: float, behind: int = 0) -> Trajectory | None:
+    """PDM-Lite route points (CARLA frame, 10 per metre) -> right-handed reference.
+
+    route_xy[behind] is the ego's matched route point; the points before it are the real
+    route behind the vehicle. A straight stub is only added when none exist (route start):
+    joining a straight stub to a curving route makes the spline wiggle right at the ego
+    (seen as a wrong-signed curvature mid-turn).
+    """
+    route_xy = np.asarray(route_xy, float)
+    start = behind % 10
+    points = route_xy[start:behind + int(REFERENCE_AHEAD_M * 10):10, :2]  # 1 m spacing
+    if len(points) - (behind - start) // 10 < 4:
+        return None
+    points = np.column_stack((points[:, 0], -points[:, 1]))  # left-handed CARLA -> right-handed
+    if behind < 10 * REFERENCE_BEHIND_M:
+        direction = points[1] - points[0]
+        direction /= max(np.linalg.norm(direction), 1e-6)
+        stub = points[0] - np.outer(np.arange(int(REFERENCE_BEHIND_M), 0, -1), direction)
+        points = np.vstack((stub, points))
+    spline = CubicSpline2D(points[:, 0], points[:, 1])
+    s = np.linspace(0, spline.length, math.ceil(spline.length / .25) + 1)
+    x, y = spline.position(s)
+    v = np.full_like(s, max(speed, .5))
+    return Trajectory(s, x, y, np.unwrap(spline.yaw(s)), spline.curvature(s), v, s / v[0],
+                      x.copy(), y.copy(), dict(source='PDM-Lite privileged route'))
+
+
+class PDMLiteOwnSteerAgent(AutoPilot):
+    def setup(self, path_to_conf_file: str, route_index=None, traffic_manager=None) -> None:
+        self.options = json.loads(Path(path_to_conf_file.split('+')[0]).read_text(encoding='utf-8'))
+        super().setup(path_to_conf_file, route_index, traffic_manager)
+        self.config.steer_noise = 0.  # PDM-Lite adds 1e-3 noise for data diversity; not wanted here
+        self.dt = float(self.options.get('dt', .05))
+        self.fault = FaultConfig(self.options['mpc_fault'], float(self.options['fault_start']),
+                                 float(self.options['fault_duration']))
+        self.mode = self.options['controller']
+        self.lateral = None
+        self.reference = None
+        self.first_timestamp = None
+        self.elapsed = 0.
+        self.last_lateral = None
+        self.resources = ExitStack()
+        out = Path(self.options['out'])
+        out.mkdir(parents=True, exist_ok=True)
+        self.control_log = self.resources.enter_context((out/'agent_controls.jsonl').open('w', encoding='utf-8'))
+        self.recorder = FrontRecorder(out) if self.options.get('record_front', False) else None
+        if self.recorder is not None:
+            self.resources.callback(self.recorder.close)
+
+    def sensors(self):
+        specs = super().sensors()
+        if self.options.get('record_front', False):
+            # Behind-the-roof view for the demo video (leaderboard limits sensors to a 3 m radius).
+            specs.append(dict(type='sensor.camera.rgb', x=-2., y=0., z=2.2, roll=0., pitch=-12., yaw=0.,
+                              width=1280, height=720, fov=100, id='rgb_front'))
+        return specs
+
+    def _get_steer(self, route_points, current_position, current_heading, current_speed):
+        # PDM-Lite's save() logs the aim point its PID used; keep it filled (not used for control).
+        self.aim_wp = route_points[min(int(10 * max(current_speed, 3.)), len(route_points) - 1)]
+        self.angle = self._get_angle_to(current_position, current_heading, self.aim_wp) / 90
+        x, y, yaw, vx, vy, yaw_rate = read_state(self._vehicle)
+        # route_points starts at the matched index; take the planner's real route behind it too.
+        planner = self._waypoint_planner
+        behind = min(planner.route_index, int(10 * REFERENCE_BEHIND_M))
+        route = planner.route_points[planner.route_index - behind:]
+        reference = route_to_reference(route, vx, behind)
+        if reference is not None:
+            self.reference = reference
+        if self.reference is None:
+            return 0.
+        if self.lateral is None:
+            geometry = vehicle_geometry(self._vehicle)
+            self.max_steer = geometry['max_steer_rad']
+            if self.mode == 'supervised':
+                self.lateral = SupervisedLateral(geometry, self.dt, self.reference, self.fault,
+                                                 lqr_config=LQR_CONFIG)
+            elif self.mode == 'mpc_unprotected':
+                self.lateral = UnprotectedMPC(geometry, self.dt, self.reference, self.fault)
+            else:
+                self.lateral = build_controller(self.mode, geometry, self.dt, self.reference,
+                                                lqr_cfg=LQR_CONFIG if self.mode == 'lqr' else None)
+        speed_cap = max(vx, .5)
+        if self.mode in ('supervised', 'mpc_unprotected'):
+            self.lateral.set_reference(self.reference, speed_cap)
+            result = self.lateral.step(self.elapsed, x, y, yaw, vx, vy, yaw_rate)
+        else:
+            update_reference(self.lateral, self.reference, speed_cap)
+            result = step_controller(self.mode, self.lateral, self.elapsed, x, y, yaw, vx, vy, yaw_rate)
+        self.last_lateral = result
+        return to_carla_steer(result.steer or 0., self.max_steer)
+
+    def run_step(self, input_data, timestamp, sensors=None, plant=False):
+        if self.first_timestamp is None:
+            self.first_timestamp = timestamp
+        self.elapsed = timestamp - self.first_timestamp
+        speed = float(input_data['speed'][1]['speed'])
+        if self.recorder is not None and 'rgb_front' in input_data:
+            self.recorder.capture(SensorFrame(int(input_data['rgb_front'][0]), self.elapsed, speed,
+                                              input_data['rgb_front'][1]))
+        started = perf_counter()
+        control = super().run_step(input_data, timestamp, sensors, plant)
+        safe_stop = bool(getattr(self.lateral, 'stop_required', False))
+        if safe_stop:
+            control.throttle, control.brake = 0., 1.
+        result = self.last_lateral
+        record = dict(t=self.elapsed, steer=float(control.steer), throttle=float(control.throttle),
+                      brake=float(control.brake), measured_speed=speed, planner='PDM-Lite',
+                      source=getattr(self.lateral, 'active', self.mode),
+                      tracking_error=None if result is None else float(result.e_y),
+                      heading_error=None if result is None else float(result.e_psi),
+                      lateral_status=None if result is None else result.status,
+                      fault_injected=self.fault.active(self.elapsed), safe_stop=safe_stop,
+                      vehicle_hazard=bool(self.vehicle_hazard), walker_hazard=bool(self.walker_hazard),
+                      traffic_light_hazard=bool(self.traffic_light_hazard), junction=bool(self.junction),
+                      step_time_s=perf_counter()-started)
+        if hasattr(self.lateral, 'record'):
+            record.update(self.lateral.record())
+        self.control_log.write(json.dumps(record)+chr(10))
+        self.control_log.flush()
+        stop_after = self.options.get('stop_after_fault')
+        self.stop_requested = bool(stop_after is not None and self.fault.config_active_since(self.elapsed, stop_after))
+        return control
+
+    def destroy(self, results=None) -> None:
+        if hasattr(self, 'resources'):
+            self.resources.close()
+        super().destroy(results)

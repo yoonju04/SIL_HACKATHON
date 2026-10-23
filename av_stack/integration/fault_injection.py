@@ -1,0 +1,64 @@
+"""Opt-in simulator faults at the MPC output boundary; never changes LQR."""
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+import math
+import time
+
+from mpc_controller import MPCOutput
+
+
+@dataclass(frozen=True)
+class FaultConfig:
+    mode: str = 'none'
+    at_s: float = 25.0
+    duration_s: float = 2.0
+
+    def __post_init__(self) -> None:
+        if self.mode not in ('none', 'solver_fail', 'nan', 'stale', 'exception', 'delay'):
+            raise ValueError('Unknown MPC fault mode.')
+        if not math.isfinite(self.at_s) or self.at_s < 0:
+            raise ValueError('Fault start must be finite and nonnegative.')
+        if not math.isfinite(self.duration_s) or self.duration_s <= 0:
+            raise ValueError('Fault duration must be finite and positive.')
+
+    def active(self, t: float) -> bool:
+        return self.mode != 'none' and self.at_s <= t < self.at_s + self.duration_s
+
+    def config_active_since(self, t: float, seconds: float) -> bool:
+        """True once a configured fault started at least `seconds` ago (demo stop option)."""
+        return self.mode != 'none' and t >= self.at_s + seconds
+
+
+class InjectedMPCFailure(RuntimeError):
+    """Temporary controller failure used only by the explicit simulator injector."""
+
+
+def _raise_failure(output: MPCOutput) -> MPCOutput:
+    raise InjectedMPCFailure('Temporary MPC computation failure')
+
+
+def _delay(output: MPCOutput) -> MPCOutput:
+    time.sleep(0.075)
+    return output
+
+
+class MPCFaultInjector:
+    """Retain the last clean sample to reproduce a stale-output fault."""
+
+    def __init__(self, config: FaultConfig) -> None:
+        self.config = config
+        self.previous: MPCOutput | None = None
+
+    def apply(self, output: MPCOutput, t: float) -> MPCOutput:
+        if not self.config.active(t):
+            self.previous = output
+            return output
+        faults = {
+            'solver_fail': lambda value: replace(value, ok=False, steer=None, status='injected_solver_failure'),
+            'nan': lambda value: replace(value, steer=math.nan),
+            'stale': lambda value: self.previous if self.previous is not None else replace(value, stamp_s=t-1),
+            'exception': _raise_failure,
+            'delay': _delay,
+        }
+        return faults[self.config.mode](output)
