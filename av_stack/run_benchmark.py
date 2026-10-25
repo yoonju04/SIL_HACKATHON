@@ -24,8 +24,8 @@ def main() -> int:
                         help="bench2drive (220 short routes), town10_long (Town10, 343 m, signals), town04_highway (2.2 km, no signals) or a route XML path")
     parser.add_argument("--max-speed", type=float, default=40.0, help="PDM-Lite speed cap [km/h]")
     parser.add_argument("--no-comfort", action="store_true", help="keep PDM-Lite's original bang-bang pedals")
-    parser.add_argument("--no-view", action="store_true", help="do not open the chase-camera window (PDM-Lite)")
-    parser.add_argument("--green-lights", action="store_true", help="switch the light ahead of the ego to green (its junction's others red); PDM-Lite")
+    parser.add_argument("--no-view", action="store_true", help="do not open the chase-camera window")
+    parser.add_argument("--green-lights", action="store_true", help="switch the light ahead of the ego to green (its junction's others red)")
     parser.add_argument("--monitor", type=float, default=0.0, metavar="SECONDS",
                         help="also print a supervisor status line every SECONDS (default: only takeover banners)")
     parser.add_argument("--controller", choices=("mpc", "lqr", "supervised", "mpc_unprotected", "original"), default="mpc",
