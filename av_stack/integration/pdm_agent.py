@@ -137,7 +137,7 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         self.max_speed = float(self.options.get('max_speed_kmh', 30.)) / 3.6
         self.comfort = ComfortPedals(max_speed=self.max_speed, dt=self.dt) if self.options.get('comfort', True) else None
         self.live = LiveFaultCommands()
-        self.console = SupervisorConsole()
+        self.console = SupervisorConsole(float(self.options.get('monitor_period', 0.)))
         print(f'[av_stack] PDM-Lite + {self.mode} steering | max speed {self.max_speed * 3.6:.0f} km/h | '
               f'comfort pedals {"on" if self.comfort else "off"} | inject: tools\inject.py <mode> [magnitude]',
               flush=True)
@@ -253,16 +253,23 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         return control
 
     def _draw_status(self, active: str) -> None:
-        """Steering owner and attack state above the ego vehicle (visible in the CARLA window)."""
-        colors = {'mpc': carla.Color(0, 200, 0), 'lqr': carla.Color(255, 140, 0)}
-        label = {'mpc': 'MPC', 'lqr': 'LQR (fallback)', 'safe_stop': 'SAFE STOP', 'none': 'NO STEERING'}.get(active, active.upper())
-        location = self._vehicle.get_location()
-        life = 2 * self.dt
-        self._world.debug.draw_string(location + carla.Location(z=2.6), label, False,
-                                      colors.get(active, carla.Color(220, 0, 0)), life)
-        if self.fault.active(self.elapsed):
-            self._world.debug.draw_string(location + carla.Location(z=3.3), 'ATTACK: ' + self.fault.mode, False,
-                                          carla.Color(220, 0, 0), life)
+        """Steering owner in the top-left corner of the CARLA window.
+
+        CARLA has no 2D HUD API, so the text is placed in 3D just in front of the follow camera
+        (integration.carla_io.follow_camera: 8 m behind, 4 m up, pitch -15 deg, 90 deg FOV, 16:9)
+        where it projects to the upper-left of the screen.
+        """
+        colors = {'mpc': carla.Color(0, 220, 0), 'lqr': carla.Color(255, 150, 0)}
+        label = {'mpc': 'STEERING: MPC', 'lqr': 'STEERING: LQR (fallback)', 'safe_stop': 'STEERING: SAFE STOP',
+                 'none': 'STEERING: NONE'}.get(active, 'STEERING: ' + active.upper())
+        vehicle = self._vehicle.get_transform()
+        forward = vehicle.get_forward_vector()
+        camera = carla.Transform(vehicle.location - 8. * forward + carla.Location(z=4.),
+                                 carla.Rotation(pitch=-15., yaw=vehicle.rotation.yaw))
+        depth = 6.
+        f, r, u = camera.get_forward_vector(), camera.get_right_vector(), camera.get_up_vector()
+        anchor = camera.location + depth * f - .85 * depth * r + .45 * depth * u  # ~upper-left corner
+        self._world.debug.draw_string(anchor, label, False, colors.get(active, carla.Color(230, 0, 0)), 2 * self.dt)
 
     def destroy(self, results=None) -> None:
         if hasattr(self, 'resources'):

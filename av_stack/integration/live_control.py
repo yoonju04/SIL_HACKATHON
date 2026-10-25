@@ -51,10 +51,26 @@ def describe(fault: FaultConfig) -> str:
             'none': 'fault cleared'}[fault.mode]
 
 
-class SupervisorConsole:
-    """One status line per second, a banner on injection and on MPC -> LQR takeover."""
+REASONS = {
+    'solver_failure': 'MPC solver reported failure',
+    'missing_steer': 'MPC returned no steering command',
+    'nonfinite_output': 'MPC output is NaN / infinite',
+    'steer_out_of_range': 'MPC steering beyond the actuator limit',
+    'deadline_miss': 'MPC took longer than the 50 ms control period',
+    'stale_output': 'MPC output timestamp is old',
+    'stale_sequence': 'MPC output was not refreshed (repeated sample)',
+    'controller_exception': 'MPC raised an exception',
+    'tracking_divergence': 'vehicle diverging from the path (|e_y| > 1.0 m or |e_psi| > 0.6 rad for 0.25 s)',
+}
 
-    def __init__(self, period_s: float = 1.0) -> None:
+
+class SupervisorConsole:
+    """Terminal output: a line when a fault is injected, a banner when the supervisor takes over.
+
+    period_s > 0 additionally prints one status line per period (off by default).
+    """
+
+    def __init__(self, period_s: float = 0.) -> None:
         self.period = period_s
         self.next_line = 0.
         self.previous_active = None
@@ -67,13 +83,19 @@ class SupervisorConsole:
     def update(self, t: float, active: str, record: dict, e_y: float | None, e_psi: float | None,
                speed: float) -> None:
         if self.previous_active == 'mpc' and active != 'mpc':
-            delay = '' if self.injected_at is None else f'   detected {t - self.injected_at:.2f} s after injection'
-            line = '=' * 72
-            print(f'\n{line}\n  SUPERVISOR: MPC -> {active.upper()}   t={t:.2f}s   reason={record.get("supervisor_reason")}'
-                  f'{delay}\n  e_y={0. if e_y is None else e_y:+.2f} m   primary status={record.get("primary_status")}\n'
-                  f'{line}\n', flush=True)
+            reason = record.get('supervisor_reason')
+            delay = ('no fault injected' if self.injected_at is None
+                     else f'{t - self.injected_at:.2f} s after the fault was injected')
+            line = '=' * 76
+            print(f'\n{line}\n  [SUPERVISOR] fault detected -> steering switched MPC -> {active.upper()}   (t={t:.2f} s)\n'
+                  f'    detected : {REASONS.get(reason, reason)}\n'
+                  f'    when     : {delay}\n'
+                  f'    state    : e_y={0. if e_y is None else e_y:+.2f} m, e_psi={math.degrees(e_psi or 0.):+.1f} deg, '
+                  f'v={speed * 3.6:.1f} km/h\n{line}\n', flush=True)
+        elif self.previous_active == 'lqr' and active == 'safe_stop':
+            print(f'\n[SUPERVISOR] t={t:.2f} s  LQR output invalid -> SAFE STOP (full brake)\n', flush=True)
         self.previous_active = active
-        if t + 1e-9 < self.next_line:
+        if self.period <= 0 or t + 1e-9 < self.next_line:
             return
         self.next_line = t + self.period
         solve = record.get('primary_elapsed_ms')
