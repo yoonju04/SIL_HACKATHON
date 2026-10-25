@@ -144,7 +144,7 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         self.console = SupervisorConsole(float(self.options.get('monitor_period', 0.)))
         print(f'[av_stack] PDM-Lite + {self.mode} steering | max speed {self.max_speed * 3.6:.0f} km/h | '
               f'comfort pedals {"on" if self.comfort else "off"} | '
-              f'traffic lights {"always green" if self.options.get("green_lights") else "normal"}',
+              f'traffic lights {"green for the ego" if self.options.get("green_lights") else "normal"}',
               flush=True)
 
     def _init(self, hd_map):
@@ -159,18 +159,26 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             self.resources.callback(self.view.close)
 
     def _hold_lights_green(self) -> None:
-        """--green-lights: every traffic light green and frozen (city driving without signal stops).
+        """--green-lights: the light the ego approaches turns green, its junction's others red.
 
-        Re-applied about once per second because the leaderboard's background activity may
-        still switch junction lights.
+        All lights green at once gridlocked the junctions, so only the ego's approach is
+        switched (within 40 m on the planned route); other traffic keeps obeying the cycle,
+        which resumes once the ego has passed. Also undoes a freeze left by an older run.
         """
+        if not getattr(self, '_lights_unfrozen', False):
+            self._world.freeze_all_traffic_lights(False)
+            self._lights_unfrozen = True
         if not self.green_lights:
             return
-        for light in self._world.get_actors().filter('traffic.traffic_light'):
-            if light.get_state() != carla.TrafficLightState.Green:
-                light.set_state(carla.TrafficLightState.Green)
-            light.set_green_time(1e5)
-        self._world.freeze_all_traffic_lights(True)
+        planner = self._waypoint_planner
+        index = min(planner.route_index, len(planner.next_traffic_lights) - 1)
+        light = planner.next_traffic_lights[index]
+        if light is None or planner.distances_to_next_traffic_lights[index] > 40.                 or light.get_state() == carla.TrafficLightState.Green:
+            return
+        for other in light.get_group_traffic_lights():
+            if other.id != light.id:
+                other.set_state(carla.TrafficLightState.Red)
+        light.set_state(carla.TrafficLightState.Green)
 
     def __call__(self):
         # Upstream prints a wall-clock line every tick; keep the console for the supervisor monitor.
@@ -232,7 +240,7 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             self.recorder.capture(SensorFrame(int(input_data['rgb_front'][0]), self.elapsed, speed,
                                               input_data['rgb_front'][1]))
         started = perf_counter()
-        if getattr(self, 'green_lights', False) and self.step % 20 == 0:
+        if getattr(self, 'green_lights', False):
             self._hold_lights_green()
         command = self.live.poll(self.elapsed)
         if command is not None:
