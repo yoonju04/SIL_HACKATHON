@@ -66,6 +66,7 @@ from integration.benchmark_recording import FrontRecorder, SensorFrame
 from integration.carla_io import read_state, to_carla_steer, vehicle_geometry
 from integration.episode import build_controller, step_controller
 from integration.fault_injection import FaultConfig
+from integration.chase_view import ChaseView
 from integration.live_control import CapturingLongitudinal, ComfortPedals, LiveFaultCommands, SupervisorConsole
 from srunner.scenariomanager.timer import GameTime
 from integration.supervised_lateral import SupervisedLateral
@@ -145,6 +146,11 @@ class PDMLiteOwnSteerAgent(AutoPilot):
     def _init(self, hd_map):
         super()._init(hd_map)
         self._longitudinal_controller = CapturingLongitudinal(self._longitudinal_controller, self.max_speed)
+        self.view = None
+        if self.options.get('view', True):
+            video = Path(self.options['out']) / 'view.mp4' if self.options.get('record_front', False) else None
+            self.view = ChaseView(carla, self._world, self._vehicle, video)
+            self.resources.callback(self.view.close)
 
     def __call__(self):
         # Upstream prints a wall-clock line every tick; keep the console for the supervisor monitor.
@@ -231,7 +237,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         active = getattr(self.lateral, 'active', self.mode)
         self.console.update(self.elapsed, active, self.lateral.record() if hasattr(self.lateral, 'record') else {},
                             None if result is None else result.e_y, None if result is None else result.e_psi, speed)
-        self._draw_status(active)
+        if getattr(self, 'view', None) is not None:
+            self.view.show(active)
         record = dict(t=self.elapsed, steer=float(control.steer), throttle=float(control.throttle),
                       brake=float(control.brake), measured_speed=speed, planner='PDM-Lite',
                       source=getattr(self.lateral, 'active', self.mode),
@@ -251,25 +258,6 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         stop_after = self.options.get('stop_after_fault')
         self.stop_requested = bool(stop_after is not None and self.fault.config_active_since(self.elapsed, stop_after))
         return control
-
-    def _draw_status(self, active: str) -> None:
-        """Steering owner in the top-left corner of the CARLA window.
-
-        CARLA has no 2D HUD API, so the text is placed in 3D just in front of the follow camera
-        (integration.carla_io.follow_camera: 8 m behind, 4 m up, pitch -15 deg, 90 deg FOV, 16:9)
-        where it projects to the upper-left of the screen.
-        """
-        colors = {'mpc': carla.Color(0, 220, 0), 'lqr': carla.Color(255, 150, 0)}
-        label = {'mpc': 'STEERING: MPC', 'lqr': 'STEERING: LQR (fallback)', 'safe_stop': 'STEERING: SAFE STOP',
-                 'none': 'STEERING: NONE'}.get(active, 'STEERING: ' + active.upper())
-        vehicle = self._vehicle.get_transform()
-        forward = vehicle.get_forward_vector()
-        camera = carla.Transform(vehicle.location - 8. * forward + carla.Location(z=4.),
-                                 carla.Rotation(pitch=-15., yaw=vehicle.rotation.yaw))
-        depth = 6.
-        f, r, u = camera.get_forward_vector(), camera.get_right_vector(), camera.get_up_vector()
-        anchor = camera.location + depth * f - .85 * depth * r + .45 * depth * u  # ~upper-left corner
-        self._world.debug.draw_string(anchor, label, False, colors.get(active, carla.Color(230, 0, 0)), 2 * self.dt)
 
     def destroy(self, results=None) -> None:
         if hasattr(self, 'resources'):

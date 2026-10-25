@@ -23,6 +23,7 @@ def main() -> int:
                         help="bench2drive (220 short routes), town10_long (CARLA Town10 route, 343 m) or a route XML path")
     parser.add_argument("--max-speed", type=float, default=30.0, help="PDM-Lite speed cap [km/h]")
     parser.add_argument("--no-comfort", action="store_true", help="keep PDM-Lite's original bang-bang pedals")
+    parser.add_argument("--no-view", action="store_true", help="do not open the chase-camera window (PDM-Lite)")
     parser.add_argument("--monitor", type=float, default=0.0, metavar="SECONDS",
                         help="also print a supervisor status line every SECONDS (default: only takeover banners)")
     parser.add_argument("--controller", choices=("mpc", "lqr", "supervised", "mpc_unprotected", "original"), default="mpc",
@@ -94,7 +95,7 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     config = dict(model=None if args.model is None else str(args.model.resolve()), planner=args.planner, record_front=args.record_front, controller=args.controller, longitudinal=args.longitudinal, mpc_extension=args.mpc_extension, speed_policy=args.speed_policy, mpc_fault=args.mpc_fault,
                   fault_start=args.fault_start, fault_duration=args.fault_duration, fault_magnitude=args.fault_magnitude, stop_after_fault=args.stop_after_fault,
-                  max_speed_kmh=args.max_speed, comfort=not args.no_comfort, monitor_period=args.monitor,
+                  max_speed_kmh=args.max_speed, comfort=not args.no_comfort, monitor_period=args.monitor, view=not args.no_view,
                   out=str(args.out), device=args.device, dt=0.05)
     agent_config = args.out / "agent_config.json"
     agent_config.write_text(json.dumps(config, indent=2), encoding="utf-8")
