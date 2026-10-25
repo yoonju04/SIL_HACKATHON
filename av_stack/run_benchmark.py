@@ -12,7 +12,8 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parent
 GARAGE = ROOT / "third_party" / "carla_garage"
 ROUTES = GARAGE / "Bench2Drive" / "leaderboard" / "data" / "bench2drive220.xml"
-NAMED_ROUTE_FILES = {"bench2drive": ROUTES, "town10_long": ROOT / "scenarios" / "town10_long.xml"}
+NAMED_ROUTE_FILES = {"bench2drive": ROUTES, "town10_long": ROOT / "scenarios" / "town10_long.xml",
+                     "town04_highway": ROOT / "scenarios" / "town04_highway.xml"}
 
 
 def main() -> int:
@@ -20,10 +21,11 @@ def main() -> int:
     parser.add_argument("--list", action="store_true", help="List the original 220 route IDs without connecting to CARLA")
     parser.add_argument("--route-id", help="One ID from --list; this is a subset evaluation")
     parser.add_argument("--routes", default="bench2drive",
-                        help="bench2drive (220 short routes), town10_long (CARLA Town10 route, 343 m) or a route XML path")
+                        help="bench2drive (220 short routes), town10_long (Town10, 343 m, signals), town04_highway (2.2 km, no signals) or a route XML path")
     parser.add_argument("--max-speed", type=float, default=30.0, help="PDM-Lite speed cap [km/h]")
     parser.add_argument("--no-comfort", action="store_true", help="keep PDM-Lite's original bang-bang pedals")
     parser.add_argument("--no-view", action="store_true", help="do not open the chase-camera window (PDM-Lite)")
+    parser.add_argument("--green-lights", action="store_true", help="hold every traffic light green (PDM-Lite)")
     parser.add_argument("--monitor", type=float, default=0.0, metavar="SECONDS",
                         help="also print a supervisor status line every SECONDS (default: only takeover banners)")
     parser.add_argument("--controller", choices=("mpc", "lqr", "supervised", "mpc_unprotected", "original"), default="mpc",
@@ -95,7 +97,7 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     config = dict(model=None if args.model is None else str(args.model.resolve()), planner=args.planner, record_front=args.record_front, controller=args.controller, longitudinal=args.longitudinal, mpc_extension=args.mpc_extension, speed_policy=args.speed_policy, mpc_fault=args.mpc_fault,
                   fault_start=args.fault_start, fault_duration=args.fault_duration, fault_magnitude=args.fault_magnitude, stop_after_fault=args.stop_after_fault,
-                  max_speed_kmh=args.max_speed, comfort=not args.no_comfort, monitor_period=args.monitor, view=not args.no_view,
+                  max_speed_kmh=args.max_speed, comfort=not args.no_comfort, monitor_period=args.monitor, view=not args.no_view, green_lights=args.green_lights,
                   out=str(args.out), device=args.device, dt=0.05)
     agent_config = args.out / "agent_config.json"
     agent_config.write_text(json.dumps(config, indent=2), encoding="utf-8")

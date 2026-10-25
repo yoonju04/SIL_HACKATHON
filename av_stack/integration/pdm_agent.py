@@ -78,8 +78,11 @@ from planner.cubic_spline import CubicSpline2D
 REFERENCE_AHEAD_M = 80.0
 REFERENCE_BEHIND_M = 3.0
 # LQR has no preview; PDM-Lite turns junctions at 8-11 m/s, so the curvature feed-forward is read
-# 0.2 s ahead (work/pdm_turn_sweep.py: max path error 0.26-0.70 m -> 0.08-0.12 m on R=6-20 m turns).
-LQR_CONFIG = LQRConfig(preview_time_s=.2)
+# 0.2 s ahead (experiments/pdm_turn_sweep.py: max path error 0.26-0.70 m -> 0.08-0.12 m on R=6-20 m
+# turns). Lateral weight 0.05 -> 0.5 (Apollo default favours heading; the fallback felt sluggish):
+# worst takeover error 0.11 -> 0.07 m on R=8-80 m; 1.0 starts to oscillate at R=12 m.
+LQR_CONFIG = LQRConfig(q=(0.5, 0.0, 1.0, 0.0), preview_time_s=.2)
+TAKEOVER_RATE_DPS = 90.0  # LQR steering-rate limit after takeover; SR2 bound (road wheel)
 
 
 def get_entry_point() -> str:
@@ -140,17 +143,34 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         self.live = LiveFaultCommands()
         self.console = SupervisorConsole(float(self.options.get('monitor_period', 0.)))
         print(f'[av_stack] PDM-Lite + {self.mode} steering | max speed {self.max_speed * 3.6:.0f} km/h | '
-              f'comfort pedals {"on" if self.comfort else "off"} | inject: tools\inject.py <mode> [magnitude]',
+              f'comfort pedals {"on" if self.comfort else "off"} | '
+              f'traffic lights {"always green" if self.options.get("green_lights") else "normal"}',
               flush=True)
 
     def _init(self, hd_map):
         super()._init(hd_map)
         self._longitudinal_controller = CapturingLongitudinal(self._longitudinal_controller, self.max_speed)
+        self.green_lights = bool(self.options.get('green_lights', False))
+        self._hold_lights_green()
         self.view = None
         if self.options.get('view', True):
             video = Path(self.options['out']) / 'view.mp4' if self.options.get('record_front', False) else None
             self.view = ChaseView(carla, self._world, self._vehicle, video)
             self.resources.callback(self.view.close)
+
+    def _hold_lights_green(self) -> None:
+        """--green-lights: every traffic light green and frozen (city driving without signal stops).
+
+        Re-applied about once per second because the leaderboard's background activity may
+        still switch junction lights.
+        """
+        if not self.green_lights:
+            return
+        for light in self._world.get_actors().filter('traffic.traffic_light'):
+            if light.get_state() != carla.TrafficLightState.Green:
+                light.set_state(carla.TrafficLightState.Green)
+            light.set_green_time(1e5)
+        self._world.freeze_all_traffic_lights(True)
 
     def __call__(self):
         # Upstream prints a wall-clock line every tick; keep the console for the supervisor monitor.
@@ -187,6 +207,7 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             if self.mode == 'supervised':
                 self.lateral = SupervisedLateral(geometry, self.dt, self.reference, self.fault,
                                                  lqr_config=LQR_CONFIG)
+                self.lateral.rate_dps = TAKEOVER_RATE_DPS
             elif self.mode == 'mpc_unprotected':
                 self.lateral = UnprotectedMPC(geometry, self.dt, self.reference, self.fault)
             else:
@@ -211,6 +232,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             self.recorder.capture(SensorFrame(int(input_data['rgb_front'][0]), self.elapsed, speed,
                                               input_data['rgb_front'][1]))
         started = perf_counter()
+        if getattr(self, 'green_lights', False) and self.step % 20 == 0:
+            self._hold_lights_green()
         command = self.live.poll(self.elapsed)
         if command is not None:
             if self.mode in ('supervised', 'mpc_unprotected'):
