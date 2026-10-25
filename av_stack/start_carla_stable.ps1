@@ -1,3 +1,6 @@
+# Start CARLA with the route's map already loaded (a later load_world crashed the server here).
+#   powershell -ExecutionPolicy Bypass -File .\start_carla_stable.ps1 [-Map Town10HD_Opt] [-Quality Epic]
+param([string]$Map = 'Town10HD_Opt', [ValidateSet('Low', 'Epic')][string]$Quality = 'Epic')
 $ErrorActionPreference = 'Stop'
 # CARLA_ROOT (the WindowsNoEditor folder) if set, else the CARLA folder next to the repository.
 $carlaRoot = $env:CARLA_ROOT
@@ -13,7 +16,7 @@ if ($runningCarla) {
 $serverLogFolder = Join-Path $PSScriptRoot 'runs\server_logs'
 New-Item -ItemType Directory -Path $serverLogFolder -Force | Out-Null
 $serverLogPath = Join-Path $serverLogFolder ('CarlaUE4-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
-$launchArguments = @('Town05', '-windowed', '-ResX=960', '-ResY=540', '-quality-level=Epic', '-nosound', ('-abslog="' + $serverLogPath + '"'))
+$launchArguments = @($Map, '-windowed', '-ResX=960', '-ResY=540', "-quality-level=$Quality", '-nosound', ('-abslog="' + $serverLogPath + '"'))
 Start-Process -FilePath $carlaProgram -ArgumentList $launchArguments -WorkingDirectory (Split-Path $carlaProgram) -WindowStyle Normal
-Write-Host 'CARLA launched with Epic quality. Wait for the game window, then run the driving command.'
+Write-Host "CARLA launched: map $Map, quality $Quality. Wait for the game window, then run the driving command."
 Write-Host ('Requested Unreal log file: ' + $serverLogPath)

@@ -162,7 +162,7 @@ def evaluate(options: argparse.Namespace, agent_config: Path) -> int:
                           "integration/tfpp_original_agent.py" if options.controller == "original" else
                           "integration/tfpp_agent.py")), agent_config=str(agent_config),
         debug=0, track="MAP" if options.planner == "pdm" else "SENSORS", record="", repetitions=1, routes_subset=options.route_id,
-        routes=str(BENCH / "leaderboard/data/bench2drive220.xml"), resume=False,
+        routes=str(options.routes), resume=False,
         checkpoint=str(options.out / "results.json"), debug_checkpoint=str(options.out / "live_results.txt"))
     indexer = RouteIndexer(args.routes, 1, args.routes_subset)
     if indexer.total != 1:

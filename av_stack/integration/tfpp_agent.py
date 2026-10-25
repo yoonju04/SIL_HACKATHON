@@ -29,7 +29,8 @@ class TFPPAgent(TrajectoryOnlySensorAgent):
         self.options = config
         self.setup_model(Path(config['model']))
         self.dt = float(config.get('dt', .05))
-        self.fault = FaultConfig(config['mpc_fault'], float(config['fault_start']), float(config['fault_duration']))
+        self.fault = FaultConfig(config['mpc_fault'], float(config['fault_start']), float(config['fault_duration']),
+                                 float(config.get('fault_magnitude', .05)))
         self.own_controller = None
         self.first_timestamp = None
         self.resources = ExitStack()

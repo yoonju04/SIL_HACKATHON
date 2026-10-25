@@ -41,6 +41,16 @@ _upstream_speed_limits = _route_planner_module.PrivilegedRoutePlanner.compute_sp
 
 def _speed_limits_from_garage(self, carla_map):
     # Upstream loads 'team_code/speed_limits/<Town>_speed_limits.npy' relative to the carla_garage root.
+    # '<Town>_Opt' (layered map) shares the speed-limit table of '<Town>'.
+    name = carla_map.name.split('/')[-1]
+    if name.endswith('_Opt') and not (GARAGE/'team_code'/'speed_limits'/f'{name}_speed_limits.npy').exists():
+        class _BaseMapName:
+            def __init__(self, inner):
+                self.inner, self.name = inner, inner.name[:-len('_Opt')]
+
+            def __getattr__(self, attribute):
+                return getattr(self.inner, attribute)
+        carla_map = _BaseMapName(carla_map)
     cwd = os.getcwd()
     os.chdir(GARAGE)
     try:
@@ -56,6 +66,8 @@ from integration.benchmark_recording import FrontRecorder, SensorFrame
 from integration.carla_io import read_state, to_carla_steer, vehicle_geometry
 from integration.episode import build_controller, step_controller
 from integration.fault_injection import FaultConfig
+from integration.live_control import CapturingLongitudinal, ComfortPedals, LiveFaultCommands, SupervisorConsole
+from srunner.scenariomanager.timer import GameTime
 from integration.supervised_lateral import SupervisedLateral
 from integration.unprotected_lateral import UnprotectedMPC
 from lqr_controller import LQRConfig
@@ -107,7 +119,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         self.config.steer_noise = 0.  # PDM-Lite adds 1e-3 noise for data diversity; not wanted here
         self.dt = float(self.options.get('dt', .05))
         self.fault = FaultConfig(self.options['mpc_fault'], float(self.options['fault_start']),
-                                 float(self.options['fault_duration']))
+                                 float(self.options['fault_duration']),
+                                 float(self.options.get('fault_magnitude', .05)))
         self.mode = self.options['controller']
         self.lateral = None
         self.reference = None
@@ -121,6 +134,24 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         self.recorder = FrontRecorder(out) if self.options.get('record_front', False) else None
         if self.recorder is not None:
             self.resources.callback(self.recorder.close)
+        self.max_speed = float(self.options.get('max_speed_kmh', 30.)) / 3.6
+        self.comfort = ComfortPedals(max_speed=self.max_speed, dt=self.dt) if self.options.get('comfort', True) else None
+        self.live = LiveFaultCommands()
+        self.console = SupervisorConsole()
+        print(f'[av_stack] PDM-Lite + {self.mode} steering | max speed {self.max_speed * 3.6:.0f} km/h | '
+              f'comfort pedals {"on" if self.comfort else "off"} | inject: tools\inject.py <mode> [magnitude]',
+              flush=True)
+
+    def _init(self, hd_map):
+        super()._init(hd_map)
+        self._longitudinal_controller = CapturingLongitudinal(self._longitudinal_controller, self.max_speed)
+
+    def __call__(self):
+        # Upstream prints a wall-clock line every tick; keep the console for the supervisor monitor.
+        input_data = self.sensor_interface.get_data(GameTime.get_frame())
+        control = self.run_step(input_data, GameTime.get_time())
+        control.manual_gear_shift = False
+        return control
 
     def sensors(self):
         specs = super().sensors()
@@ -174,11 +205,33 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             self.recorder.capture(SensorFrame(int(input_data['rgb_front'][0]), self.elapsed, speed,
                                               input_data['rgb_front'][1]))
         started = perf_counter()
+        command = self.live.poll(self.elapsed)
+        if command is not None:
+            if self.mode in ('supervised', 'mpc_unprotected'):
+                self.fault = command
+                if self.lateral is not None:
+                    self.lateral.injector.config = command
+                self.console.injected(self.elapsed, command)
+            else:
+                print('[inject] ignored: faults need --controller supervised or mpc_unprotected', flush=True)
         control = super().run_step(input_data, timestamp, sensors, plant)
+        pdm_pedals = (float(control.throttle), float(control.brake))
+        if self.comfort is not None and getattr(self, '_longitudinal_controller', None) is not None:
+            hazard, target, _ = self._longitudinal_controller.last
+            blocked = self.ego_blocked_for_ticks >= self.config.max_blocked_ticks  # PDM-Lite's unstick throttle
+            if not blocked:
+                control.throttle, control.brake = self.comfort(hazard or control.brake >= 1. and target < .05,
+                                                               target, speed, float(control.throttle))
+                if control.throttle == 0 and speed < self.config.minimum_speed_to_prevent_rolling_back:
+                    control.brake = 1.
         safe_stop = bool(getattr(self.lateral, 'stop_required', False))
         if safe_stop:
             control.throttle, control.brake = 0., 1.
         result = self.last_lateral
+        active = getattr(self.lateral, 'active', self.mode)
+        self.console.update(self.elapsed, active, self.lateral.record() if hasattr(self.lateral, 'record') else {},
+                            None if result is None else result.e_y, None if result is None else result.e_psi, speed)
+        self._draw_status(active)
         record = dict(t=self.elapsed, steer=float(control.steer), throttle=float(control.throttle),
                       brake=float(control.brake), measured_speed=speed, planner='PDM-Lite',
                       source=getattr(self.lateral, 'active', self.mode),
@@ -186,6 +239,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
                       heading_error=None if result is None else float(result.e_psi),
                       lateral_status=None if result is None else result.status,
                       fault_injected=self.fault.active(self.elapsed), safe_stop=safe_stop,
+                      fault_mode=self.fault.mode, fault_magnitude=self.fault.magnitude,
+                      pdm_throttle=pdm_pedals[0], pdm_brake=pdm_pedals[1],
                       vehicle_hazard=bool(self.vehicle_hazard), walker_hazard=bool(self.walker_hazard),
                       traffic_light_hazard=bool(self.traffic_light_hazard), junction=bool(self.junction),
                       step_time_s=perf_counter()-started)
@@ -196,6 +251,18 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         stop_after = self.options.get('stop_after_fault')
         self.stop_requested = bool(stop_after is not None and self.fault.config_active_since(self.elapsed, stop_after))
         return control
+
+    def _draw_status(self, active: str) -> None:
+        """Steering owner and attack state above the ego vehicle (visible in the CARLA window)."""
+        colors = {'mpc': carla.Color(0, 200, 0), 'lqr': carla.Color(255, 140, 0)}
+        label = {'mpc': 'MPC', 'lqr': 'LQR (fallback)', 'safe_stop': 'SAFE STOP', 'none': 'NO STEERING'}.get(active, active.upper())
+        location = self._vehicle.get_location()
+        life = 2 * self.dt
+        self._world.debug.draw_string(location + carla.Location(z=2.6), label, False,
+                                      colors.get(active, carla.Color(220, 0, 0)), life)
+        if self.fault.active(self.elapsed):
+            self._world.debug.draw_string(location + carla.Location(z=3.3), 'ATTACK: ' + self.fault.mode, False,
+                                          carla.Color(220, 0, 0), life)
 
     def destroy(self, results=None) -> None:
         if hasattr(self, 'resources'):
