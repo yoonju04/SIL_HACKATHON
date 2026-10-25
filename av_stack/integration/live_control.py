@@ -115,8 +115,8 @@ class ComfortPedals:
     - throttle capped and rate-limited (no 0 -> 1 jumps)
     """
     max_speed: float = 30 / 3.6
-    throttle_max: float = .5
-    throttle_rise_per_s: float = 1.0
+    throttle_max: float = .75
+    throttle_rise_per_s: float = 2.0
     dt: float = .05
     throttle: float = 0.
 

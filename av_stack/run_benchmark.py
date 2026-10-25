@@ -22,7 +22,7 @@ def main() -> int:
     parser.add_argument("--route-id", help="One ID from --list; this is a subset evaluation")
     parser.add_argument("--routes", default="bench2drive",
                         help="bench2drive (220 short routes), town10_long (Town10, 343 m, signals), town04_highway (2.2 km, no signals) or a route XML path")
-    parser.add_argument("--max-speed", type=float, default=30.0, help="PDM-Lite speed cap [km/h]")
+    parser.add_argument("--max-speed", type=float, default=40.0, help="PDM-Lite speed cap [km/h]")
     parser.add_argument("--no-comfort", action="store_true", help="keep PDM-Lite's original bang-bang pedals")
     parser.add_argument("--no-view", action="store_true", help="do not open the chase-camera window (PDM-Lite)")
     parser.add_argument("--green-lights", action="store_true", help="switch the light ahead of the ego to green (its junction's others red); PDM-Lite")

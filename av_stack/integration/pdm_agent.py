@@ -138,7 +138,7 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         self.recorder = FrontRecorder(out) if self.options.get('record_front', False) else None
         if self.recorder is not None:
             self.resources.callback(self.recorder.close)
-        self.max_speed = float(self.options.get('max_speed_kmh', 30.)) / 3.6
+        self.max_speed = float(self.options.get('max_speed_kmh', 40.)) / 3.6
         self.comfort = ComfortPedals(max_speed=self.max_speed, dt=self.dt) if self.options.get('comfort', True) else None
         self.live = LiveFaultCommands()
         self.console = SupervisorConsole(float(self.options.get('monitor_period', 0.)))
