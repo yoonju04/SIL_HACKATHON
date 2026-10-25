@@ -133,12 +133,14 @@ class TFPPAgent(TrajectoryOnlySensorAgent):
         control_started = perf_counter()
         command = self.own_controller.command(reference, desired_speed, state, elapsed, lqr_reference)
         control_seconds = perf_counter() - control_started
-        self.control = carla.VehicleControl(throttle=command.throttle, brake=command.brake, steer=command.steer)
+        creeping = self._creep(state.vx, elapsed, command.source)
+        self.control = carla.VehicleControl(throttle=.4 if creeping else command.throttle,
+                                            brake=0. if creeping else command.brake, steer=command.steer)
         record = dict(t=elapsed, sensor_frame=int(input_data['rgb_front'][0]), **asdict(command), perception=self.options.get('planner', 'transfuserpp'), original_control=False,
                       fault_injected=self.fault.active(elapsed), measured_speed=state.vx,
                       yaw_rate=state.yaw_rate, prediction_time_s=prediction_seconds,
                       control_time_s=control_seconds, model_target_speed=prediction.target_speed,
-                      lidar_brake=guard.brake, lidar_clearance_m=guard.clearance_m)
+                      lidar_brake=guard.brake, lidar_clearance_m=guard.clearance_m, creep=creeping)
         if self.own_controller.supervised is not None:
             record.update(self.own_controller.supervised.record())
         if self.own_controller.unprotected is not None:
@@ -158,6 +160,36 @@ class TFPPAgent(TrajectoryOnlySensorAgent):
         stop_after = self.options.get('stop_after_fault')
         self.stop_requested = bool(stop_after is not None and self.fault.config_active_since(elapsed, stop_after))
         return self.control
+
+    def _creep(self, speed: float, elapsed: float, source: str) -> bool:
+        """Upstream TF++ stuck recovery (stuck_threshold / creep_duration / safety box), demo timing.
+
+        The model sometimes keeps predicting 0 m/s at a busy junction entry forever. After
+        creep_after_s standing still, creep with throttle 0.4 for 1 s if the LiDAR safety box
+        (ego front to 2.5 m ahead, 0.8 x half width, 0.5-1.5 m high) is empty; upstream waits 55 s.
+        """
+        if source == 'safe_stop':
+            return False
+        if speed > .1:
+            self._stopped_since = None
+        elif getattr(self, '_stopped_since', None) is None:
+            self._stopped_since = elapsed
+        if getattr(self, '_creep_until', 0.) > elapsed:
+            return True
+        if self._stopped_since is None or elapsed - self._stopped_since < float(self.options.get('creep_after_s', 6.)):
+            return False
+        c, cloud = self.config, self.lidar_buffer[-1]
+        x0 = getattr(c, 'safety_box_x_min', 2.45)  # TCP's config has no safety box: TF++ values
+        y0 = getattr(c, 'safety_box_y_max', .85)
+        box = ((cloud[:, 0] > x0) & (cloud[:, 0] < getattr(c, 'safety_box_x_max', x0 + 2.5))
+               & (cloud[:, 1] > -y0) & (cloud[:, 1] < y0)
+               & (cloud[:, 2] > getattr(c, 'safety_box_z_min', .5)) & (cloud[:, 2] < getattr(c, 'safety_box_z_max', 1.5)))
+        if box.any():
+            return False
+        print(f'[creep] t={elapsed:.1f}s model kept 0 m/s for {elapsed - self._stopped_since:.0f}s, '
+              f'safety box clear -> creeping forward', flush=True)
+        self._creep_until, self._stopped_since = elapsed + 1., None
+        return True
 
     def throttle_law(self):
         """TF++'s own longitudinal law (nav_planner.get_throttle); steering stays with MPC/LQR.
