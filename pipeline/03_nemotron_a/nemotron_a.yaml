@@ -22,6 +22,7 @@ A_scenario_generation:
     rationale: [evidence_ids, expected_mechanism, missing_information]
   per_round: 15
   must_cite_ids: true
+  cite_only_hypotheses_with_status: [proposed, testing]   # 07이 hypothesis_ids로 지표 GP를 고른다
 
 # 09 Monitor → A 피드백 (실패 few-shot)
 feedback_in:

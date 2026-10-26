@@ -15,6 +15,11 @@ environment:
   tire_friction_scale:    {type: float, range: [0.3, 1.0], range_status: example_only,
                            note: "CARLA tire_friction 스케일. 물리적 μ와 같다고 가정하지 않음"}
   lead_vehicle:           {type: bool}
+  vehicle_mass_scale:     {type: float, range: [0.8, 1.5], range_status: example_only,
+                           note: "CARLA physics control mass 배율 (H-08)"}
+  maneuver:               {type: categorical, values: [lane_keeping, lane_change]}   # H-10
+  velocity_disturbance:   {type: categorical, values: [none, moderate]}             # H-10
+  steering_disturbance:   {type: categorical, values: [none, moderate]}             # H-10
 
 faults:
   # layer: 주입 위치. 감지기는 주입 신호를 직접 보지 않는다.
@@ -24,14 +29,14 @@ faults:
     params:
       delay_ms:   {range: [10, 80],   range_status: example_only}
       duration_s: {range: [0.1, 3.0], range_status: example_only}
-    targets_hypotheses: [H-01, H-02]
+    targets_hypotheses: [H-01, H-02, H-03, H-04, H-06, H-07]   # H-03은 control arm
   - id: F-02
     type: solver_status_override
     layer: supervisor_input
     params:
       status:     {values: [infeasible, numerical_error]}
       duration_s: {range: [0.05, 2.0], range_status: example_only}
-    targets_hypotheses: [H-01]
+    targets_hypotheses: [H-01, H-04, H-07]
   - id: F-03
     type: solver_delay_oscillation
     layer: solver_wrapper
@@ -41,18 +46,27 @@ faults:
       amplitude_ms: {range: [2, 10],   range_status: example_only}
       period_s:     {range: [0.1, 1.0], range_status: example_only}
     targets_hypotheses: [H-03]
+  - id: F-04
+    type: switch_command_delay
+    layer: supervisor_output                 # 전환 결정 후 LQR 명령 적용을 늦춤
+    params:
+      extra_delay_ms: {range: [0, 150], range_status: example_only}
+    co_injected_only: true                   # 단독 주입하지 않고 F-01과 함께 (H-06 slack 조절)
+    targets_hypotheses: [H-06]
+  # H-05, H-09는 fault_type을 F-01~03 중 자유롭게 고른다 (scenario_guidance.fault_dimensions)
   # 선택: 시간 여유가 있을 때만
-  # - id: F-04
+  # - id: F-05
   #   type: localization_degradation
   #   layer: state_input
   #   params: {extra_latency_ms: [0, 200], noise_std_m: [0.0, 0.5]}
 
 fault_timing:
-  reference_events: [curve_entry, curve_apex, lane_change_start, steady_state]
+  reference_events: [curve_entry, curve_apex, straight_mid, lane_change_start, steady_state]
   offset_s: {range: [-1.0, 1.0], range_status: example_only}
   event_detection:                            # 1~3일 차에 반드시 확정
     curve_entry:       {method: null, note: "예: route 곡률이 임계값을 처음 넘는 waypoint"}
     curve_apex:        {method: null, note: "예: 곡선 구간 내 곡률 최대 waypoint"}
+    straight_mid:      {method: null, note: "H-02 control arm. 예: 직선 구간 중간 waypoint"}
     lane_change_start: {method: null}
     steady_state:      {method: null, note: "예: 속도 오차 < 0.5 m/s 유지 2초"}
   record_actual_onset_time: true              # 계획 시점과 실제 주입 시점을 모두 기록

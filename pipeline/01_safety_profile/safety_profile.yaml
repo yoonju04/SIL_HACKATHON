@@ -12,7 +12,7 @@ meta:
   verification_states: [unverified, code_checked]   # 코드 사실은 code_checked까지만
 
 system:
-  controller_period_ms: null
+  controller_period_ms: null             # required_for: [H-10]
   ego_vehicle_blueprint: null
   longitudinal_controller: null
   lateral_controller_chain: [C-MPC, SWITCH, C-LQR]
@@ -24,7 +24,10 @@ controllers:
     implementation:
       file: null
       class_or_function: null
-      prediction_model: null              # kinematic/dynamic bicycle, etc.
+      prediction_model: null              # kinematic/dynamic bicycle, etc. required_for: [H-08, H-11]
+      model_parameters_fixed: null        # 질량·마찰 등 모델 파라미터가 고정인가. required_for: [H-08]
+      assumed_friction: null              # 예측 모델이 가정하는 마찰. required_for: [H-09]
+      assumed_mass_kg: null
       state_variables: []
       control_variables: []
       solver_name: null
@@ -37,16 +40,17 @@ controllers:
       cost_weights: {}                    # actual weights only if extractable
     constraints:
       state_bounds: {}
-      steering_angle_bounds: null
+      steering_angle_bounds: null         # required_for: [H-11]
       steering_rate_bounds: null
       acceleration_bounds: null
+      lateral_accel_limit_mps2: null      # required_for: [H-11]
       other_constraints: []
     solver_runtime:
-      configured_time_limit_ms: null      # required_for: [DF-03, H-02]
+      configured_time_limit_ms: null      # required_for: [DF-03, H-03]
       maximum_iterations: null
       convergence_tolerance: null
       possible_status_codes: []
-      timeout_handling: null              # required_for: [H-02]
+      timeout_handling: null              # required_for: [H-10]
       infeasible_handling: null
       numerical_error_handling: null
       warm_start_enabled: null
@@ -74,8 +78,9 @@ controllers:
       scheduling_variables: []
       feedforward_present: null
     constraints_and_behavior:
-      steering_saturation: null
-      steering_rate_limit: null
+      steering_saturation: null           # 조향각 한계(rad). required_for: [H-04, H-05, recovery_robustness]
+      steering_rate_limit: null           # 조향속도 한계(rad/s). required_for: [H-05, recovery_robustness]
+      output_clipping: null               # 명령을 한계로 자르는가. required_for: [H-05]
       state_estimate_inputs: []
       low_speed_handling: null
       integrator_or_state_reset: null
@@ -85,6 +90,7 @@ controllers:
 switching:
   # 3. MPC→LQR 및 필요 시 LQR→MPC 전환 규칙
   supervisor_file: null
+  backup_controller_enabled: null        # required_for: [H-04, H-05, H-07, H-09]
   failure_detector_inputs: []            # only runtime-observable signals (never injected-fault truth)
   triggers: []
   # 항목 형태:
@@ -93,18 +99,19 @@ switching:
   #   threshold: null
   #   consecutive_cycles: null
   #   evidence_ids: []                   # O-xxx
-  failure_detection_period_ms: null      # required_for: [DF-04, H-02]
+  failure_detection_period_ms: null      # required_for: [DF-04, H-02, H-06]
+  switch_latency_ms: null                # 감지 후 LQR 명령이 나가기까지. required_for: [H-06]
   command_during_detection_delay: null   # required_for: [H-02]
   handover:
     state_source_for_lqr: null
-    steering_blending: null              # required_for: [H-03]
+    steering_blending: null
     steering_rate_limit: null
     reset_behavior: null
   return_to_mpc:
     enabled: null                        # required_for: [H-03]
     conditions: []
     hysteresis: null
-    minimum_dwell_s: null
+    minimum_dwell_s: null                # required_for: [H-03]
   code_refs: []
 
 dependencies:
@@ -122,6 +129,20 @@ dependencies:
     update_rate_hz: null
     stale_data_policy: null
   other_inputs: []
+
+vehicle:
+  # 차선·차체 치수. 코드 또는 CARLA 맵/블루프린트에서 확인
+  lane_half_width_m: null                # required_for: [H-11, recovery_robustness]
+  vehicle_half_width_m: null             # required_for: [H-11, recovery_robustness]
+
+recoverability:
+  # 코드 사실이 아니라 LQR 설계 모델로 계산한 산출물. 계산 커밋과 함께 기록하고,
+  # 비어 있으면 H-04/H-06/H-07/H-09는 blocked (02 recoverability_oracle_spec 참조)
+  P_matrix: null
+  level_c: null
+  reach_table: null
+  settling_time_s: null
+  artifact_commit: null
 
 code_evidence:
   # 관측 사실의 유일한 원본. 위 필드들은 여기의 id를 참조한다.

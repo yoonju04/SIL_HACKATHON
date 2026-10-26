@@ -1,20 +1,45 @@
-# surrogate.yaml — GP surrogate
+# surrogate.yaml — GP surrogate (지표별 GP)
 # 입력: 05a 결정론적 feature + 05b 질문 답변 (+ ODD·고장 수치)
-# 타깃: margin_delta_m (08 짝 실행 차이값). 출력: 평균·불확실성 → 07 Orchestrator
+# 타깃: 가설마다 주 지표가 다르므로 지표마다 GP를 하나씩 둔다.
+#       지표 목록·타깃 형태·스케일의 원본은 02 vulnerability_patterns.yaml metric_rules[*].gp
+# 출력: 지표별 평균·불확실성(정규화 z) → 07 Orchestrator
 
 meta:
-  schema_version: '1.0'
+  schema_version: '2.0'
   profile_id: sp-code-aware-mpc-lqr
   status: template_unverified
 
 surrogate:
   model: gaussian_process_regression
   kernel: "Matern 5/2 with ARD + WhiteKernel"
-  target: margin_delta_m
-  outputs: [mean_delta_m, std_delta_m]
+  per_metric: true                              # 지표 하나당 GP 하나, 같은 feature 입력
+  targets_from: 02_hypotheses/vulnerability_patterns.yaml#metric_rules.*.gp
+  active_metrics: metrics_of_hypotheses_with_status [proposed, testing]   # blocked 가설 지표는 학습 안 함
+  train_on: all_valid_runs_where_target_defined # 모든 런이 모든 지표를 기록하므로 지표 GP끼리 데이터 공유
+
+  # 타깃 계산 (런 1개 → 지표별 y 1개)
+  target_forms:
+    paired_delta_if_fault_else_absolute:
+      with_fault: "metric(fault_injected) - metric(no_fault_baseline)"   # 같은 match 키의 baseline
+      without_fault: "metric(run)"               # H-08/H-10/H-11처럼 fault_types가 빈 후보는 짝 없음
+    absolute_post_switch:
+      value: "metric(fault_injected)"           # 전환 후 창만 정의됨. baseline은 전환이 없다
+      undefined_if: no_switch                   # 타깃 없음으로 제외, recovery_success=false는 판정에서만 사용
+
+  # 지표끼리 단위가 달라 07에서 한 줄로 순위를 매기려면 방향·스케일을 맞춘다
+  orientation:
+    formula: "z = sign * y / gp.scale"
+    sign: "+1 if support_direction == negative else -1"   # 결과: z가 낮을수록 가설 방향(더 위험)
+    scale_units: "metric_rules[*].gp.scale (= minimum_effect, recovery_robustness는 example_only 0.1)"
+    fit_on: z                                   # GP는 z를 학습한다. 원래 단위 평균은 z * scale / sign으로 복원
+  target_transform:
+    fraction_metrics: none                      # deadline_miss_rate 등. 0/1 근처에 몰리면 logit 검토
+  outputs: [mean_z, std_z]                      # 지표별
   refit: per_batch
+  not_used_for_hypothesis_decision: true        # 판정은 02 decision_protocol의 전용 무작위 런만
 
 # 09 Monitor → GP 재학습
 feedback_in:
   from: 09_monitor/run_record
-  select: all_valid_paired_results
+  select: all_valid_runs
+  fields: [features, metrics, baseline_metrics, gp_targets]

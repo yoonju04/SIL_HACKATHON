@@ -1,0 +1,307 @@
+# safety_profile.example.yaml — 가상 예시 (example_only). 실제 코드 관측값이 아니다.
+# pipeline/01_safety_profile/safety_profile.yaml과 같은 스키마. tests/test_hypothesis_tools.py가 사용한다.
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-code-aware-mpc-lqr
+  status: example_only
+  source_revision:
+    repository: null
+    commit: null
+    source_files: []
+  extraction_methods:
+  - ast
+  - static
+  - llm_inference
+  - human
+  - simulation_measured
+  verification_states:
+  - unverified
+  - code_checked
+system:
+  controller_period_ms: null
+  ego_vehicle_blueprint: null
+  longitudinal_controller: null
+  lateral_controller_chain:
+  - C-MPC
+  - SWITCH
+  - C-LQR
+controllers:
+  mpc:
+    id: C-MPC
+    implementation:
+      file: null
+      class_or_function: null
+      prediction_model: kinematic_bicycle
+      model_parameters_fixed: true
+      assumed_friction: null
+      assumed_mass_kg: null
+      state_variables: []
+      control_variables: []
+      solver_name: null
+      solver_interface: null
+    planning:
+      horizon_steps: null
+      prediction_dt_s: null
+      reference_inputs: []
+      cost_terms: []
+      cost_weights: {}
+    constraints:
+      state_bounds: {}
+      steering_angle_bounds: null
+      steering_rate_bounds: null
+      acceleration_bounds: null
+      lateral_accel_limit_mps2: null
+      other_constraints: []
+    solver_runtime:
+      configured_time_limit_ms: 20
+      maximum_iterations: null
+      convergence_tolerance: null
+      possible_status_codes: []
+      timeout_handling: null
+      infeasible_handling: null
+      numerical_error_handling: null
+      warm_start_enabled: null
+      last_valid_command_fallback: null
+    code_refs: []
+  lqr:
+    id: C-LQR
+    implementation:
+      file: null
+      class_or_function: null
+      design_model: null
+      state_variables: []
+      control_variables: []
+      system_matrix_A_source: null
+      input_matrix_B_source: null
+    feedback_design:
+      gain_type: fixed
+      gain_K_source: null
+      Q_source: null
+      R_source: null
+      design_speed_mps: 15.0
+      design_curvature_per_m: 0.0
+      scheduling_variables: []
+      feedforward_present: null
+    constraints_and_behavior:
+      steering_saturation: null
+      steering_rate_limit: null
+      output_clipping: null
+      state_estimate_inputs: []
+      low_speed_handling: null
+      integrator_or_state_reset: null
+      failure_or_invalid_output_handling: null
+    code_refs: []
+switching:
+  supervisor_file: null
+  backup_controller_enabled: true
+  failure_detector_inputs: []
+  triggers: []
+  failure_detection_period_ms: 20
+  switch_latency_ms: null
+  command_during_detection_delay: hold_last
+  handover:
+    state_source_for_lqr: null
+    steering_blending: none
+    steering_rate_limit: null
+    reset_behavior: null
+  return_to_mpc:
+    enabled: true
+    conditions: []
+    hysteresis: null
+    minimum_dwell_s: 0.2
+  code_refs: []
+dependencies:
+  localization:
+    update_rate_hz: null
+    latency_ms: null
+    stale_data_policy: null
+  reference_path:
+    update_rate_hz: null
+    latency_ms: null
+    stale_data_policy: null
+  vehicle_state_estimator:
+    update_rate_hz: null
+    stale_data_policy: null
+  other_inputs: []
+vehicle:
+  lane_half_width_m: null
+  vehicle_half_width_m: null
+recoverability:
+  P_matrix: null
+  level_c: null
+  reach_table: null
+  settling_time_s: null
+  artifact_commit: null
+code_evidence:
+  observations:
+  - id: O-001
+    field: controllers.lqr.feedback_design.gain_type
+    observed_value: fixed
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-002
+    field: controllers.lqr.feedback_design.design_speed_mps
+    observed_value: 15.0
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-003
+    field: controllers.lqr.feedback_design.design_curvature_per_m
+    observed_value: 0.0
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-005
+    field: switching.backup_controller_enabled
+    observed_value: true
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-006
+    field: controllers.mpc.solver_runtime.configured_time_limit_ms
+    observed_value: 20
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-007
+    field: switching.failure_detection_period_ms
+    observed_value: 20
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-008
+    field: switching.command_during_detection_delay
+    observed_value: hold_last
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-010
+    field: switching.return_to_mpc.enabled
+    observed_value: true
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-011
+    field: switching.return_to_mpc.hysteresis
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-012
+    field: switching.return_to_mpc.minimum_dwell_s
+    observed_value: 0.2
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-013
+    field: switching.handover.steering_blending
+    observed_value: none
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-014
+    field: controllers.lqr.constraints_and_behavior.steering_saturation
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-015
+    field: controllers.lqr.constraints_and_behavior.steering_rate_limit
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-016
+    field: vehicle.lane_half_width_m
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-017
+    field: vehicle.vehicle_half_width_m
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-019
+    field: recoverability.settling_time_s
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-020
+    field: controllers.lqr.implementation.design_model
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-021
+    field: controllers.lqr.feedback_design.gain_K_source
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-022
+    field: controllers.lqr.constraints_and_behavior.output_clipping
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-023
+    field: controllers.mpc.implementation.prediction_model
+    observed_value: kinematic_bicycle
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-024
+    field: controllers.mpc.implementation.assumed_friction
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-025
+    field: controllers.mpc.solver_runtime.timeout_handling
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-026
+    field: system.controller_period_ms
+    observed_value: null
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  - id: O-027
+    field: controllers.mpc.implementation.model_parameters_fixed
+    observed_value: true
+    source: null
+    extraction_method: null
+    verified: false
+    note: example_only_unverified
+  unresolved_questions: []
+  conflicts: []

@@ -1,0 +1,1024 @@
+meta:
+  kind: unverified_scenario_candidates
+  seed: 7
+  per_arm: 8
+  lateral_acc_threshold_mps2: null
+  ready_for_carla: false
+candidates:
+- candidate_id: H-01-C-001
+  hypothesis_ids:
+  - H-01
+  arm: condition
+  metric: recovery_success
+  parameters:
+    speed_mps: 10.431772
+    road_curvature_per_m: 0.041923
+    fault_type: F-01
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 4.562139
+  preconditions: &id001 {}
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 > 0.01
+  - speed_offset_mps: abs(speed_mps - 15.0) > 5.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-002
+  hypothesis_ids:
+  - H-01
+  arm: condition
+  metric: recovery_success
+  parameters:
+    speed_mps: 10.882581
+    road_curvature_per_m: 0.019442
+    fault_type: F-02
+    onset_event: curve_entry
+    nominal_lateral_acc_mps2: 2.302527
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 > 0.01
+  - speed_offset_mps: abs(speed_mps - 15.0) > 5.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-003
+  hypothesis_ids:
+  - H-01
+  arm: condition
+  metric: recovery_success
+  parameters:
+    speed_mps: 25.513828
+    road_curvature_per_m: 0.019892
+    fault_type: F-01
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 12.948805
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 > 0.01
+  - speed_offset_mps: abs(speed_mps - 15.0) > 5.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-004
+  hypothesis_ids:
+  - H-01
+  arm: condition
+  metric: recovery_success
+  parameters:
+    speed_mps: 6.149117
+    road_curvature_per_m: 0.011767
+    fault_type: F-02
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 0.44493
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 > 0.01
+  - speed_offset_mps: abs(speed_mps - 15.0) > 5.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-005
+  hypothesis_ids:
+  - H-01
+  arm: condition
+  metric: recovery_success
+  parameters:
+    speed_mps: 11.54351
+    road_curvature_per_m: 0.013241
+    fault_type: F-02
+    onset_event: curve_entry
+    nominal_lateral_acc_mps2: 1.764398
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 > 0.01
+  - speed_offset_mps: abs(speed_mps - 15.0) > 5.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-006
+  hypothesis_ids:
+  - H-01
+  arm: condition
+  metric: recovery_success
+  parameters:
+    speed_mps: 21.521006
+    road_curvature_per_m: 0.004912
+    fault_type: F-02
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 2.275011
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 > 0.01
+  - speed_offset_mps: abs(speed_mps - 15.0) > 5.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-007
+  hypothesis_ids:
+  - H-01
+  arm: condition
+  metric: recovery_success
+  parameters:
+    speed_mps: 10.704604
+    road_curvature_per_m: 0.009572
+    fault_type: F-02
+    onset_event: curve_entry
+    nominal_lateral_acc_mps2: 1.096842
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 > 0.01
+  - speed_offset_mps: abs(speed_mps - 15.0) > 5.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-008
+  hypothesis_ids:
+  - H-01
+  arm: condition
+  metric: recovery_success
+  parameters:
+    speed_mps: 21.142723
+    road_curvature_per_m: 0.018805
+    fault_type: F-01
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 8.406112
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 > 0.01
+  - speed_offset_mps: abs(speed_mps - 15.0) > 5.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-001
+  hypothesis_ids:
+  - H-01
+  arm: control
+  metric: recovery_success
+  parameters:
+    speed_mps: 21.182534
+    road_curvature_per_m: 0.010515
+    fault_type: F-01
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 4.718078
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 <= 0.005
+  - speed_offset_mps: abs(speed_mps - 15.0) <= 2.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-002
+  hypothesis_ids:
+  - H-01
+  arm: control
+  metric: recovery_success
+  parameters:
+    speed_mps: 27.010523
+    road_curvature_per_m: 0.018161
+    fault_type: F-02
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 13.249691
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 <= 0.005
+  - speed_offset_mps: abs(speed_mps - 15.0) <= 2.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-003
+  hypothesis_ids:
+  - H-01
+  arm: control
+  metric: recovery_success
+  parameters:
+    speed_mps: 24.274886
+    road_curvature_per_m: 0.028406
+    fault_type: F-02
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 16.738806
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 <= 0.005
+  - speed_offset_mps: abs(speed_mps - 15.0) <= 2.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-004
+  hypothesis_ids:
+  - H-01
+  arm: control
+  metric: recovery_success
+  parameters:
+    speed_mps: 13.100418
+    road_curvature_per_m: 0.022253
+    fault_type: F-02
+    onset_event: curve_entry
+    nominal_lateral_acc_mps2: 3.819081
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 <= 0.005
+  - speed_offset_mps: abs(speed_mps - 15.0) <= 2.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-005
+  hypothesis_ids:
+  - H-01
+  arm: control
+  metric: recovery_success
+  parameters:
+    speed_mps: 5.534392
+    road_curvature_per_m: 0.040601
+    fault_type: F-02
+    onset_event: curve_entry
+    nominal_lateral_acc_mps2: 1.243588
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 <= 0.005
+  - speed_offset_mps: abs(speed_mps - 15.0) <= 2.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-006
+  hypothesis_ids:
+  - H-01
+  arm: control
+  metric: recovery_success
+  parameters:
+    speed_mps: 20.829273
+    road_curvature_per_m: 0.000691
+    fault_type: F-01
+    onset_event: curve_entry
+    nominal_lateral_acc_mps2: 0.299796
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 <= 0.005
+  - speed_offset_mps: abs(speed_mps - 15.0) <= 2.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-007
+  hypothesis_ids:
+  - H-01
+  arm: control
+  metric: recovery_success
+  parameters:
+    speed_mps: 10.657139
+    road_curvature_per_m: 0.013998
+    fault_type: F-02
+    onset_event: curve_entry
+    nominal_lateral_acc_mps2: 1.589817
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 <= 0.005
+  - speed_offset_mps: abs(speed_mps - 15.0) <= 2.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-01-C-008
+  hypothesis_ids:
+  - H-01
+  arm: control
+  metric: recovery_success
+  parameters:
+    speed_mps: 29.220096
+    road_curvature_per_m: 0.026234
+    fault_type: F-01
+    onset_event: curve_apex
+    nominal_lateral_acc_mps2: 22.398957
+  preconditions: *id001
+  unbound_conditions:
+  - curvature_offset: road_curvature_per_m - 0.0 <= 0.005
+  - speed_offset_mps: abs(speed_mps - 15.0) <= 2.0
+  lateral_screen: not_evaluated
+  executable: false
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-001
+  hypothesis_ids:
+  - H-02
+  arm: condition
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.023545
+    fault_type: F-01
+    onset_event: curve_entry
+  preconditions: &id002
+    command_during_detection_delay: hold_last
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-002
+  hypothesis_ids:
+  - H-02
+  arm: condition
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.014399
+    fault_type: F-01
+    onset_event: curve_entry
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-003
+  hypothesis_ids:
+  - H-02
+  arm: condition
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.019754
+    fault_type: F-01
+    onset_event: curve_entry
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-004
+  hypothesis_ids:
+  - H-02
+  arm: condition
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.019502
+    fault_type: F-01
+    onset_event: curve_entry
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-005
+  hypothesis_ids:
+  - H-02
+  arm: condition
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.007557
+    fault_type: F-01
+    onset_event: curve_entry
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-006
+  hypothesis_ids:
+  - H-02
+  arm: condition
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.005572
+    fault_type: F-01
+    onset_event: curve_entry
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-007
+  hypothesis_ids:
+  - H-02
+  arm: condition
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.044346
+    fault_type: F-01
+    onset_event: curve_entry
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-008
+  hypothesis_ids:
+  - H-02
+  arm: condition
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.003114
+    fault_type: F-01
+    onset_event: curve_entry
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-001
+  hypothesis_ids:
+  - H-02
+  arm: control
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.04882
+    fault_type: F-01
+    onset_event: straight_mid
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-002
+  hypothesis_ids:
+  - H-02
+  arm: control
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.030167
+    fault_type: F-01
+    onset_event: straight_mid
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-003
+  hypothesis_ids:
+  - H-02
+  arm: control
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.043701
+    fault_type: F-01
+    onset_event: straight_mid
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-004
+  hypothesis_ids:
+  - H-02
+  arm: control
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.00784
+    fault_type: F-01
+    onset_event: straight_mid
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-005
+  hypothesis_ids:
+  - H-02
+  arm: control
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.032353
+    fault_type: F-01
+    onset_event: straight_mid
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-006
+  hypothesis_ids:
+  - H-02
+  arm: control
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.018763
+    fault_type: F-01
+    onset_event: straight_mid
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-007
+  hypothesis_ids:
+  - H-02
+  arm: control
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.049585
+    fault_type: F-01
+    onset_event: straight_mid
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-02-C-008
+  hypothesis_ids:
+  - H-02
+  arm: control
+  metric: pre_switch_max_lateral_error_m
+  parameters:
+    road_curvature_per_m: 0.014144
+    fault_type: F-01
+    onset_event: straight_mid
+  preconditions: *id002
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-001
+  hypothesis_ids:
+  - H-03
+  arm: condition
+  metric: switch_count
+  parameters:
+    speed_mps: 26.362032
+    fault_type: F-03
+    F-03.amplitude_ms: 6.417458
+    F-03.center_ms: 18.677215
+  preconditions: &id003 {}
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-002
+  hypothesis_ids:
+  - H-03
+  arm: condition
+  metric: switch_count
+  parameters:
+    speed_mps: 9.623351
+    fault_type: F-03
+    F-03.amplitude_ms: 3.333305
+    F-03.center_ms: 19.434811
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-003
+  hypothesis_ids:
+  - H-03
+  arm: condition
+  metric: switch_count
+  parameters:
+    speed_mps: 25.007887
+    fault_type: F-03
+    F-03.amplitude_ms: 6.207662
+    F-03.center_ms: 20.121836
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-004
+  hypothesis_ids:
+  - H-03
+  arm: condition
+  metric: switch_count
+  parameters:
+    speed_mps: 20.947267
+    fault_type: F-03
+    F-03.amplitude_ms: 7.734551
+    F-03.center_ms: 22.488583
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-005
+  hypothesis_ids:
+  - H-03
+  arm: condition
+  metric: switch_count
+  parameters:
+    speed_mps: 6.165024
+    fault_type: F-03
+    F-03.amplitude_ms: 9.355038
+    F-03.center_ms: 17.802224
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-006
+  hypothesis_ids:
+  - H-03
+  arm: condition
+  metric: switch_count
+  parameters:
+    speed_mps: 8.527002
+    fault_type: F-03
+    F-03.amplitude_ms: 7.442087
+    F-03.center_ms: 17.016834
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-007
+  hypothesis_ids:
+  - H-03
+  arm: condition
+  metric: switch_count
+  parameters:
+    speed_mps: 9.623827
+    fault_type: F-03
+    F-03.amplitude_ms: 2.565803
+    F-03.center_ms: 22.383703
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-008
+  hypothesis_ids:
+  - H-03
+  arm: condition
+  metric: switch_count
+  parameters:
+    speed_mps: 26.384086
+    fault_type: F-03
+    F-03.amplitude_ms: 3.074561
+    F-03.center_ms: 17.639185
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-001
+  hypothesis_ids:
+  - H-03
+  arm: control
+  metric: switch_count
+  parameters:
+    speed_mps: 9.664727
+    fault_type: F-01
+    F-01.delay_ms: 17.274214
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-002
+  hypothesis_ids:
+  - H-03
+  arm: control
+  metric: switch_count
+  parameters:
+    speed_mps: 25.19042
+    fault_type: F-01
+    F-01.delay_ms: 18.527486
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-003
+  hypothesis_ids:
+  - H-03
+  arm: control
+  metric: switch_count
+  parameters:
+    speed_mps: 15.986275
+    fault_type: F-01
+    F-01.delay_ms: 17.666757
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-004
+  hypothesis_ids:
+  - H-03
+  arm: control
+  metric: switch_count
+  parameters:
+    speed_mps: 23.932137
+    fault_type: F-01
+    F-01.delay_ms: 17.974508
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-005
+  hypothesis_ids:
+  - H-03
+  arm: control
+  metric: switch_count
+  parameters:
+    speed_mps: 9.040311
+    fault_type: F-01
+    F-01.delay_ms: 22.103899
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-006
+  hypothesis_ids:
+  - H-03
+  arm: control
+  metric: switch_count
+  parameters:
+    speed_mps: 11.015595
+    fault_type: F-01
+    F-01.delay_ms: 19.26541
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-007
+  hypothesis_ids:
+  - H-03
+  arm: control
+  metric: switch_count
+  parameters:
+    speed_mps: 18.657758
+    fault_type: F-01
+    F-01.delay_ms: 17.29605
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-03-C-008
+  hypothesis_ids:
+  - H-03
+  arm: control
+  metric: switch_count
+  parameters:
+    speed_mps: 18.180782
+    fault_type: F-01
+    F-01.delay_ms: 18.267338
+  preconditions: *id003
+  unbound_conditions: []
+  lateral_screen: insufficient_data
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-001
+  hypothesis_ids:
+  - H-08
+  arm: condition
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 23.216975
+    road_curvature_per_m: 0.048537
+    tire_friction_scale: 0.6
+    vehicle_mass_scale: 1.3
+    fault_type: null
+    nominal_lateral_acc_mps2: 26.162799
+  preconditions: &id004 {}
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-002
+  hypothesis_ids:
+  - H-08
+  arm: condition
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 29.745445
+    road_curvature_per_m: 0.014636
+    tire_friction_scale: 0.6
+    vehicle_mass_scale: 1.3
+    fault_type: null
+    nominal_lateral_acc_mps2: 12.949808
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-003
+  hypothesis_ids:
+  - H-08
+  arm: condition
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 25.120623
+    road_curvature_per_m: 0.043067
+    tire_friction_scale: 0.6
+    vehicle_mass_scale: 1.3
+    fault_type: null
+    nominal_lateral_acc_mps2: 27.177245
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-004
+  hypothesis_ids:
+  - H-08
+  arm: condition
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 25.118825
+    road_curvature_per_m: 0.016121
+    tire_friction_scale: 0.6
+    vehicle_mass_scale: 1.3
+    fault_type: null
+    nominal_lateral_acc_mps2: 10.171632
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-005
+  hypothesis_ids:
+  - H-08
+  arm: condition
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 27.204109
+    road_curvature_per_m: 0.040919
+    tire_friction_scale: 0.6
+    vehicle_mass_scale: 1.3
+    fault_type: null
+    nominal_lateral_acc_mps2: 30.28266
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-006
+  hypothesis_ids:
+  - H-08
+  arm: condition
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 21.238289
+    road_curvature_per_m: 0.015744
+    tire_friction_scale: 0.6
+    vehicle_mass_scale: 1.3
+    fault_type: null
+    nominal_lateral_acc_mps2: 7.101566
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-007
+  hypothesis_ids:
+  - H-08
+  arm: condition
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 26.134777
+    road_curvature_per_m: 0.017948
+    tire_friction_scale: 0.6
+    vehicle_mass_scale: 1.3
+    fault_type: null
+    nominal_lateral_acc_mps2: 12.258961
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-008
+  hypothesis_ids:
+  - H-08
+  arm: condition
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 26.343223
+    road_curvature_per_m: 0.026285
+    tire_friction_scale: 0.6
+    vehicle_mass_scale: 1.3
+    fault_type: null
+    nominal_lateral_acc_mps2: 18.24088
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-001
+  hypothesis_ids:
+  - H-08
+  arm: control
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 24.20522
+    road_curvature_per_m: 0.025513
+    tire_friction_scale: 0.8
+    vehicle_mass_scale: 1.0
+    fault_type: null
+    nominal_lateral_acc_mps2: 14.94788
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-002
+  hypothesis_ids:
+  - H-08
+  arm: control
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 28.788443
+    road_curvature_per_m: 0.043301
+    tire_friction_scale: 0.8
+    vehicle_mass_scale: 1.0
+    fault_type: null
+    nominal_lateral_acc_mps2: 35.886762
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-003
+  hypothesis_ids:
+  - H-08
+  arm: control
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 20.023093
+    road_curvature_per_m: 0.038447
+    tire_friction_scale: 0.8
+    vehicle_mass_scale: 1.0
+    fault_type: null
+    nominal_lateral_acc_mps2: 15.414335
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-004
+  hypothesis_ids:
+  - H-08
+  arm: control
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 28.876272
+    road_curvature_per_m: 0.022186
+    tire_friction_scale: 0.8
+    vehicle_mass_scale: 1.0
+    fault_type: null
+    nominal_lateral_acc_mps2: 18.499554
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-005
+  hypothesis_ids:
+  - H-08
+  arm: control
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 25.307499
+    road_curvature_per_m: 0.042277
+    tire_friction_scale: 0.8
+    vehicle_mass_scale: 1.0
+    fault_type: null
+    nominal_lateral_acc_mps2: 27.077129
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-006
+  hypothesis_ids:
+  - H-08
+  arm: control
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 22.418127
+    road_curvature_per_m: 0.028143
+    tire_friction_scale: 0.8
+    vehicle_mass_scale: 1.0
+    fault_type: null
+    nominal_lateral_acc_mps2: 14.143896
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-007
+  hypothesis_ids:
+  - H-08
+  arm: control
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 20.043973
+    road_curvature_per_m: 0.039869
+    tire_friction_scale: 0.8
+    vehicle_mass_scale: 1.0
+    fault_type: null
+    nominal_lateral_acc_mps2: 16.017803
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'
+- candidate_id: H-08-C-008
+  hypothesis_ids:
+  - H-08
+  arm: control
+  metric: lateral_error_rmse_m
+  parameters:
+    speed_mps: 20.635541
+    road_curvature_per_m: 0.038786
+    tire_friction_scale: 0.8
+    vehicle_mass_scale: 1.0
+    fault_type: null
+    nominal_lateral_acc_mps2: 16.51607
+  preconditions: *id004
+  unbound_conditions: []
+  lateral_screen: not_evaluated
+  executable: true
+  note: 'Exploratory proposal only: simulator adapters and matching checks still required'

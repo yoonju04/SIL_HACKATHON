@@ -1,7 +1,7 @@
 # error_table.yaml — Monitor → Error table (robustness, 결과 5분류)
 # 입력: 08 짝 실행 시계열 + safety_spec.yaml
 # 출력(피드백 3종):
-#   run_record    → 06 GP 재학습 (all_valid_paired_results)
+#   run_record    → 06 GP 재학습 (all_valid_runs, 지표별 타깃)
 #   failure_table → 03 Nemotron A 실패 few-shot (verified_failures_top_k)
 #   run_record    → 02 hypotheses.yaml tracking (가설 상태 갱신)
 
@@ -16,7 +16,16 @@ results_schema:
                source_commit, feature_schema_version, hypothesis_ids, parameters,
                planned_fault_onset, actual_fault_onset, trigger_time, switch_time,
                switch_count, outcome_category, P01, P02, P03, margin_delta_m,
+               switch_state_label, metrics, baseline_metrics, gp_targets,
                gp_mean, gp_std, sim_status, invalid_reason]
+  # metrics / baseline_metrics: 02 metric_rules의 모든 지표 + 보조 지표 (정의: 02 outcome_definitions)
+  #   계산 불가(예: 전환 없음 → recovery_robustness)는 null. 0으로 대체 금지
+  # gp_targets: 06 orientation 적용 후 지표별 z. gp_mean/gp_std: 선택 당시 지표별 예측 {metric: value}
+  # margin_delta_m: 보조 지표로 계속 기록 (H-01/H-04/H-06 secondary_prediction)
+  metric_names: [recovery_success, recovery_robustness, pre_switch_max_lateral_error_m,
+                 switch_count, lateral_error_rmse_m, deadline_miss_rate,
+                 mpc_constraint_violation_rate, post_switch_saturation_ratio,
+                 command_jump_rad, max_steering_rate_dps, margin_delta_m]
   failure_table: [scenario_id, violated_property, originating_evidence_ids,
                   hypothesis_ids, environment, fault, onset_event,
                   observed_switch_behavior, robustness, reproduction_count]

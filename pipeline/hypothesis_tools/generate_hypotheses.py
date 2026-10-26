@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Generate immutable, evidence-linked MPC/LQR hypotheses and scenario search specs.
-Usage: python generate_hypotheses.py safety_profile.example.yaml vulnerability_patterns.yaml \
-  --scenario-space scenario_space.example.yaml -o hypotheses.yaml
+Usage (repository root): python -m pipeline.hypothesis_tools.generate_hypotheses
+  defaults: 01 safety_profile + 02 vulnerability_patterns + 04 scenario_space -> 02 hypotheses.yaml
 The generated YAML is a PROPOSAL, not executable CARLA scenarios or validated safety claims.
 """
 from __future__ import annotations
 import argparse, ast, copy, datetime as dt, json, math, pathlib, re
 import yaml
+
+from .space import normalize_space
 
 FIELD = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_.]*)\}")
 SINGLE = re.compile(r"^\{([a-zA-Z_][a-zA-Z0-9_.]*)\}$")
@@ -26,6 +28,10 @@ def evidence_index(profile):
         if ob['id'] in ids:raise ValueError('Duplicate observation ID: '+str(ob['id']))
         ids.add(ob['id']);out.setdefault(ob['field'],[]).append(ob['id'])
     return out,ids
+
+STATUS_VALUES={'proposed':'생성됨, 아직 판정 런 없음','blocked':'needs/템플릿/차원/오라클 중 비어 있어 검증 불가',
+  'testing':'판정 런이 첫 checkpoint 미만','supported':'decision_protocol.support_if 충족',
+  'refuted':'decision_protocol.refute_if 충족','inconclusive':'최대 checkpoint 도달, 어느 쪽도 충족 못 함'}
 
 # Arithmetic and comparisons are AST-whitelisted; never use eval().
 OPS={ast.Add:lambda a,b:a+b,ast.Sub:lambda a,b:a-b,ast.Mult:lambda a,b:a*b,
@@ -96,6 +102,7 @@ def validate_llm(prop,obs_ids,cat,space):
     return issues
 
 def generate(profile,cat,space=None,proposals=None):
+    if space is not None:space=normalize_space(space)
     ev,obs_ids=evidence_index(profile)
     result={'meta':{'schema_version':'2.0','generated_by':'generate_hypotheses.py',
       'profile_id':(profile.get('meta') or {}).get('profile_id'),
@@ -107,6 +114,8 @@ def generate(profile,cat,space=None,proposals=None):
       'outcome_definitions':copy.deepcopy(cat.get('outcome_definitions',{})),
       'recoverability_oracle_spec':copy.deepcopy(cat.get('recoverability_oracle_spec',{})),
       'metric_rules':copy.deepcopy(cat.get('metric_rules',{})),
+      'decision_protocol':copy.deepcopy(cat.get('decision_protocol',{})),
+      'status_values':copy.deepcopy(STATUS_VALUES),
       'pattern_application':[],'hypotheses':[],'rejected_proposals':[],'tracking':[]}
     for p in cat['patterns']:
         pid=p['pattern_id'];ok,reason=apply(p['applies_if'],profile)
@@ -157,19 +166,30 @@ def generate(profile,cat,space=None,proposals=None):
         # Even reviewed proposals stay blocked until separately approved; never silently add untrusted tests.
         result['rejected_proposals'].append({'proposal':prop,'reasons':['manual approval required before catalog inclusion']})
     for h in result['hypotheses']:
-        result['tracking'].append({'id':h['id'],'runs_condition':0,'runs_control':0,'effect_estimate':None,'ci':None,'mismatch_runs':0,'status_history':[]})
+        result['tracking'].append({'id':h['id'],'metric':h['prediction']['metric'],'runs_condition':0,'runs_control':0,'effect_estimate':None,'ci':None,'mismatch_runs':0,'status_history':[]})
     return result
 
+HEADER='''# hypotheses.yaml — 자동 생성 결과물 (손으로 편집하지 않음)
+# vulnerability_patterns.yaml(틀) + safety_profile.yaml(값) + scenario_space.yaml → 이 파일
+# 재생성: python -m pipeline.hypothesis_tools.generate_hypotheses (저장소 루트에서)
+# 실행 중 가설 내용은 바뀌지 않고 tracking/status만 바뀐다.
+
+'''
+
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('profile');ap.add_argument('catalog');ap.add_argument('--scenario-space');ap.add_argument('--llm-proposals');ap.add_argument('-o','--out',default='hypotheses.yaml')
+    root=pathlib.Path(__file__).resolve().parents[1]
+    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--profile',default=str(root/'01_safety_profile/safety_profile.yaml'))
+    ap.add_argument('--catalog',default=str(root/'02_hypotheses/vulnerability_patterns.yaml'))
+    ap.add_argument('--scenario-space',default=str(root/'04_feasibility_expansion/scenario_space.yaml'))
+    ap.add_argument('--llm-proposals');ap.add_argument('-o','--out',default=str(root/'02_hypotheses/hypotheses.yaml'))
     a=ap.parse_args()
     def read(path):return yaml.safe_load(pathlib.Path(path).read_text(encoding='utf-8'))
     profile=read(a.profile);cat=read(a.catalog)
-    space=read(a.scenario_space) if a.scenario_space else None
+    space=read(a.scenario_space)
     props=read(a.llm_proposals) if a.llm_proposals else []
     output=generate(profile,cat,space,props)
-    pathlib.Path(a.out).write_text(yaml.safe_dump(output,allow_unicode=True,sort_keys=False,width=110),encoding='utf-8')
+    pathlib.Path(a.out).write_text(HEADER+yaml.safe_dump(output,allow_unicode=True,sort_keys=False,width=110),encoding='utf-8')
     for h in output['hypotheses']:print(h['id'],h['status'],h['from_pattern'])
     print('wrote',a.out)
 if __name__=='__main__':main()

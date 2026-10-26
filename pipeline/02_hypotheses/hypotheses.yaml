@@ -1,113 +1,1057 @@
-# hypotheses.yaml — 코드마다 자동 생성되는 결과물 (손으로 편집하지 않음)
-# vulnerability_patterns.yaml(틀) + safety_profile.yaml(값) → 이 파일
-# 아래 값은 "코드 A: 고정 gain LQR, 설계 속도 15 m/s, 복귀 로직 있음"을 가정한 형식 예시다.
-# 실제 코드가 들어오면 생성기가 이 파일 전체를 다시 쓴다.
+# hypotheses.yaml — 자동 생성 결과물 (손으로 편집하지 않음)
+# vulnerability_patterns.yaml(틀) + safety_profile.yaml(값) + scenario_space.yaml → 이 파일
+# 재생성: python -m pipeline.hypothesis_tools.generate_hypotheses (저장소 루트에서)
+# 실행 중 가설 내용은 바뀌지 않고 tracking/status만 바뀐다.
 
 meta:
-  schema_version: '1.0'
-  generated_by: hypothesis_generator       # 패턴 적용 + Nemotron 추가 제안
+  schema_version: '2.0'
+  generated_by: generate_hypotheses.py
   profile_id: sp-code-aware-mpc-lqr
-  source_commit: null                       # 생성에 쓴 제어기 코드 커밋
-  catalog_version: '1.0'                    # vulnerability_patterns.yaml 버전
-  generated_at: null
-  frozen_at_commit: null                    # 판정 런 시작 전 이 파일을 커밋하고 기록
-  status: example_only
+  source_commit: null
+  catalog_version: '2.1'
+  generated_at: '2026-10-26T23:13:37+00:00'
+  frozen_at_commit: null
+  status: generated_not_validated
+references:
+  S-01:
+    cite: Bak, Johnson, Caccamo, Sha. Real-Time Reachability for Verified Simplex Design. IEEE RTSS 2014.
+    used_for:
+    - admissible vs recoverable 상태 구분
+    - 늦은 전환의 복구 불가
+    - LMI 타원체의 보수성
+    - 온라인 도달 가능성으로 전환 영역 확장
+  S-02:
+    cite: Sha. Using Simplicity to Control Complexity. IEEE Software, 2001.
+    used_for:
+    - Simplex 구조(고성능 주 제어기 + 검증된 안전 제어기 + 결정 모듈)
+  S-03:
+    cite: Landolfi et al. Hardware-in-the-Loop Validation of an Adaptive MPC on a Connected and Automated Vehicle.
+      IJACSP 37(6), 2023.
+    used_for:
+    - 예측 모델(single-track) ≠ 플랜트 모델(4륜+Dugoff) 구조
+    - robustness/sensitivity 시험 분리
+    - 질량·마찰·풍속 변수
+    - MAXE/RMSE 지표
+    caution: 악조건에서도 MPC는 추종 성능을 유지했음. 마찰 감소가 MPC 실패를 유발한다는 근거로 쓰면 안 됨.
+  S-04:
+    cite: Mahmood & Szabolcsi. Safety-Constrained NMPC for Autonomous Vehicle Lane Keeping and Lane Change under
+      Disturbances. 2026.
+    used_for:
+    - 도로 경계·조향·가속도 제약 위반을 실패 기준으로 사용
+    - 단계적 외란 실험(LK→LC→속도외란→복합외란)
+    - solver 시간 vs deadline 측정
+    caution: deadline 초과 25/800(N=20, 100 ms 주기)은 해당 설정의 값. 코드 A의 주기·solver에 그대로 적용 불가. Phase 4는 더 보수적 설정이라 난이도만
+      바꾼 비교가 아님.
+  S-05:
+    cite: Mahmood & Szabolcsi (2026), Safety-Constrained NMPC for Autonomous Vehicle Lane Keeping and Lane Change
+      under Disturbances
+    used_for:
+    - 조향·차선·횡가속도 제약 모니터링과 위반 비율 비교
+    caution: 고곡률/고속에서 반드시 위반한다는 증거가 아님
+outcome_definitions:
+  admissible_constraints:
+    lateral_error: abs(e_y) <= lane_half_width_m - vehicle_half_width_m
+    steering_angle: abs(delta) <= delta_max_rad
+    steering_rate: abs(delta_dot) <= delta_rate_max_rps
+    lateral_accel: abs(a_y) <= a_y_max_mps2
+  recovery_success:
+    definition: 'After switch: no constraints violated during T_hold and enters certified invariant region by T_settle
+      if such certificate is available; otherwise outcome unavailable.'
+    T_hold_s: 5.0
+    T_settle_s: null
+  margin_delta_m: 정상(무고장) 기준 런 대비 최소 횡방향 여유 차이 (기존 정의 유지)
+  post_switch_saturation_ratio: t_sw 이후 1 s 동안 조향각 또는 조향속도 포화 스텝 비율
+  command_jump_rad: abs(u_LQR(t_sw) - u_MPC(t_sw - dt))
+  switch_occurred: 보조 지표. 전환 실패(전환 자체가 없음)는 recovery_success = false 로 처리
+  recovery_robustness: min over [switch_time, switch_time + T_hold_s] of min_i(margin_i / limit_i) over admissible_constraints.
+    < 0 means a constraint was violated. Undefined if no switch.
+  pre_switch_max_lateral_error_m: max abs(e_y) over [actual_fault_onset, switch_time]
+  lateral_error_rmse_m: RMS of e_y over the safety_spec evaluation window
+  deadline_miss_rate: solver calls exceeding configured_time_limit_ms / solver calls, evaluation window
+  mpc_constraint_violation_rate: control steps with any MPC constraint violated / control steps, evaluation window
+  switch_count: number of MPC->LQR switches in the evaluation window
+recoverability_oracle_spec:
+  state:
+  - e_y
+  - e_y_dot
+  - e_psi
+  - e_psi_dot
+  design_model_ref: O-020
+  labels:
+    R_LMI: Certified interior only if a valid certificate exists
+    R_REACH_ESTIMATED: Simulation-estimated recovery candidate; not formally verified
+    NOT_CERTIFIED: Recovery not certified; NOT proof of irrecoverability
+  T_reach_s: 1.0
+  reach_method: sampled_simulation_not_formal_verification
+  speed_grid_mps:
+  - 10
+  - 15
+  - 20
+  - 25
+  artifacts:
+    P_matrix: null
+    level_c: null
+    reach_table: null
+  manipulation_check: '각 런의 실제 전환 시점 상태를 라벨링해 의도한 arm과 다르면 해당 런은 판정에서 제외하고 mismatch_runs에 기록
 
-# 실행 중 가설 내용은 바뀌지 않고 status만 바뀐다.
+    '
+metric_rules:
+  recovery_success:
+    unit: binary
+    effect: risk_difference
+    support_direction: negative
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
+  pre_switch_max_lateral_error_m:
+    unit: m
+    effect: mean_difference
+    support_direction: positive
+    minimum_effect: 0.1
+    ci_level: 0.99
+    gp:
+      target: pre_switch_max_lateral_error_m
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.1
+  switch_count:
+    unit: count
+    effect: mean_difference
+    support_direction: positive
+    minimum_effect: 1.0
+    ci_level: 0.99
+    gp:
+      target: switch_count
+      form: paired_delta_if_fault_else_absolute
+      scale: 1.0
+  lateral_error_rmse_m:
+    unit: m
+    effect: mean_difference
+    support_direction: positive
+    minimum_effect: 0.1
+    ci_level: 0.99
+    gp:
+      target: lateral_error_rmse_m
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.1
+  deadline_miss_rate:
+    unit: fraction
+    effect: risk_difference
+    support_direction: positive
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: deadline_miss_rate
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.05
+  mpc_constraint_violation_rate:
+    unit: fraction
+    effect: risk_difference
+    support_direction: positive
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: mpc_constraint_violation_rate
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.05
+decision_protocol:
+  runs_source: dedicated_random_in_region
+  gp_search_runs_used_for_decision: false
+  effect: condition - control, per metric_rules[metric].effect
+  interval:
+    method: bootstrap
+    level: 0.99
+    resamples: 5000
+  support_if:
+    negative: ci_upper < -minimum_effect
+    positive: ci_lower > minimum_effect
+    non_inferior: ci_lower > -minimum_margin
+  refute_if:
+    negative: ci_lower > -minimum_effect
+    positive: ci_upper < minimum_effect
+    non_inferior: ci_upper < -minimum_margin
+  else: inconclusive
+  checkpoints_per_arm:
+  - 10
+  - 20
+  - 30
+  exclude_outcomes:
+  - simulation_invalid
+  exclude_runs:
+  - recoverability_manipulation_check_mismatch
+  - metric_unavailable
 status_values:
-  proposed: "생성됨, 아직 판정 런 없음"
-  blocked: "needs 중 null이 있어 검증 불가"
-  testing: "판정 런이 첫 checkpoint 미만"
-  supported: "decision_rule.support_if 충족"
-  refuted: "decision_rule.refute_if 충족"
-  inconclusive: "최대 checkpoint 도달, 어느 쪽도 충족 못 함"
-
-# 카탈로그 패턴별 적용 결과 (생성되지 않은 패턴도 사유와 함께 기록)
+  proposed: 생성됨, 아직 판정 런 없음
+  blocked: needs/템플릿/차원/오라클 중 비어 있어 검증 불가
+  testing: 판정 런이 첫 checkpoint 미만
+  supported: decision_protocol.support_if 충족
+  refuted: decision_protocol.refute_if 충족
+  inconclusive: 최대 checkpoint 도달, 어느 쪽도 충족 못 함
 pattern_application:
-  - {pattern_id: P-OFF-DESIGN,     applies: true,  reason: "gain_type == fixed (O-001)"}
-  - {pattern_id: P-DELAYED-SWITCH, applies: true,  reason: "failure_detection_period_ms = 20 (O-007)"}
-  - {pattern_id: P-CHATTERING,     applies: true,  reason: "return_to_mpc.enabled == true (O-010)"}
-
+- pattern_id: P-OFF-DESIGN-H-01
+  applies: null
+  reason: 'Missing applies_if fields: controllers.lqr.feedback_design.gain_type'
+  hypothesis_id: H-01
+- pattern_id: P-DELAYED-SWITCH-H-02
+  applies: null
+  reason: 'Missing applies_if fields: switching.failure_detection_period_ms'
+  hypothesis_id: H-02
+- pattern_id: P-CHATTERING-H-03
+  applies: null
+  reason: 'Missing applies_if fields: switching.return_to_mpc.enabled'
+  hypothesis_id: H-03
+- pattern_id: P-UNRECOVERABLE-SWITCH-H-04
+  applies: null
+  reason: 'Missing applies_if fields: switching.backup_controller_enabled'
+  hypothesis_id: H-04
+- pattern_id: P-BACKUP-SATURATION-H-05
+  applies: null
+  reason: 'Missing applies_if fields: switching.backup_controller_enabled'
+  hypothesis_id: H-05
+- pattern_id: P-UNRECOVERABLE-SWITCH-H-06
+  applies: null
+  reason: 'Missing applies_if fields: switching.failure_detection_period_ms'
+  hypothesis_id: H-06
+- pattern_id: P-UNRECOVERABLE-SWITCH-H-07
+  applies: null
+  reason: 'Missing applies_if fields: switching.backup_controller_enabled'
+  hypothesis_id: H-07
+- pattern_id: P-MPC-MODEL-MISMATCH-H-08
+  applies: null
+  reason: 'Missing applies_if fields: controllers.mpc.implementation.prediction_model, controllers.mpc.implementation.model_parameters_fixed'
+  hypothesis_id: H-08
+- pattern_id: P-UNRECOVERABLE-SWITCH-H-09
+  applies: null
+  reason: 'Missing applies_if fields: switching.backup_controller_enabled'
+  hypothesis_id: H-09
+- pattern_id: P-MPC-DEADLINE-H-10
+  applies: null
+  reason: 'Missing applies_if fields: system.controller_period_ms'
+  hypothesis_id: H-10
+- pattern_id: P-MPC-CONSTRAINT-STRESS-H-11
+  applies: null
+  reason: 'Missing applies_if fields: controllers.mpc.implementation.prediction_model'
+  hypothesis_id: H-11
 hypotheses:
-  - id: H-01
-    from_pattern: P-OFF-DESIGN
-    provenance: pattern_instantiation
-    based_on: [O-001, O-002, O-003]          # gain_type, design_speed_mps, design_curvature_per_m
-    filled_values:
-      design_speed_mps: 15.0
-      design_curvature_per_m: 0.0
-    condition:
-      speed_offset_mps: "abs(speed_mps - 15.0) > 5.0"
-      curvature_offset: "road_curvature_per_m - 0.0 > 0.01"
-      fault_types: [F-01, F-02]
-      onset_event: [curve_entry, curve_apex]
-    control:
-      speed_offset_mps: "abs(speed_mps - 15.0) <= 2.0"
-      curvature_offset: "road_curvature_per_m - 0.0 <= 0.005"
-      fault_types: [F-01, F-02]
-      onset_event: [curve_entry, curve_apex]
-    prediction: {metric: margin_delta_m, direction: negative}
-    decision_rule: default
-    status: proposed
+- id: H-01
+  from_pattern: P-OFF-DESIGN-H-01
+  phase: after_switch
+  provenance: pattern_instantiation
+  claim: P-OFF-DESIGN
+  based_on: []
+  filled_values:
+    controllers.lqr.feedback_design.gain_type: null
+    controllers.lqr.feedback_design.design_speed_mps: null
+    controllers.lqr.feedback_design.design_curvature_per_m: null
+  condition:
+    curvature_offset: road_curvature_per_m - None > 0.01
+    fault_types:
+    - F-01
+    - F-02
+    onset_event:
+    - curve_entry
+    - curve_apex
+    speed_offset_mps: abs(speed_mps - None) > 5.0
+  control:
+    curvature_offset: road_curvature_per_m - None <= 0.005
+    fault_types:
+    - F-01
+    - F-02
+    onset_event:
+    - curve_entry
+    - curve_apex
+    speed_offset_mps: abs(speed_mps - None) <= 2.0
+  scenario_guidance:
+    odd_dimensions:
+    - speed_mps
+    - road_curvature_per_m
+    fault_dimensions:
+    - fault_type
+    - onset_event
+    candidate_constraints: []
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: recovery_success
+    direction: negative
+  secondary_prediction:
+  - metric: margin_delta_m
+    direction: negative
+  evidence:
+  - source: code
+    role: code_only
+    supports: 고정 gain은 설계점(15 m/s, 직선)에서만 최적
+  - source: S-01
+    role: mechanism
+    supports: 복구 가능 영역은 플랜트 동역학에 의존 → v_x가 설계점에서 멀어지면 같은 오차 상태라도 복구 가능성이 달라질 수 있음
+    does_not_claim: S-01은 속도 의존 gain 문제를 다루지 않음
+  - source: S-03
+    role: method_borrowed
+    supports: 속도 프로파일을 바꿔가며 같은 제어기를 비교하는 설계(50–30–50, 90–50–70)
+    does_not_claim: S-03은 고정 gain LQR을 시험하지 않음
+  decision_rule:
+    unit: binary
+    effect: risk_difference
+    support_direction: negative
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
+  status: blocked
+  blocked_reason:
+  - 'Missing applies_if fields: controllers.lqr.feedback_design.gain_type'
+  - 'missing profile values: controllers.lqr.feedback_design.gain_type, controllers.lqr.feedback_design.design_speed_mps,
+    controllers.lqr.feedback_design.design_curvature_per_m'
+  - 'missing template values: controllers.lqr.feedback_design.design_curvature_per_m, controllers.lqr.feedback_design.design_speed_mps'
+- id: H-02
+  from_pattern: P-DELAYED-SWITCH-H-02
+  phase: before_switch
+  provenance: pattern_instantiation
+  claim: P-DELAYED-SWITCH
+  based_on: []
+  filled_values:
+    switching.failure_detection_period_ms: null
+    switching.command_during_detection_delay: null
+  condition:
+    command_during_detection_delay: hold_last
+    fault_types:
+    - F-01
+    onset_event:
+    - curve_entry
+  control:
+    command_during_detection_delay: hold_last
+    fault_types:
+    - F-01
+    onset_event:
+    - straight_mid
+  scenario_guidance:
+    odd_dimensions:
+    - road_curvature_per_m
+    fault_dimensions:
+    - fault_type
+    - onset_event
+    candidate_constraints: []
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: pre_switch_max_lateral_error_m
+    direction: positive
+  secondary_prediction:
+  - metric: recovery_success
+    direction: negative
+  evidence:
+  - source: code
+    role: code_only
+    supports: 감지 지연 동안 마지막 명령 유지(O-008) → 곡률 변화 구간에서 오차 누적
+  - source: S-01
+    role: mechanism
+    supports: 지연 동안 상태가 admissible 안에 있어도 recoverable 밖으로 나갈 수 있음
+  decision_rule:
+    unit: m
+    effect: mean_difference
+    support_direction: positive
+    minimum_effect: 0.1
+    ci_level: 0.99
+    gp:
+      target: pre_switch_max_lateral_error_m
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.1
+  status: blocked
+  design_notes: 'v1.0의 condition("onset + 0.02 > curve_entry_time")은 곡선 진입을 위험의 proxy로 쓴 것이라 근거가 약했음. 위험의 정의를 ''복구
+    가능 영역 이탈''로 바꾸고, 그 검증은 H-05로 이관. H-02는 hold_last 자체의 효과만 본다.
 
-  - id: H-02
-    from_pattern: P-DELAYED-SWITCH
-    provenance: pattern_instantiation
-    based_on: [O-005, O-006, O-007, O-008]
-    filled_values:
-      configured_time_limit_ms: 20
-      failure_detection_period_ms: 20
-      command_during_detection_delay: hold_last
-    condition:
-      expected_switch_after_curve_entry: "onset_time + 0.02 > curve_entry_time"
-      fault_types: [F-01]
-    control:
-      expected_switch_after_curve_entry: "onset_time + 0.02 <= curve_entry_time"
-      fault_types: [F-01]
-    prediction: {metric: margin_delta_m, direction: negative}
-    secondary_prediction:
-      - {metric: pre_switch_max_lateral_error_m, direction: positive}
-    decision_rule: {inherit: default, from_pattern: P-DELAYED-SWITCH}
-    status: proposed
+    '
+  blocked_reason:
+  - 'Missing applies_if fields: switching.failure_detection_period_ms'
+  - 'missing profile values: switching.failure_detection_period_ms, switching.command_during_detection_delay'
+- id: H-03
+  from_pattern: P-CHATTERING-H-03
+  phase: after_switch
+  provenance: pattern_instantiation
+  claim: P-CHATTERING
+  based_on: []
+  filled_values:
+    switching.return_to_mpc.enabled: null
+    switching.return_to_mpc.minimum_dwell_s: null
+    controllers.mpc.solver_runtime.configured_time_limit_ms: null
+  condition:
+    fault_params:
+      center_ms: near(None, 3)
+    fault_types:
+    - F-03
+  control:
+    fault_params:
+      delay_ms: near(None, 3)
+    fault_types:
+    - F-01
+  scenario_guidance:
+    odd_dimensions:
+    - speed_mps
+    fault_dimensions:
+    - fault_type
+    - F-03.amplitude_ms
+    candidate_constraints: []
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: switch_count
+    direction: positive
+  secondary_prediction:
+  - metric: max_steering_rate_dps
+    direction: positive
+  - metric: recovery_success
+    direction: negative
+  evidence:
+  - source: code
+    role: code_only
+    supports: 임계값 근처 지터 + MPC 복귀 허용 + blending 없음
+  - source: S-01
+    role: mechanism
+    supports: 주 제어기로 되돌아가려면 그 상태에서 다시 안전 제어기로 복구 가능해야 함 — 복귀 조건이 이를 확인하지 않으면 반복 전환 위험
+    does_not_claim: S-01은 chattering 빈도나 dwell time을 실험하지 않음
+  decision_rule:
+    unit: count
+    effect: mean_difference
+    support_direction: positive
+    minimum_effect: 1.0
+    ci_level: 0.99
+    gp:
+      target: switch_count
+      form: paired_delta_if_fault_else_absolute
+      scale: 1.0
+  status: blocked
+  blocked_reason:
+  - 'Missing applies_if fields: switching.return_to_mpc.enabled'
+  - 'missing profile values: switching.return_to_mpc.enabled, switching.return_to_mpc.minimum_dwell_s, controllers.mpc.solver_runtime.configured_time_limit_ms'
+  - 'missing template values: controllers.mpc.solver_runtime.configured_time_limit_ms'
+- id: H-04
+  from_pattern: P-UNRECOVERABLE-SWITCH-H-04
+  phase: after_switch
+  provenance: pattern_instantiation
+  claim: MPC→LQR 전환 시점 상태가 LQR 복구 가능 영역 밖(NR)이면, 영역 안(R_LMI)에서 전환할 때보다 복구 성공률이 낮다.
+  based_on: []
+  filled_values:
+    switching.backup_controller_enabled: null
+    recoverability.P_matrix: null
+    recoverability.level_c: null
+    recoverability.reach_table: null
+    controllers.lqr.constraints_and_behavior.steering_saturation: null
+    controllers.lqr.feedback_design.design_speed_mps: null
+  condition:
+    fault_types:
+    - F-01
+    - F-02
+    speed_mps: near(None, 2)
+    switch_state_label: NOT_CERTIFIED
+  control:
+    fault_types:
+    - F-01
+    - F-02
+    speed_mps: near(None, 2)
+    switch_state_label: R_LMI
+  scenario_guidance:
+    odd_dimensions:
+    - speed_mps
+    - road_curvature_per_m
+    fault_dimensions:
+    - fault_type
+    - onset_event
+    - onset_offset_s
+    candidate_constraints: []
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: recovery_success
+    direction: negative
+  secondary_prediction:
+  - metric: post_switch_saturation_ratio
+    direction: positive
+  - metric: margin_delta_m
+    direction: negative
+  evidence:
+  - source: S-01
+    role: mechanism
+    supports: admissible ≠ recoverable. 안전 제어기로의 전환이 너무 늦으면 관성·액추에이터 한계로 복구 불가
+    does_not_claim: S-01의 대상 플랜트는 차량 조향이 아님. CARLA 플랜트에서 설계 모델 라벨이 실제 결과를 예측하는지는 이 가설이 새로 검증
+  - source: S-02
+    role: mechanism
+    supports: 주 제어기가 잘못된 명령을 내도 검증된 안전 제어기가 유지되면 시스템 안전 확보 — 단, 안전 제어기의 검증 범위 안에서만
+  - source: S-04
+    role: outcome_definition
+    supports: 도로 경계·조향·가속도 제약 위반을 실패로 판정
+  decision_rule:
+    unit: binary
+    effect: risk_difference
+    support_direction: negative
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
+  status: blocked
+  blocked_reason:
+  - 'Missing applies_if fields: switching.backup_controller_enabled'
+  - 'missing profile values: switching.backup_controller_enabled, recoverability.P_matrix, recoverability.level_c,
+    recoverability.reach_table, controllers.lqr.constraints_and_behavior.steering_saturation, controllers.lqr.feedback_design.design_speed_mps'
+  - 'missing template values: controllers.lqr.feedback_design.design_speed_mps'
+  - recoverability oracle artifacts not certified/populated
+- id: H-05
+  from_pattern: P-BACKUP-SATURATION-H-05
+  phase: after_switch
+  provenance: pattern_instantiation
+  claim: 전환 직후 LQR 명령이 조향각/조향속도 한계를 넘는 경우(포화 발생), 같은 복구 가능 라벨이라도 복구 성공률이 낮다.
+  based_on: []
+  filled_values:
+    controllers.lqr.constraints_and_behavior.output_clipping: null
+    controllers.lqr.constraints_and_behavior.steering_saturation: null
+    controllers.lqr.constraints_and_behavior.steering_rate_limit: null
+  condition:
+    predicted_first_lqr_command: abs(K x(t_sw)) > delta_max_rad OR command_jump_rad / dt > delta_rate_max_rps
+    switch_state_label:
+    - R_LMI
+    - R_REACH_ESTIMATED
+  control:
+    predicted_first_lqr_command: abs(K x(t_sw)) <= 0.8 * delta_max_rad AND command_jump_rad / dt <= 0.8 * delta_rate_max_rps
+    switch_state_label:
+    - R_LMI
+    - R_REACH_ESTIMATED
+  scenario_guidance:
+    odd_dimensions:
+    - speed_mps
+    - road_curvature_per_m
+    fault_dimensions:
+    - fault_type
+    - onset_event
+    - onset_offset_s
+    candidate_constraints: []
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: recovery_success
+    direction: negative
+  secondary_prediction:
+  - metric: post_switch_saturation_ratio
+    direction: positive
+  evidence:
+  - source: S-01
+    role: mechanism
+    supports: 복구 가능 영역은 입력 제약을 포함해 정의됨 → 제약을 무시한 선형 LQR 분석은 영역을 과대평가
+    does_not_claim: S-01은 주 제어기→안전 제어기 명령 점프(rate limit)를 별도로 다루지 않음. 이 부분은 O-022 코드 관측 기반
+  - source: code
+    role: code_only
+    supports: LQR 출력이 액추에이터 전에 clip/rate-limit되는지(O-022)
+  decision_rule:
+    unit: binary
+    effect: risk_difference
+    support_direction: negative
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
+  status: blocked
+  design_notes: oracle이 포화를 반영해 영역을 계산하면 H-04와 일부 겹침. 겹치는 런은 H-04 판정에만 사용
+  blocked_reason:
+  - 'Missing applies_if fields: switching.backup_controller_enabled'
+  - 'missing profile values: controllers.lqr.constraints_and_behavior.output_clipping, controllers.lqr.constraints_and_behavior.steering_saturation,
+    controllers.lqr.constraints_and_behavior.steering_rate_limit'
+- id: H-06
+  from_pattern: P-UNRECOVERABLE-SWITCH-H-06
+  phase: after_switch
+  provenance: pattern_instantiation
+  claim: '고장 주입 후 상태가 복구 가능 영역을 벗어나는 시점을 t_exit라 할 때, 전환이 t_exit보다 늦으면(감지·전환 지연) t_exit 전에 전환한 경우보다 복구 실패율이 높다.
 
-  - id: H-03
-    from_pattern: P-CHATTERING
-    provenance: pattern_instantiation
-    based_on: [O-005, O-010, O-011, O-012, O-013]
-    filled_values:
-      configured_time_limit_ms: 20
-      minimum_dwell_s: 0.2
-      steering_blending: none
-    condition:
-      fault_types: [F-03]
-      fault_params: {center_ms: "near(20, 3)"}
-    control:
-      fault_types: [F-01]
-      fault_params: {delay_ms: "near(20, 3)"}
-    prediction: {metric: switch_count, direction: positive}
-    secondary_prediction:
-      - {metric: max_steering_rate_dps, direction: positive}
-      - {metric: margin_delta_m, direction: negative}
-    decision_rule: {inherit: default, from_pattern: P-CHATTERING}
-    status: proposed
+    '
+  based_on: []
+  filled_values:
+    switching.failure_detection_period_ms: null
+    switching.switch_latency_ms: null
+    recoverability.reach_table: null
+  condition:
+    fault_types:
+    - F-01
+    slack_ms: < -50
+    co_injected_faults:
+    - F-04
+  control:
+    fault_types:
+    - F-01
+    slack_ms: '> +50'
+    co_injected_faults:
+    - F-04
+  scenario_guidance:
+    odd_dimensions:
+    - speed_mps
+    - road_curvature_per_m
+    fault_dimensions:
+    - fault_type
+    - F-04.extra_delay_ms
+    candidate_constraints: []
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: recovery_success
+    direction: negative
+  secondary_prediction:
+  - metric: margin_delta_m
+    direction: negative
+  evidence:
+  - source: S-01
+    role: mechanism
+    supports: 너무 늦은 전환은 안전 제어기도 복구 못 함(문제 A)
+    does_not_claim: S-01은 차량 고장 감지 지연값을 실험하지 않음. t_exit 기준 경계가 CARLA에서 맞는지는 새로 검증
+  - source: code
+    role: code_only
+    supports: 감지 주기 20 ms, time limit 20 ms (O-006, O-007)
+  decision_rule:
+    unit: binary
+    effect: risk_difference
+    support_direction: negative
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
+  status: blocked
+  blocked_reason:
+  - 'Missing applies_if fields: switching.failure_detection_period_ms'
+  - 'missing profile values: switching.failure_detection_period_ms, switching.switch_latency_ms, recoverability.reach_table'
+  - recoverability oracle artifacts not certified/populated
+- id: H-07
+  from_pattern: P-UNRECOVERABLE-SWITCH-H-07
+  phase: after_switch
+  provenance: pattern_instantiation
+  claim: 'LMI 타원체 밖이지만 도달 가능성 분석상 복구 가능한 상태(R_REACH)에서 전환해도, 타원체 안(R_LMI)에서 전환한 경우와 복구 성공률이 실질적으로 다르지 않다(비열등성).
 
-  # Nemotron이 카탈로그 밖에서 제안하고 자동 검사(llm_proposed_hypothesis_gate)를 통과한 가설
-  # - id: H-04
-  #   from_pattern: null
-  #   provenance: llm_inference
-  #   mechanism: "..."
-  #   based_on: [O-0xx]
-  #   condition: {...}
-  #   control: {...}
-  #   prediction: {metric: ..., direction: ...}
-  #   decision_rule: default
-  #   status: proposed
+    '
+  based_on: []
+  filled_values:
+    recoverability.P_matrix: null
+    recoverability.level_c: null
+    recoverability.reach_table: null
+  condition:
+    fault_types:
+    - F-01
+    - F-02
+    switch_state_label: R_REACH_ESTIMATED
+  control:
+    fault_types:
+    - F-01
+    - F-02
+    switch_state_label: R_LMI
+  scenario_guidance:
+    odd_dimensions:
+    - speed_mps
+    - road_curvature_per_m
+    fault_dimensions:
+    - fault_type
+    - onset_event
+    - onset_offset_s
+    candidate_constraints: []
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: recovery_success
+    direction: non_inferior
+    margin: 0.05
+  secondary_prediction: []
+  evidence:
+  - source: S-01
+    role: mechanism
+    supports: LMI 타원체는 보수적. 영역 밖이어도 일정 시간 내 재진입 가능한 상태를 실시간 도달 가능성으로 확인해 주 제어기 사용 영역을 확장
+    does_not_claim: S-01은 설계 모델과 실제 플랜트가 다를 때(CARLA) 이 확장이 유지되는지 보이지 않음 → H-09와 함께 판단
+  decision_rule:
+    unit: binary
+    effect: risk_difference
+    support_direction: negative
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
+    minimum_margin: 0.05
+    direction: non_inferior
+  status: blocked
+  blocked_reason:
+  - 'Missing applies_if fields: switching.backup_controller_enabled'
+  - 'missing profile values: recoverability.P_matrix, recoverability.level_c, recoverability.reach_table'
+  - recoverability oracle artifacts not certified/populated
+- id: H-08
+  from_pattern: P-MPC-MODEL-MISMATCH-H-08
+  phase: before_switch
+  provenance: pattern_instantiation
+  claim: MPC 예측 모델(kinematic bicycle, 고정 mu)과 CARLA 차량 거동의 차이가 커지는 조건에서, 정상 조건보다 횡방향 추종 오차와 조향 입력 부담이 증가한다.
+  based_on: []
+  filled_values:
+    controllers.mpc.implementation.prediction_model: null
+    controllers.mpc.implementation.model_parameters_fixed: null
+  condition:
+    fault_types: []
+    road_curvature_per_m: '> 0.01'
+    speed_mps: '> 20'
+    vehicle_mass_scale: 1.3
+    tire_friction_scale: 0.6
+  control:
+    fault_types: []
+    road_curvature_per_m: '> 0.01'
+    speed_mps: '> 20'
+    vehicle_mass_scale: 1.0
+    tire_friction_scale: 0.8
+  scenario_guidance:
+    odd_dimensions:
+    - speed_mps
+    - road_curvature_per_m
+    - tire_friction_scale
+    - vehicle_mass_scale
+    fault_dimensions: []
+    candidate_constraints:
+    - keep_controller_parameters_fixed
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+    sensitivity_arms:
+    - tire_friction_only
+    - vehicle_mass_only
+  prediction:
+    metric: lateral_error_rmse_m
+    direction: positive
+  secondary_prediction:
+  - metric: steering_effort_rms_rad
+    direction: positive
+  - metric: mpc_switch_trigger_rate
+    direction: positive
+  evidence:
+  - source: S-03
+    role: method_borrowed
+    supports: 예측 모델 ≠ 플랜트 모델 구조, 질량 1,050→1,371 kg·마찰 0.8→0.6 변화폭, robustness와 sensitivity 시험 분리, RMSE·MAXE 지표
+    does_not_claim: S-03에서 Adaptive MPC는 악조건에서도 추종을 유지함(횡방향 RMSE 1.7/3.7 cm). 이 가설은 고정 모델 MPC에 대한 새 검증 가설이며 S-03
+      결론의 재현이 아님
+  decision_rule:
+    unit: m
+    effect: mean_difference
+    support_direction: positive
+    minimum_effect: 0.1
+    ci_level: 0.99
+    gp:
+      target: lateral_error_rmse_m
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.1
+  status: blocked
+  design_notes: 풍속은 CARLA에서 직접 구현이 어려워 제외. mass_scale 1.3은 S-03의 1,371/1,050 ≈ 1.31에서 가져옴
+  blocked_reason:
+  - 'Missing applies_if fields: controllers.mpc.implementation.prediction_model, controllers.mpc.implementation.model_parameters_fixed'
+  - 'missing profile values: controllers.mpc.implementation.prediction_model, controllers.mpc.implementation.model_parameters_fixed'
+- id: H-09
+  from_pattern: P-UNRECOVERABLE-SWITCH-H-09
+  phase: after_switch
+  provenance: pattern_instantiation
+  claim: '노면 마찰이 설계값보다 낮으면 설계 모델로 계산한 복구 가능 영역이 실제보다 넓게 추정되어, R_LMI ∪ R_REACH 라벨 안에서 전환한 런의 복구 실패율이 증가한다.
 
-# 검사에서 탈락한 Nemotron 제안 (재현성·디버깅용)
+    '
+  based_on: []
+  filled_values:
+    controllers.mpc.implementation.assumed_friction: null
+    recoverability.reach_table: null
+  condition:
+    switch_state_label:
+    - R_LMI
+    - R_REACH_ESTIMATED
+    tire_friction_scale: 0.6
+  control:
+    switch_state_label:
+    - R_LMI
+    - R_REACH_ESTIMATED
+    tire_friction_scale: 0.8
+  scenario_guidance:
+    odd_dimensions:
+    - tire_friction_scale
+    - speed_mps
+    fault_dimensions:
+    - fault_type
+    - onset_event
+    - onset_offset_s
+    candidate_constraints: []
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: recovery_success
+    direction: negative
+  secondary_prediction: []
+  evidence:
+  - source: S-03
+    role: method_borrowed
+    supports: 마찰 0.8→0.6을 악조건 변수로 쓰는 설계
+  - source: S-01
+    role: mechanism
+    supports: 복구 가능 판정은 플랜트 모델에 의존 → 모델이 틀리면 판정도 틀림
+    does_not_claim: 어느 출처도 이 조합을 직접 실험하지 않음. 문헌 결합으로 도출한 가설
+  decision_rule:
+    unit: binary
+    effect: risk_difference
+    support_direction: negative
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
+  status: blocked
+  blocked_reason:
+  - 'Missing applies_if fields: switching.backup_controller_enabled'
+  - 'missing profile values: controllers.mpc.implementation.assumed_friction, recoverability.reach_table'
+  - recoverability oracle artifacts not certified/populated
+- id: H-10
+  from_pattern: P-MPC-DEADLINE-H-10
+  phase: before_switch
+  provenance: pattern_instantiation
+  claim: 차선 변경·복합 외란 조건에서 MPC solver의 deadline 초과율이 차선 유지 조건보다 높고, 초과가 전환을 유발한 런은 복구 성공률이 낮다.
+  based_on: []
+  filled_values:
+    system.controller_period_ms: null
+    controllers.mpc.solver_runtime.timeout_handling: null
+  condition:
+    maneuver: lane_change
+    velocity_disturbance: moderate
+    steering_disturbance: moderate
+    fault_types: []
+  control:
+    maneuver: lane_keeping
+    velocity_disturbance: none
+    steering_disturbance: none
+    fault_types: []
+  scenario_guidance:
+    odd_dimensions:
+    - maneuver
+    - road_curvature_per_m
+    fault_dimensions:
+    - velocity_disturbance
+    - steering_disturbance
+    candidate_constraints:
+    - measure_natural_deadline_misses_separately_from_injected_delay
+    selection_objective: seek_boundary_or_uncertainty
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: deadline_miss_rate
+    direction: positive
+  secondary_prediction:
+  - metric: recovery_success
+    direction: negative
+  evidence:
+  - source: S-04
+    role: method_borrowed
+    supports: LK→LC→속도외란→복합외란 단계 설계, solver 시간을 제어 주기 deadline과 비교, fallback 존재
+    does_not_claim: S-04가 외란 단계별로 deadline 초과율이 증가했다고 보고하지는 않음(N=20 전체 800회 중 25회). 단계별 증가는 새 가설
+  decision_rule:
+    unit: fraction
+    effect: risk_difference
+    support_direction: positive
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: deadline_miss_rate
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.05
+  status: blocked
+  blocked_reason:
+  - 'Missing applies_if fields: system.controller_period_ms'
+  - 'missing profile values: system.controller_period_ms, controllers.mpc.solver_runtime.timeout_handling'
+- id: H-11
+  from_pattern: P-MPC-CONSTRAINT-STRESS-H-11
+  phase: before_switch
+  provenance: pattern_instantiation
+  claim: MPC constraint stress under lateral acceleration demand
+  based_on: []
+  filled_values:
+    controllers.mpc.implementation.prediction_model: null
+    controllers.mpc.constraints.steering_angle_bounds: null
+    controllers.mpc.constraints.lateral_accel_limit_mps2: null
+    vehicle.lane_half_width_m: null
+    vehicle.vehicle_half_width_m: null
+  condition:
+    fault_types: []
+    lateral_accel_demand: high
+  control:
+    fault_types: []
+    lateral_accel_demand: low
+  scenario_guidance:
+    odd_dimensions:
+    - speed_mps
+    - road_curvature_per_m
+    - tire_friction_scale
+    fault_dimensions: []
+    derived_features:
+      lateral_accel_demand_mps2: speed_mps ** 2 * abs(road_curvature_per_m)
+    candidate_constraints:
+    - hold_mpc_parameters_fixed
+    - compare_physical_feasibility
+    - vary_one_factor_or_use_matched_pairs
+    selection_objective: approach_constraint_boundary
+    physical_validity_checks:
+    - finite_values
+    - within_scenario_space
+    - physically_feasible
+  prediction:
+    metric: mpc_constraint_violation_rate
+    direction: positive
+  secondary_prediction: []
+  evidence:
+  - source: S-05
+    role: method_borrowed
+    supports: 모델 기반 MPC 제약과 조향·횡가속도·도로경계 위반의 계측 방법
+    does_not_claim: 높은 v²|κ|가 곧바로 MPC 제약 위반을 뜻하지 않음
+  decision_rule:
+    unit: fraction
+    effect: risk_difference
+    support_direction: positive
+    minimum_effect: 0.05
+    ci_level: 0.99
+    gp:
+      target: mpc_constraint_violation_rate
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.05
+  status: blocked
+  blocked_reason:
+  - 'Missing applies_if fields: controllers.mpc.implementation.prediction_model'
+  - 'missing profile values: controllers.mpc.implementation.prediction_model, controllers.mpc.constraints.steering_angle_bounds,
+    controllers.mpc.constraints.lateral_accel_limit_mps2, vehicle.lane_half_width_m, vehicle.vehicle_half_width_m'
 rejected_proposals: []
-
-# Orchestrator가 실행 중 채움
 tracking:
-  - {id: H-01, runs_condition: 0, runs_control: 0, d_estimate: null, ci: null, status_history: []}
-  - {id: H-02, runs_condition: 0, runs_control: 0, d_estimate: null, ci: null, status_history: []}
-  - {id: H-03, runs_condition: 0, runs_control: 0, d_estimate: null, ci: null, status_history: []}
+- id: H-01
+  metric: recovery_success
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-02
+  metric: pre_switch_max_lateral_error_m
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-03
+  metric: switch_count
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-04
+  metric: recovery_success
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-05
+  metric: recovery_success
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-06
+  metric: recovery_success
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-07
+  metric: recovery_success
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-08
+  metric: lateral_error_rmse_m
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-09
+  metric: recovery_success
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-10
+  metric: deadline_miss_rate
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []
+- id: H-11
+  metric: mpc_constraint_violation_rate
+  runs_condition: 0
+  runs_control: 0
+  effect_estimate: null
+  ci: null
+  mismatch_runs: 0
+  status_history: []

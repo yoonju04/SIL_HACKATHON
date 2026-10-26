@@ -186,17 +186,23 @@ SIL_HACKATHON/
 │   ├── ROADMAP.md                 # 구현 단계 체크리스트
 │   └── REFERENCES.md              # 공식 문서 · 출처
 ├── pipeline/                      # code-aware 탐색 파이프라인 (단계별 설정, pipeline/README.md 참고)
+│   ├── 00_prior_knowledge/        # 물리 관계 · 검증 전 가설 (PK)
 │   ├── 01_safety_profile/         # 코드 관측 사실
-│   ├── 02_hypotheses/             # 취약 패턴 카탈로그 + 가설 H-01~03
+│   ├── 02_hypotheses/             # 취약 패턴 카탈로그 v2 + 가설 H-01~11
 │   ├── 03_nemotron_a/             # Nemotron A: 시나리오 생성
 │   ├── 04_feasibility_expansion/  # 타당성 검사 G-01~04 + 후보 확장, scenario space
 │   ├── 05a_deterministic_features/# DF-01~05
 │   ├── 05b_nemotron_b/            # Nemotron B: 코드 질문
-│   ├── 06_gp_surrogate/           # GP (margin_delta_m)
+│   ├── 06_gp_surrogate/           # 지표별 GP (정규화 z)
 │   ├── 07_orchestrator/           # LCB 선택 · 예산
 │   ├── 08_carla_paired_run/       # baseline vs fault 짝 실행
 │   ├── 09_monitor/                # safety spec P-01~03 + error table
-│   └── evaluation/                # ablation X-1~5
+│   ├── evaluation/                # ablation X-1~5
+│   ├── hypothesis_tools/          # 가설 생성기 · 후보 샘플러
+│   └── prior_tools/               # Nemotron prior payload · 횡가속도 스크리닝
+├── scripts/
+│   └── runner_skeleton.py         # 파이프라인 러너 (--check, --self-test)
+├── tests/                         # python -m unittest discover -s tests
 ├── configs/
 │   └── scenario.example.yaml      # 시나리오 스펙 예시 (실행 설정 아님)
 ├── examples/

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SIL_HACKATHON 파이프라인 러너 스켈레톤 (DRAFT — 저장소 루트에서 실행: python3 scripts/runner_skeleton.py --check).
 
-이 파일은 pipeline/ 의 14개 YAML을 순서대로 읽어 실행하는 진입점의 뼈대다.
+이 파일은 pipeline/ 의 15개 YAML을 순서대로 읽어 실행하는 진입점의 뼈대다.
 2026-10-26에 확인한 pipeline/ YAML 기준으로 만들었고, YAML에 null로 비어 있는
 값은 절대 0이나 예시값으로 대체하지 않는다. 비어 있으면 --check 가 목록으로
 보고하고, 실행은 그 지점에서 멈춘다.
@@ -9,13 +9,14 @@
 구현된 것 (순수 함수, --self-test 로 검증 가능):
   * DF-01~05 계산 (05a deterministic_features.yaml)
   * 타당성 게이트 G-01~G-03 (04 feasibility_expansion.yaml)
-  * LCB 선택 + 배치 구성 + 다양성/시드 제한 (07 orchestrator.yaml)
+  * 지표별 GP 타깃 + 방향·스케일 정규화 z (06 surrogate.yaml, 02 metric_rules[*].gp)
+  * 가설 지표별 LCB 선택 + 배치 구성 + 다양성/시드 제한 (07 orchestrator.yaml)
   * 모니터 P-01~03 robustness + 결과 5분류 + margin_delta_m (09 monitor)
   * 짝 실행 baseline 캐시 키 (08 paired_runs.yaml)
 
 스텁으로 남은 것 (외부 시스템이 필요해서 여기서 구현하지 않음):
   * Nemotron A 시나리오 생성, Nemotron B 코드 질문 — model이 null이다.
-  * GP 서러게이트 학습 — 스펙은 Matern 5/2 with ARD + WhiteKernel 이지만,
+  * GP 서러게이트 학습 (지표마다 하나) — 스펙은 Matern 5/2 with ARD + WhiteKernel 이지만,
     이 환경에 scikit-learn이 없어 어댑터가 명시적으로 실패한다.
     scikit-learn을 설치하거나 GP 백엔드를 교체하면 연결 지점은 GPModel 이다.
   * CARLA 짝 실행 + 고장 주입 — version/map/route/fixed_delta_seconds가 null이다.
@@ -38,8 +39,10 @@ from typing import Any, Iterable
 
 import yaml
 
-# pipeline/ 의 14개 YAML. 파일이 하나라도 빠지면 load_pipeline()이 실패한다.
+# pipeline/ 의 15개 YAML. 파일이 하나라도 빠지면 load_pipeline()이 실패한다.
+# hypotheses.yaml은 python -m pipeline.hypothesis_tools.generate_hypotheses 로 생성한다.
 PIPELINE_FILES = {
+    "prior_knowledge": "00_prior_knowledge/prior_knowledge.yaml",
     "safety_profile": "01_safety_profile/safety_profile.yaml",
     "hypotheses": "02_hypotheses/hypotheses.yaml",
     "vulnerability_patterns": "02_hypotheses/vulnerability_patterns.yaml",
@@ -81,7 +84,8 @@ RUN_RECORD_FIELDS = (
     "profile_id", "source_commit", "feature_schema_version", "hypothesis_ids",
     "parameters", "planned_fault_onset", "actual_fault_onset", "trigger_time",
     "switch_time", "switch_count", "outcome_category", "P01", "P02", "P03",
-    "margin_delta_m", "gp_mean", "gp_std", "sim_status", "invalid_reason",
+    "margin_delta_m", "switch_state_label", "metrics", "baseline_metrics", "gp_targets",
+    "gp_mean", "gp_std", "sim_status", "invalid_reason",
 )
 
 
@@ -99,7 +103,7 @@ def _get(data: dict, *keys: str) -> Any:
 
 
 def load_pipeline(pipeline_dir: str | Path) -> dict[str, Any]:
-    """14개 YAML을 모두 읽는다. 빠진 파일이 있으면 FileNotFoundError."""
+    """15개 YAML을 모두 읽는다. 빠진 파일이 있으면 FileNotFoundError."""
     root = Path(pipeline_dir)
     loaded: dict[str, Any] = {}
     for name, rel in PIPELINE_FILES.items():
@@ -133,6 +137,11 @@ def collect_missing(config: dict[str, Any]) -> list[str]:
           "safety_profile.switching.failure_detection_period_ms")
     check(_get(profile, "switching", "triggers"),
           "safety_profile.switching.triggers")
+    # recovery_robustness(GP 타깃)를 계산하려면 admissible 제약의 한계값이 필요하다.
+    for path in (("vehicle", "lane_half_width_m"), ("vehicle", "vehicle_half_width_m"),
+                 ("controllers", "lqr", "constraints_and_behavior", "steering_saturation"),
+                 ("controllers", "lqr", "constraints_and_behavior", "steering_rate_limit")):
+        check(_get(profile, *path), "safety_profile." + ".".join(path))
     check(_get(config["nemotron_a"], "nemotron", "model"),
           "nemotron_a.nemotron.model (.env NEMOTRON_MODEL_ID)")
     check(_get(config["nemotron_b"], "nemotron", "model"),
@@ -239,7 +248,43 @@ def feasibility_gate(candidate: dict[str, Any], route_events: Iterable[str],
 
 
 # ---------------------------------------------------------------------------
-# 07: LCB 오케스트레이터 — GP 평균/표준편차가 주어졌을 때의 선택 로직.
+# 06: 지표별 GP 타깃. 규칙 원본은 02 vulnerability_patterns.yaml metric_rules[*].
+# ---------------------------------------------------------------------------
+
+def gp_target(rule: dict[str, Any], run_metrics: dict[str, Any],
+              baseline_metrics: dict[str, Any] | None, has_fault: bool) -> float | None:
+    """런 1개의 원래 단위 타깃 y. 계산할 수 없으면 None (0으로 대체하지 않는다)."""
+    gp = rule["gp"]
+    value = run_metrics.get(gp["target"])
+    if value is None:
+        return None
+    if gp["form"] == "absolute_post_switch" or not has_fault:
+        return float(value)
+    if gp["form"] != "paired_delta_if_fault_else_absolute":
+        raise ValueError(f"알 수 없는 GP 타깃 형태: {gp['form']}")
+    base = (baseline_metrics or {}).get(gp["target"])
+    return None if base is None else float(value) - float(base)
+
+
+def orient(y: float, rule: dict[str, Any]) -> float:
+    """z = sign * y / scale. z가 낮을수록 가설 방향(더 위험). 07이 지표끼리 비교한다."""
+    sign = 1.0 if rule["support_direction"] == "negative" else -1.0
+    return sign * y / rule["gp"]["scale"]
+
+
+def gp_targets(metric_rules: dict[str, Any], run_metrics: dict[str, Any],
+               baseline_metrics: dict[str, Any] | None, has_fault: bool) -> dict[str, float]:
+    """run_record.gp_targets: 지표별 z. 정의되지 않은 지표는 빠진다."""
+    out: dict[str, float] = {}
+    for name, rule in metric_rules.items():
+        y = gp_target(rule, run_metrics, baseline_metrics, has_fault)
+        if y is not None:
+            out[name] = orient(y, rule)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# 07: LCB 오케스트레이터 — 지표별 GP 평균/표준편차(z)가 주어졌을 때의 선택 로직.
 # ---------------------------------------------------------------------------
 
 def beta_schedule(round_index: int, total_rounds: int) -> float:
@@ -250,22 +295,40 @@ def beta_schedule(round_index: int, total_rounds: int) -> float:
     return 2.0 + (0.5 - 2.0) * frac
 
 
-def lcb(mean_delta_m: float, std_delta_m: float, beta: float) -> float:
-    """낮을수록 margin 감소가 예상되는, 즉 더 위험한 후보. 최소화 방향."""
-    return mean_delta_m - beta * std_delta_m
+def lcb(mean_z: float, std_z: float, beta: float) -> float:
+    """낮을수록 가설 방향 효과가 예상되는, 즉 더 위험한 후보. 최소화 방향."""
+    return mean_z - beta * std_z
 
 
-def select_batch(candidates: list[dict[str, Any]], beta: float, seed: int = 0,
-                 batch_size: int = 12, min_distance: float = 0.1,
+def candidate_lcb(candidate: dict[str, Any], metric_of: dict[str, str],
+                  beta: float) -> float | None:
+    """candidate: hypothesis_ids, gp_mean/gp_std = {metric: z}. metric_of: 가설 id → 주 지표.
+
+    인용한 가설 지표 중 가장 낮은 LCB. 해당 지표 GP 예측이 없으면 None.
+    """
+    scores = []
+    for hid in candidate.get("hypothesis_ids") or []:
+        metric = metric_of.get(hid)
+        mean = (candidate.get("gp_mean") or {}).get(metric)
+        std = (candidate.get("gp_std") or {}).get(metric)
+        if mean is not None and std is not None:
+            scores.append(lcb(mean, std, beta))
+    return min(scores) if scores else None
+
+
+def select_batch(candidates: list[dict[str, Any]], metric_of: dict[str, str], beta: float,
+                 seed: int = 0, batch_size: int = 12, min_distance: float = 0.1,
                  max_per_seed: int = 2) -> list[dict[str, Any]]:
     """배치 12개 = LCB 9개 + 무작위 space filling 3개 (07, 예시 비율).
 
-    candidates 각 항목은 gp_mean, gp_std, normalized_features(list[float]),
-    seed_scenario_id를 가져야 한다. 다양성: 정규화 feature 공간 최소 거리 0.1,
-    시드당 최대 2개.
+    candidates 각 항목은 hypothesis_ids, gp_mean/gp_std({metric: z}),
+    normalized_features(list[float]), seed_scenario_id를 가져야 한다.
+    LCB를 계산할 수 없는 후보는 무작위 몫으로만 뽑힌다.
+    다양성: 정규화 feature 공간 최소 거리 0.1, 시드당 최대 2개.
     """
     rng = random.Random(seed)
-    ranked = sorted(candidates, key=lambda c: lcb(c["gp_mean"], c["gp_std"], beta))
+    scored = [(candidate_lcb(c, metric_of, beta), c) for c in candidates]
+    ranked = [c for s, c in sorted((x for x in scored if x[0] is not None), key=lambda x: x[0])]
     picked: list[dict[str, Any]] = []
     per_seed: dict[str, int] = {}
     for cand in ranked:
@@ -371,8 +434,12 @@ class NemotronBClient:
 class GPModel:
     """06 GP: gaussian_process_regression, Matern 5/2 with ARD + WhiteKernel.
 
-    refit: per_batch, 학습 데이터는 09 run_record의 all_valid_paired_results.
+    지표마다 인스턴스 하나 (metric). 타깃은 run_record.gp_targets[metric] (z).
+    refit: per_batch, 학습 데이터는 09 run_record의 all_valid_runs 중 타깃이 정의된 런.
     """
+
+    def __init__(self, metric: str) -> None:
+        self.metric = metric
 
     def fit(self, features, targets):
         raise NotImplementedError(
@@ -403,7 +470,15 @@ class CarlaRunner:
 def cmd_check(pipeline_dir: Path) -> int:
     config = load_pipeline(pipeline_dir)
     missing = collect_missing(config)
-    print(f"YAML 14개 로드 완료: {pipeline_dir}")
+    print(f"YAML {len(PIPELINE_FILES)}개 로드 완료: {pipeline_dir}")
+    hyps = (config["hypotheses"] or {}).get("hypotheses") or []
+    counts: dict[str, int] = {}
+    for h in hyps:
+        counts[h["status"]] = counts.get(h["status"], 0) + 1
+    print("가설 상태:", ", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "없음")
+    metric_of = {h["id"]: h["prediction"]["metric"] for h in hyps
+                 if h["status"] in ("proposed", "testing")}
+    print("활성 GP 지표:", ", ".join(sorted(set(metric_of.values()))) or "없음 (전부 blocked)")
     if not missing:
         print("실행에 필요한 null 항목이 없다.")
         return 0
@@ -443,14 +518,40 @@ def cmd_self_test() -> int:
                             p01=0.2, p02=0.5, collision=False) == "simulation_invalid"
     assert margin_delta_m(-0.1, 0.4) == -0.5
     assert cold_start_split(24) == (12, 12)
-    print("self-test 통과: DF-01~05, LCB, G-03, P-01/P-02, 결과 분류, margin_delta_m")
+    rules = {
+        "recovery_success": {"support_direction": "negative",
+                             "gp": {"target": "recovery_robustness",
+                                    "form": "absolute_post_switch", "scale": 0.1}},
+        "switch_count": {"support_direction": "positive",
+                         "gp": {"target": "switch_count",
+                                "form": "paired_delta_if_fault_else_absolute", "scale": 1.0}},
+    }
+    z = gp_targets(rules, {"recovery_robustness": -0.05, "switch_count": 4},
+                   {"switch_count": 1}, has_fault=True)
+    assert abs(z["recovery_success"] + 0.5) < 1e-9 and z["switch_count"] == -3.0, z
+    assert gp_targets(rules, {"switch_count": 2}, None, has_fault=False) == {"switch_count": -2.0}
+    assert gp_targets(rules, {"switch_count": 2}, None, has_fault=True) == {}  # baseline 없음
+    metric_of = {"H-01": "recovery_success", "H-03": "switch_count"}
+    cands = [
+        {"id": "a", "hypothesis_ids": ["H-01"], "gp_mean": {"recovery_success": 0.0},
+         "gp_std": {"recovery_success": 1.0}, "normalized_features": [0.0], "seed_scenario_id": "s1"},
+        {"id": "b", "hypothesis_ids": ["H-03"], "gp_mean": {"switch_count": -1.0},
+         "gp_std": {"switch_count": 0.1}, "normalized_features": [0.5], "seed_scenario_id": "s2"},
+        {"id": "c", "hypothesis_ids": ["H-03"], "gp_mean": {}, "gp_std": {},
+         "normalized_features": [1.0], "seed_scenario_id": "s3"},
+    ]
+    assert candidate_lcb(cands[2], metric_of, 2.0) is None
+    batch = select_batch(cands, metric_of, beta=2.0, batch_size=4)
+    assert [c["id"] for c in batch[:2]] == ["a", "b"] and len(batch) == 3
+    print("self-test 통과: DF-01~05, LCB, G-03, P-01/P-02, 결과 분류, margin_delta_m, "
+          "지표별 GP 타깃, 가설 지표 LCB")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pipeline-dir", default="pipeline")
-    parser.add_argument("--check", action="store_true", help="14개 YAML 로드 + null 항목 보고")
+    parser.add_argument("--check", action="store_true", help="15개 YAML 로드 + null 항목 보고")
     parser.add_argument("--self-test", action="store_true", help="순수 함수 자가 검증")
     args = parser.parse_args(argv)
     if args.self_test:

@@ -19,9 +19,10 @@ paired_runs:
   match: [map, route_id, initial_state, seed, weather, traffic, speed_mps,
           tire_friction_scale]
   search_target:
-    id: margin_delta_m
-    formula: "P01_robustness(fault) - P01_robustness(baseline)"
-    negative_means: "고장·전환 때문에 여유가 줄어듦"
+    per_metric: true                         # 06 surrogate.yaml target_forms 참조
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#metric_rules.*.gp
+  no_fault_candidates: single_run            # fault_types가 빈 후보(H-08/H-10/H-11)는 짝 없이 1회
+  record_all_metrics_every_run: true         # 지표 GP끼리 데이터를 공유하도록
   failure_report_uses: absolute_robustness     # 실패 판정은 절대값(P-01..03)
   baseline_cache:
     enabled: true

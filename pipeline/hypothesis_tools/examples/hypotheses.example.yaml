@@ -1,10 +1,15 @@
+# hypotheses.yaml — 자동 생성 결과물 (손으로 편집하지 않음)
+# vulnerability_patterns.yaml(틀) + safety_profile.yaml(값) + scenario_space.yaml → 이 파일
+# 재생성: python -m pipeline.hypothesis_tools.generate_hypotheses (저장소 루트에서)
+# 실행 중 가설 내용은 바뀌지 않고 tracking/status만 바뀐다.
+
 meta:
   schema_version: '2.0'
   generated_by: generate_hypotheses.py
   profile_id: sp-code-aware-mpc-lqr
   source_commit: null
-  catalog_version: '2.0'
-  generated_at: '2026-10-26T21:49:29+00:00'
+  catalog_version: '2.1'
+  generated_at: '2026-10-26T23:13:37+00:00'
   frozen_at_commit: null
   status: generated_not_validated
 references:
@@ -58,6 +63,13 @@ outcome_definitions:
   post_switch_saturation_ratio: t_sw 이후 1 s 동안 조향각 또는 조향속도 포화 스텝 비율
   command_jump_rad: abs(u_LQR(t_sw) - u_MPC(t_sw - dt))
   switch_occurred: 보조 지표. 전환 실패(전환 자체가 없음)는 recovery_success = false 로 처리
+  recovery_robustness: min over [switch_time, switch_time + T_hold_s] of min_i(margin_i / limit_i) over admissible_constraints.
+    < 0 means a constraint was violated. Undefined if no switch.
+  pre_switch_max_lateral_error_m: max abs(e_y) over [actual_fault_onset, switch_time]
+  lateral_error_rmse_m: RMS of e_y over the safety_spec evaluation window
+  deadline_miss_rate: solver calls exceeding configured_time_limit_ms / solver calls, evaluation window
+  mpc_constraint_violation_rate: control steps with any MPC constraint violated / control steps, evaluation window
+  switch_count: number of MPC->LQR switches in the evaluation window
 recoverability_oracle_spec:
   state:
   - e_y
@@ -90,36 +102,95 @@ metric_rules:
     support_direction: negative
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
   pre_switch_max_lateral_error_m:
     unit: m
     effect: mean_difference
     support_direction: positive
     minimum_effect: 0.1
     ci_level: 0.99
+    gp:
+      target: pre_switch_max_lateral_error_m
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.1
   switch_count:
     unit: count
     effect: mean_difference
     support_direction: positive
     minimum_effect: 1.0
     ci_level: 0.99
+    gp:
+      target: switch_count
+      form: paired_delta_if_fault_else_absolute
+      scale: 1.0
   lateral_error_rmse_m:
     unit: m
     effect: mean_difference
     support_direction: positive
     minimum_effect: 0.1
     ci_level: 0.99
+    gp:
+      target: lateral_error_rmse_m
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.1
   deadline_miss_rate:
     unit: fraction
     effect: risk_difference
     support_direction: positive
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: deadline_miss_rate
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.05
   mpc_constraint_violation_rate:
     unit: fraction
     effect: risk_difference
     support_direction: positive
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: mpc_constraint_violation_rate
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.05
+decision_protocol:
+  runs_source: dedicated_random_in_region
+  gp_search_runs_used_for_decision: false
+  effect: condition - control, per metric_rules[metric].effect
+  interval:
+    method: bootstrap
+    level: 0.99
+    resamples: 5000
+  support_if:
+    negative: ci_upper < -minimum_effect
+    positive: ci_lower > minimum_effect
+    non_inferior: ci_lower > -minimum_margin
+  refute_if:
+    negative: ci_lower > -minimum_effect
+    positive: ci_upper < minimum_effect
+    non_inferior: ci_upper < -minimum_margin
+  else: inconclusive
+  checkpoints_per_arm:
+  - 10
+  - 20
+  - 30
+  exclude_outcomes:
+  - simulation_invalid
+  exclude_runs:
+  - recoverability_manipulation_check_mismatch
+  - metric_unavailable
+status_values:
+  proposed: 생성됨, 아직 판정 런 없음
+  blocked: needs/템플릿/차원/오라클 중 비어 있어 검증 불가
+  testing: 판정 런이 첫 checkpoint 미만
+  supported: decision_protocol.support_if 충족
+  refuted: decision_protocol.refute_if 충족
+  inconclusive: 최대 checkpoint 도달, 어느 쪽도 충족 못 함
 pattern_application:
 - pattern_id: P-OFF-DESIGN-H-01
   applies: true
@@ -159,7 +230,7 @@ pattern_application:
   hypothesis_id: H-09
 - pattern_id: P-MPC-DEADLINE-H-10
   applies: null
-  reason: 'Missing applies_if fields: controllers.mpc.solver_runtime.control_period_ms'
+  reason: 'Missing applies_if fields: system.controller_period_ms'
   hypothesis_id: H-10
 - pattern_id: P-MPC-CONSTRAINT-STRESS-H-11
   applies: true
@@ -203,7 +274,7 @@ hypotheses:
     - road_curvature_per_m
     fault_dimensions:
     - fault_type
-    - fault_onset_event
+    - onset_event
     candidate_constraints: []
     selection_objective: seek_boundary_or_uncertainty
     physical_validity_checks:
@@ -234,6 +305,12 @@ hypotheses:
     support_direction: negative
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
   status: proposed
 - id: H-02
   from_pattern: P-DELAYED-SWITCH-H-02
@@ -263,7 +340,7 @@ hypotheses:
     - road_curvature_per_m
     fault_dimensions:
     - fault_type
-    - fault_onset_event
+    - onset_event
     candidate_constraints: []
     selection_objective: seek_boundary_or_uncertainty
     physical_validity_checks:
@@ -289,6 +366,10 @@ hypotheses:
     support_direction: positive
     minimum_effect: 0.1
     ci_level: 0.99
+    gp:
+      target: pre_switch_max_lateral_error_m
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.1
   status: proposed
   design_notes: 'v1.0의 condition("onset + 0.02 > curve_entry_time")은 곡선 진입을 위험의 proxy로 쓴 것이라 근거가 약했음. 위험의 정의를 ''복구
     가능 영역 이탈''로 바꾸고, 그 검증은 H-05로 이관. H-02는 hold_last 자체의 효과만 본다.
@@ -322,7 +403,7 @@ hypotheses:
     - speed_mps
     fault_dimensions:
     - fault_type
-    - solver_delay_jitter_ms
+    - F-03.amplitude_ms
     candidate_constraints: []
     selection_objective: seek_boundary_or_uncertainty
     physical_validity_checks:
@@ -351,6 +432,10 @@ hypotheses:
     support_direction: positive
     minimum_effect: 1.0
     ci_level: 0.99
+    gp:
+      target: switch_count
+      form: paired_delta_if_fault_else_absolute
+      scale: 1.0
   status: proposed
 - id: H-04
   from_pattern: P-UNRECOVERABLE-SWITCH-H-04
@@ -358,6 +443,7 @@ hypotheses:
   provenance: pattern_instantiation
   claim: MPC→LQR 전환 시점 상태가 LQR 복구 가능 영역 밖(NR)이면, 영역 안(R_LMI)에서 전환할 때보다 복구 성공률이 낮다.
   based_on:
+  - O-002
   - O-005
   - O-014
   filled_values:
@@ -365,18 +451,19 @@ hypotheses:
     recoverability.P_matrix: null
     recoverability.level_c: null
     recoverability.reach_table: null
-    controllers.lqr.limits.steering_angle_limit_rad: null
+    controllers.lqr.constraints_and_behavior.steering_saturation: null
+    controllers.lqr.feedback_design.design_speed_mps: 15.0
   condition:
     fault_types:
     - F-01
     - F-02
-    speed_mps: near(15, 2)
+    speed_mps: near(15.0, 2)
     switch_state_label: NOT_CERTIFIED
   control:
     fault_types:
     - F-01
     - F-02
-    speed_mps: near(15, 2)
+    speed_mps: near(15.0, 2)
     switch_state_label: R_LMI
   scenario_guidance:
     odd_dimensions:
@@ -384,7 +471,8 @@ hypotheses:
     - road_curvature_per_m
     fault_dimensions:
     - fault_type
-    - fault_onset_time_s
+    - onset_event
+    - onset_offset_s
     candidate_constraints: []
     selection_objective: seek_boundary_or_uncertainty
     physical_validity_checks:
@@ -416,9 +504,15 @@ hypotheses:
     support_direction: negative
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
   status: blocked
   blocked_reason:
-  - 'missing profile values: recoverability.P_matrix, recoverability.level_c, recoverability.reach_table, controllers.lqr.limits.steering_angle_limit_rad'
+  - 'missing profile values: recoverability.P_matrix, recoverability.level_c, recoverability.reach_table, controllers.lqr.constraints_and_behavior.steering_saturation'
   - recoverability oracle artifacts not certified/populated
 - id: H-05
   from_pattern: P-BACKUP-SATURATION-H-05
@@ -430,9 +524,9 @@ hypotheses:
   - O-015
   - O-022
   filled_values:
-    controllers.lqr.output_clipping: null
-    controllers.lqr.limits.steering_angle_limit_rad: null
-    controllers.lqr.limits.steering_rate_limit_rps: null
+    controllers.lqr.constraints_and_behavior.output_clipping: null
+    controllers.lqr.constraints_and_behavior.steering_saturation: null
+    controllers.lqr.constraints_and_behavior.steering_rate_limit: null
   condition:
     predicted_first_lqr_command: abs(K x(t_sw)) > delta_max_rad OR command_jump_rad / dt > delta_rate_max_rps
     switch_state_label:
@@ -449,7 +543,8 @@ hypotheses:
     - road_curvature_per_m
     fault_dimensions:
     - fault_type
-    - fault_onset_time_s
+    - onset_event
+    - onset_offset_s
     candidate_constraints: []
     selection_objective: seek_boundary_or_uncertainty
     physical_validity_checks:
@@ -476,10 +571,17 @@ hypotheses:
     support_direction: negative
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
   status: blocked
   design_notes: oracle이 포화를 반영해 영역을 계산하면 H-04와 일부 겹침. 겹치는 런은 H-04 판정에만 사용
   blocked_reason:
-  - 'missing profile values: controllers.lqr.output_clipping, controllers.lqr.limits.steering_angle_limit_rad, controllers.lqr.limits.steering_rate_limit_rps'
+  - 'missing profile values: controllers.lqr.constraints_and_behavior.output_clipping, controllers.lqr.constraints_and_behavior.steering_saturation,
+    controllers.lqr.constraints_and_behavior.steering_rate_limit'
 - id: H-06
   from_pattern: P-UNRECOVERABLE-SWITCH-H-06
   phase: after_switch
@@ -497,17 +599,21 @@ hypotheses:
     fault_types:
     - F-01
     slack_ms: < -50
+    co_injected_faults:
+    - F-04
   control:
     fault_types:
     - F-01
     slack_ms: '> +50'
+    co_injected_faults:
+    - F-04
   scenario_guidance:
     odd_dimensions:
     - speed_mps
     - road_curvature_per_m
     fault_dimensions:
     - fault_type
-    - detection_delay_ms
+    - F-04.extra_delay_ms
     candidate_constraints: []
     selection_objective: seek_boundary_or_uncertainty
     physical_validity_checks:
@@ -534,6 +640,12 @@ hypotheses:
     support_direction: negative
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
   status: blocked
   blocked_reason:
   - 'missing profile values: switching.switch_latency_ms, recoverability.reach_table'
@@ -566,7 +678,8 @@ hypotheses:
     - road_curvature_per_m
     fault_dimensions:
     - fault_type
-    - fault_onset_time_s
+    - onset_event
+    - onset_offset_s
     candidate_constraints: []
     selection_objective: seek_boundary_or_uncertainty
     physical_validity_checks:
@@ -589,6 +702,12 @@ hypotheses:
     support_direction: negative
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
     minimum_margin: 0.05
     direction: non_inferior
   status: blocked
@@ -602,26 +721,27 @@ hypotheses:
   claim: MPC 예측 모델(kinematic bicycle, 고정 mu)과 CARLA 차량 거동의 차이가 커지는 조건에서, 정상 조건보다 횡방향 추종 오차와 조향 입력 부담이 증가한다.
   based_on:
   - O-023
+  - O-027
   filled_values:
-    controllers.mpc.model.type: kinematic_bicycle
-    controllers.mpc.model.fixed_parameters: true
+    controllers.mpc.implementation.prediction_model: kinematic_bicycle
+    controllers.mpc.implementation.model_parameters_fixed: true
   condition:
     fault_types: []
     road_curvature_per_m: '> 0.01'
-    road_friction: 0.6
     speed_mps: '> 20'
     vehicle_mass_scale: 1.3
+    tire_friction_scale: 0.6
   control:
     fault_types: []
     road_curvature_per_m: '> 0.01'
-    road_friction: 0.8
     speed_mps: '> 20'
     vehicle_mass_scale: 1.0
+    tire_friction_scale: 0.8
   scenario_guidance:
     odd_dimensions:
     - speed_mps
     - road_curvature_per_m
-    - road_friction
+    - tire_friction_scale
     - vehicle_mass_scale
     fault_dimensions: []
     candidate_constraints:
@@ -632,7 +752,7 @@ hypotheses:
     - within_scenario_space
     - physically_feasible
     sensitivity_arms:
-    - road_friction_only
+    - tire_friction_only
     - vehicle_mass_only
   prediction:
     metric: lateral_error_rmse_m
@@ -654,6 +774,10 @@ hypotheses:
     support_direction: positive
     minimum_effect: 0.1
     ci_level: 0.99
+    gp:
+      target: lateral_error_rmse_m
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.1
   status: proposed
   design_notes: 풍속은 CARLA에서 직접 구현이 어려워 제외. mass_scale 1.3은 S-03의 1,371/1,050 ≈ 1.31에서 가져옴
 - id: H-09
@@ -666,25 +790,26 @@ hypotheses:
   based_on:
   - O-024
   filled_values:
-    controllers.mpc.model.assumed_friction: null
+    controllers.mpc.implementation.assumed_friction: null
     recoverability.reach_table: null
   condition:
-    road_friction: 0.6
     switch_state_label:
     - R_LMI
     - R_REACH_ESTIMATED
+    tire_friction_scale: 0.6
   control:
-    road_friction: 0.8
     switch_state_label:
     - R_LMI
     - R_REACH_ESTIMATED
+    tire_friction_scale: 0.8
   scenario_guidance:
     odd_dimensions:
-    - road_friction
+    - tire_friction_scale
     - speed_mps
     fault_dimensions:
     - fault_type
-    - fault_onset_time_s
+    - onset_event
+    - onset_offset_s
     candidate_constraints: []
     selection_objective: seek_boundary_or_uncertainty
     physical_validity_checks:
@@ -709,9 +834,15 @@ hypotheses:
     support_direction: negative
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: recovery_robustness
+      form: absolute_post_switch
+      scale: 0.1
+      scale_status: example_only
+      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
   status: blocked
   blocked_reason:
-  - 'missing profile values: controllers.mpc.model.assumed_friction, recoverability.reach_table'
+  - 'missing profile values: controllers.mpc.implementation.assumed_friction, recoverability.reach_table'
   - recoverability oracle artifacts not certified/populated
 - id: H-10
   from_pattern: P-MPC-DEADLINE-H-10
@@ -722,16 +853,18 @@ hypotheses:
   - O-025
   - O-026
   filled_values:
-    controllers.mpc.solver_runtime.control_period_ms: null
-    controllers.mpc.solver_runtime.deadline_handling: null
+    system.controller_period_ms: null
+    controllers.mpc.solver_runtime.timeout_handling: null
   condition:
-    disturbance:
-    - velocity
-    - steering
     maneuver: lane_change
+    velocity_disturbance: moderate
+    steering_disturbance: moderate
+    fault_types: []
   control:
-    disturbance: none
     maneuver: lane_keeping
+    velocity_disturbance: none
+    steering_disturbance: none
+    fault_types: []
   scenario_guidance:
     odd_dimensions:
     - maneuver
@@ -763,10 +896,14 @@ hypotheses:
     support_direction: positive
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: deadline_miss_rate
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.05
   status: blocked
   blocked_reason:
-  - 'Missing applies_if fields: controllers.mpc.solver_runtime.control_period_ms'
-  - 'missing profile values: controllers.mpc.solver_runtime.control_period_ms, controllers.mpc.solver_runtime.deadline_handling'
+  - 'Missing applies_if fields: system.controller_period_ms'
+  - 'missing profile values: system.controller_period_ms, controllers.mpc.solver_runtime.timeout_handling'
 - id: H-11
   from_pattern: P-MPC-CONSTRAINT-STRESS-H-11
   phase: before_switch
@@ -777,8 +914,8 @@ hypotheses:
   - O-017
   - O-023
   filled_values:
-    controllers.mpc.model.type: kinematic_bicycle
-    controllers.mpc.constraints.steering_angle_limit_rad: null
+    controllers.mpc.implementation.prediction_model: kinematic_bicycle
+    controllers.mpc.constraints.steering_angle_bounds: null
     controllers.mpc.constraints.lateral_accel_limit_mps2: null
     vehicle.lane_half_width_m: null
     vehicle.vehicle_half_width_m: null
@@ -792,7 +929,7 @@ hypotheses:
     odd_dimensions:
     - speed_mps
     - road_curvature_per_m
-    - road_friction
+    - tire_friction_scale
     fault_dimensions: []
     derived_features:
       lateral_accel_demand_mps2: speed_mps ** 2 * abs(road_curvature_per_m)
@@ -820,13 +957,18 @@ hypotheses:
     support_direction: positive
     minimum_effect: 0.05
     ci_level: 0.99
+    gp:
+      target: mpc_constraint_violation_rate
+      form: paired_delta_if_fault_else_absolute
+      scale: 0.05
   status: blocked
   blocked_reason:
-  - 'missing profile values: controllers.mpc.constraints.steering_angle_limit_rad, controllers.mpc.constraints.lateral_accel_limit_mps2,
+  - 'missing profile values: controllers.mpc.constraints.steering_angle_bounds, controllers.mpc.constraints.lateral_accel_limit_mps2,
     vehicle.lane_half_width_m, vehicle.vehicle_half_width_m'
 rejected_proposals: []
 tracking:
 - id: H-01
+  metric: recovery_success
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -834,6 +976,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-02
+  metric: pre_switch_max_lateral_error_m
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -841,6 +984,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-03
+  metric: switch_count
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -848,6 +992,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-04
+  metric: recovery_success
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -855,6 +1000,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-05
+  metric: recovery_success
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -862,6 +1008,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-06
+  metric: recovery_success
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -869,6 +1016,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-07
+  metric: recovery_success
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -876,6 +1024,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-08
+  metric: lateral_error_rmse_m
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -883,6 +1032,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-09
+  metric: recovery_success
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -890,6 +1040,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-10
+  metric: deadline_miss_rate
   runs_condition: 0
   runs_control: 0
   effect_estimate: null
@@ -897,6 +1048,7 @@ tracking:
   mismatch_runs: 0
   status_history: []
 - id: H-11
+  metric: mpc_constraint_violation_rate
   runs_condition: 0
   runs_control: 0
   effect_estimate: null

@@ -26,7 +26,7 @@ evaluation:
     - simulations_to_first_failure
     - unique_failure_conditions               # (fault_type, onset_event, 영역) 기준 중복 제거
     - hypotheses_supported_refuted
-    - gp_prediction_error_over_rounds
+    - gp_prediction_error_over_rounds         # 지표별 GP 각각
 
 research_scope:
   implemented: [static_code_extraction, nemotron_hypothesis_and_scenario_generation,

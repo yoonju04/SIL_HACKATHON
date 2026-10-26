@@ -1,5 +1,5 @@
 # orchestrator.yaml — Orchestrator 선택 (LCB + 다양성 + 무작위 25%)
-# 입력: 06 GP 평균·불확실성. 출력: 실행 배치 → 08 CARLA 짝 실행
+# 입력: 06 지표별 GP 평균·불확실성(z). 출력: 실행 배치 → 08 CARLA 짝 실행
 
 meta:
   schema_version: '1.0'
@@ -13,7 +13,10 @@ cold_start:
 
 acquisition:
   name: lower_confidence_bound
-  formula: "mean_delta_m - beta * std_delta_m"
+  formula: "mean_z[m] - beta * std_z[m]"
+  metric_of_candidate: "m = 02 hypotheses[h].prediction.metric for h in candidate.hypothesis_ids"
+  multi_hypothesis: min_over_cited_hypotheses   # 여러 가설을 인용하면 가장 위험한 쪽
+  inactive_metric: skip_lcb_use_space_filling   # 해당 지표 GP가 아직 없으면 무작위 몫으로
   selection: minimize
   beta_schedule: {start: 2.0, end: 0.5, decay: linear_over_rounds}   # 예시
   batch_size: 12
@@ -31,4 +34,4 @@ budget:
   stop_if:
     - budget_exhausted
     - "no new unique failure condition for 3 rounds"
-    - "max std_delta_m < threshold"
+    - "max std_z over active metrics < threshold"
