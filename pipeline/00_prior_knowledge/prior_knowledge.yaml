@@ -1,0 +1,29 @@
+meta:
+  schema_version: '1.0'
+  status: template_unverified
+  purpose: hypothesis_guidance_not_safety_certification
+principles:
+  - id: PK-001
+    title: steady_state_lateral_acceleration
+    kind: physical_relation
+    equation: 'a_y = v^2 * abs(curvature)'
+    assumptions: [steady_state_motion, known_path_curvature]
+    usage: deterministic_screening
+    evidence: {type: physics_relation, source: 'centripetal acceleration a=v²/R'}
+  - id: PK-002
+    title: lqr_off_design_point
+    kind: testable_hypothesis
+    statement: 'Fixed-gain LQR performance may degrade away from its design operating point.'
+    evidence: {type: control_theory_hypothesis, source: 'local linearization principle'}
+    validation: controller_specific_simulation_required
+  - id: PK-003
+    title: switching_latency
+    kind: testable_hypothesis
+    statement: 'Detection and handover latency may reduce recovery margin.'
+    evidence: {type: runtime_assurance_hypothesis, source: 'delay-sensitive closed-loop dynamics'}
+    validation: paired_simulation_required
+policy:
+  missing_controller_parameters: never_invent
+  hypothesis_is_not_fact: true
+  physical_stress_tests: tag_not_reject
+  final_safety_decision: deterministic_monitor_only
