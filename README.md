@@ -196,16 +196,18 @@ SIL_HACKATHON/
 │   ├── 06_gp_surrogate/           # 지표별 GP (정규화 z)
 │   ├── 07_orchestrator/           # LCB 선택 · 예산
 │   ├── 08_carla_paired_run/       # baseline vs fault 짝 실행
-│   ├── 09_monitor/                # safety spec P-01~03 + error table + monitor.py (av_stack 로그 판정)
+│   ├── 09_monitor/                # safety spec P-01~03 + error table (판정 코드는 engine/monitor.py)
 │   ├── 10_video_explainer/        # 영상 해설 + 검증 (Cosmos Reason / Nemotron VL)
-│   ├── engine/                    # 실행 엔진 (monitor, GP, LLM 클라이언트, CARLA 러너, 영상, 피드백, 합성 fixture)
 │   ├── llm_models.yaml            # 모델 id · 호출 파라미터 (역할 A, A_refine, B, C)
-│   ├── run.py                     # 한 번에 실행: python -m pipeline.run --mock | --real
-│   ├── evaluation/                # ablation X-1~6
-│   ├── hypothesis_tools/          # 가설 생성기 · 후보 샘플러
+│   └── evaluation/                # ablation X-1~6
+├── engine/                        # 실행 코드 전부 (pipeline/ 에는 단계 설정만 둔다)
+│   ├── judgment.py · monitor.py   # 판정 순수 함수 · 09 모니터 (CLI: python -m engine.monitor RUN_DIR)
+│   ├── config.py · config_check.py# YAML·av_stack 경로 해석 · null 항목 점검 (python run.py --check)
+│   ├── surrogate.py · scenarios.py · nemotron.py · llm.py · carla_runner.py · video.py · explainer.py · feedback.py
+│   ├── fixtures/                  # mock 전용 합성 시뮬레이터 · scenario space (SYNTHETIC)
+│   ├── hypothesis_tools/          # 가설 생성기 · 후보 샘플러 (+ examples/)
 │   └── prior_tools/               # Nemotron prior payload · 횡가속도 스크리닝
-├── scripts/
-│   └── runner_skeleton.py         # 파이프라인 러너 (--check, --self-test)
+├── run.py                         # 한 번에 실행: python run.py --mock | --real | --check
 ├── tests/                         # python -m pytest -q (unittest 테스트 포함)
 ├── requirements-pipeline.txt      # 루프용 패키지 (CARLA는 sim-eval .venv-tfpp)
 ├── configs/
@@ -232,7 +234,7 @@ SIL_HACKATHON/
 
 고장은 MPC의 계산 · 실행 고장만 다루며, 센서 · 액추에이터 등 하드웨어 고장은 범위 밖입니다. 이 프로젝트는 시뮬레이션 기반 연구 도구이며 실제 차량용 소프트웨어나 ISO 26262 인증 도구가 아닙니다. 하나의 시뮬레이터 · 차량 모델 결과를 실제 차량 안전 보장으로 일반화할 수 없습니다. MPC와 LQR이 같은 센서나 ECU를 공유하면 알고리즘 백업만으로는 하드웨어 고장을 막지 못합니다. **실패를 찾지 못했다고 해서 안전이 증명되는 것은 아닙니다.**
 
-## 12. 한 번에 실행하기 (`python -m pipeline.run`, 2026-10-27)
+## 12. 한 번에 실행하기 (`python run.py`, 2026-10-27)
 
 `new_pipeline` + `junwoo/sim-eval` 을 main 에 병합하면 `pipeline/08_carla_paired_run/av_stack/` 와
 `pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml` 이 생기고, 루프가 그것을 자동으로 찾는다.
@@ -249,12 +251,16 @@ py -3.11 -m venv .venv-sil
 ### mock 모드 (CARLA·네트워크 없음, 합성 데이터)
 
 ```powershell
-.venv-sil\Scripts\python -m pipeline.run --mock                      # 00 → 10 전체, outputs\mock_<시각>\
-.venv-sil\Scripts\python -m pipeline.run --mock --ablation-suite      # X-1,2,3,5,6 비교 (SYNTHETIC)
+.venv-sil\Scripts\python run.py --mock                      # 00 → 10 전체, outputs\mock_<시각>\
+.venv-sil\Scripts\python run.py --mock --ablation-suite      # X-1,2,3,5,6 비교 (SYNTHETIC)
 .venv-sil\Scripts\python -m pytest -q
+.venv-sil\Scripts\python run.py --check                     # 단계 YAML null 항목 보고 (남아 있으면 exit 2)
+.venv-sil\Scripts\python -m engine.monitor RUN_DIR --baseline BASE_DIR   # 런 폴더 하나만 판정
 ```
 
-mock 은 `pipeline/engine/fixtures/synthetic_sim.py`(운동학 근사 시뮬레이터, 320x180 합성 영상)와 stub LLM 을 쓴다.
+`python -m run ...` 도 같다. 실행 코드는 전부 `engine/`, 단계 설정(YAML)은 `pipeline/` 에 있다.
+
+mock 은 `engine/fixtures/synthetic_sim.py`(운동학 근사 시뮬레이터, 320x180 합성 영상)와 stub LLM 을 쓴다.
 모든 파일에 `synthetic_fixture: true` 가 붙고 보고서에 SYNTHETIC 이 표시된다. **수치는 실측이 아니다.**
 
 ### real 모드 (CARLA 0.9.15 + Nebius Token Factory)
@@ -265,9 +271,9 @@ cd pipeline\08_carla_paired_run\av_stack ; .\start_carla_stable.ps1 ; cd ..\..\.
 # 2) 키: .env 에 NEBIUS_API_KEY=... (커밋 금지) 또는
 $env:NEBIUS_API_KEY = "..."
 # 3) 점검 → 실행
-.venv-sil\Scripts\python -m pipeline.run --real --check
-.venv-sil\Scripts\python -m pipeline.run --real                       # 기본: X-5 + 영상 해설 on (= X-6)
-.venv-sil\Scripts\python -m pipeline.run --real --ablation X-3 --video-explainer off --rounds 2
+.venv-sil\Scripts\python run.py --real --check
+.venv-sil\Scripts\python run.py --real                       # 기본: X-5 + 영상 해설 on (= X-6)
+.venv-sil\Scripts\python run.py --real --ablation X-3 --video-explainer off --rounds 2
 ```
 
 | 환경 변수 | 뜻 |

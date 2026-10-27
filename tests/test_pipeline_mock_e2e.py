@@ -1,9 +1,9 @@
-"""python -m pipeline.run --mock end to end (SYNTHETIC; small budget)."""
+"""python run.py --mock end to end (SYNTHETIC; small budget)."""
 import json
 
 import yaml
 
-from pipeline.run import Loop, main
+from run import Loop, main
 
 
 def test_mock_loop_small(tmp_path):

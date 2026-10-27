@@ -49,6 +49,6 @@ feedback:
 
 prompt:
   # 역할 분리: 해설기는 '맥락'(고장·트리거·전환 시각)만 받고, 영상에서 봐야 하는 값(차선 이탈·충돌·오프셋·포화·최종 판정)은 숨긴다.
-  # verify()는 숨긴 monitor 값과 비교하므로 프롬프트를 베껴서는 통과할 수 없다. (pipeline/engine/explainer.py VISIBLE_TIMELINE_KEYS)
+  # verify()는 숨긴 monitor 값과 비교하므로 프롬프트를 베껴서는 통과할 수 없다. (engine/explainer.py VISIBLE_TIMELINE_KEYS)
   visible_timeline_keys: [fault_mode, fault_magnitude, planned_fault_onset_s, actual_fault_onset_s,
                           trigger_time_s, trigger_source, switch_time_s]

@@ -124,7 +124,7 @@ def taxonomy_proposals(explanations: dict[str, dict], min_cluster_size: int = 2)
         proposals.append({"tag": tag, "support_runs": sorted(set(runs)), "support": len(set(runs)),
                           "proposed_rule": RULE_TEMPLATES.get(tag, "NEW pattern: define a deterministic signal before use"),
                           "status": "proposed_for_human_review", "auto_applied": False})
-    return {"meta": {"generated_by": "pipeline/engine/feedback.py taxonomy_proposals", "auto_apply": False,
+    return {"meta": {"generated_by": "engine/feedback.py taxonomy_proposals", "auto_apply": False,
                      "note": "Candidates only. A human must define/approve a rule before 09 monitor uses it.",
                      "accepted_explanations": len(acc)},
             "already_covered_by_monitor": {t: COVERED[t] for t in tag_runs if t in COVERED},

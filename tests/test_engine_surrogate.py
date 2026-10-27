@@ -2,8 +2,8 @@ import random
 
 import pytest
 
-from pipeline.engine.surrogate import MetricGPs, acquisition_score, select_batch_scored, straddle
-from pipeline.run import SWITCH_METRIC, switch_aware_score
+from engine.surrogate import MetricGPs, acquisition_score, select_batch_scored, straddle
+from run import SWITCH_METRIC, switch_aware_score
 
 
 def test_straddle_prefers_uncertain_points_near_zero():

@@ -1,14 +1,14 @@
 import unittest,yaml,pathlib
-from pipeline.hypothesis_tools.generate_hypotheses import safe_expr,generate,interpolate
-from pipeline.hypothesis_tools.build_scenario_candidates import make
-from pipeline.hypothesis_tools.space import normalize_space
+from engine.hypothesis_tools.generate_hypotheses import safe_expr,generate,interpolate
+from engine.hypothesis_tools.build_scenario_candidates import make
+from engine.hypothesis_tools.space import normalize_space
 ROOT=pathlib.Path(__file__).resolve().parents[1]/'pipeline'
 REPO=ROOT.parent
 def load(rel):return yaml.safe_load((ROOT/rel).read_text(encoding='utf-8'))
 SO='02_hypotheses/search_objectives/'
 class Tests(unittest.TestCase):
  def setUp(self):
-  self.p=load('hypothesis_tools/examples/safety_profile.example.yaml')
+  self.p=yaml.safe_load((REPO/'engine/hypothesis_tools/examples/safety_profile.example.yaml').read_text(encoding='utf-8'))
   self.c=load('02_hypotheses/vulnerability_patterns.yaml')
   self.s=load('04_feasibility_expansion/scenario_space.yaml')
   # Generator mechanics are tested on the superseded (legacy) patterns; the active catalog is empty.
@@ -128,10 +128,7 @@ class ProfileAndSchemaTests(unittest.TestCase):
   for t in self.prof['switching']['triggers']:
    self.assertTrue(set(t['evidence_ids'])<=obs)
  def test_run_record_and_baseline_key_match_runner(self):
-  import importlib.util
-  spec=importlib.util.spec_from_file_location('runner_skeleton_t',REPO/'scripts/runner_skeleton.py')
-  import sys
-  m=importlib.util.module_from_spec(spec);sys.modules['runner_skeleton_t']=m;spec.loader.exec_module(m)
+  from engine import judgment as m
   self.assertEqual(list(m.RUN_RECORD_FIELDS),self.err['results_schema']['run_record'])
   self.assertEqual(list(m.BASELINE_MATCH_FIELDS),self.pr['paired_runs']['match'])
   for k in ('vehicle_mass_scale','maneuver','velocity_disturbance','steering_disturbance'):
@@ -142,9 +139,7 @@ class RecoveryJudgmentTests(unittest.TestCase):
   self.c=load('02_hypotheses/vulnerability_patterns.yaml')
   self.od=self.c['outcome_definitions']
   self.common=load(SO+'_common.yaml')['recovery_judgment']
-  import importlib.util,sys
-  spec=importlib.util.spec_from_file_location('runner_skeleton_r',REPO/'scripts/runner_skeleton.py')
-  self.m=importlib.util.module_from_spec(spec);sys.modules['runner_skeleton_r']=self.m;spec.loader.exec_module(self.m)
+  from engine import judgment as m;self.m=m
  def test_outcome_classes_consistent(self):
   classes=set(self.od['recovery_outcome']['classes'])
   self.assertEqual(classes,set(self.common['recovery_outcome']))

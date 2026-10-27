@@ -31,7 +31,7 @@ feedback_in:
   select: verified_failures_top_k               # 09 error_table failure_table 규칙: unrecovered 우선, 라벨(recovery_labels) 포함
   k: 5
 
-# ---- 2026-10-27: pipeline/run.py ----
+# ---- 2026-10-27: run.py ----
 include_unreviewed_observations: true           # 사용자 결정 필요: verified:false 관측을 'unreviewed leads'로 A에 준다 (false면 제외)
 refine:
   enabled: true                                 # 라운드마다 GP 경계 근처 3개를 A_refine(thinking ON)으로 다듬기

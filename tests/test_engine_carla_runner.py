@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.engine import scenarios as SC
-from pipeline.engine.carla_runner import CarlaRunner, baseline_key, key_hash
-from pipeline.engine.config import FIXTURE_SPACE, load_stage_configs, load_yaml, resolve_av_stack
+from engine import scenarios as SC
+from engine.carla_runner import CarlaRunner, baseline_key, key_hash
+from engine.config import FIXTURE_SPACE, load_stage_configs, load_yaml, resolve_av_stack
 
 
 def make(tmp_path, av_stack):

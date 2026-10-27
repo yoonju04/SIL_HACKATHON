@@ -1,4 +1,4 @@
-# pipeline/run.py (mock + real). CARLA itself runs in sim-eval's own venv (.venv-tfpp); this file is for the loop.
+# run.py (mock + real). CARLA itself runs in sim-eval's own venv (.venv-tfpp); this file is for the loop.
 pyyaml>=6
 numpy>=1.24
 scikit-learn>=1.3

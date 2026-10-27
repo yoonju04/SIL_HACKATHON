@@ -11,8 +11,11 @@ Input files (written by sim-eval integration/pdm_agent.py + integration/monitor_
   agent_config.json    run options + geometry.max_steer_rad                (run_benchmark.py:102-107, tfpp_benchmark.py:111-113)
   front_frames.jsonl / front.mp4 / view.mp4 (only with --record-front)     (benchmark_recording.py, chase_view.py)
 
-The judgment rules are the pure functions in pipeline/engine/judgment.py. Thresholds are PROVISIONAL.
+The judgment rules are the pure functions in engine/judgment.py. Thresholds are PROVISIONAL.
 The monitor is the ONLY component that sets safety labels; 10_video_explainer never writes here.
+
+CLI (repository root; was pipeline/09_monitor/monitor.py):
+  python -m engine.monitor RUN_DIR [--baseline BASELINE_DIR] [--out record.json]
 """
 from __future__ import annotations
 
@@ -414,3 +417,31 @@ def evaluate_folder(run_dir: str | Path, baseline_dir: str | Path | None = None,
     run = load_av_stack_run(run_dir)
     base = load_av_stack_run(baseline_dir) if baseline_dir else None
     return compute_run_record(run, base, **kw)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """09 Monitor CLI: one av_stack run folder (+ optional no-fault baseline) -> run_record JSON."""
+    import argparse
+
+    from engine.config import load_stage_configs
+
+    ap = argparse.ArgumentParser(prog="python -m engine.monitor", description=main.__doc__)
+    ap.add_argument("run_dir", type=Path)
+    ap.add_argument("--baseline", type=Path)
+    ap.add_argument("--out", type=Path)
+    args = ap.parse_args(argv)
+    cfg = load_stage_configs()
+    th = thresholds_from_config(cfg)
+    run = load_av_stack_run(args.run_dir)
+    base = load_av_stack_run(args.baseline) if args.baseline else None
+    rec = compute_run_record(run, base, metric_rules=cfg["vulnerability_patterns"]["metric_rules"], th=th)
+    rec["_timeline"] = monitor_timeline(run, rec, th)
+    text = json.dumps(rec, indent=2, ensure_ascii=False, default=str)
+    if args.out:
+        args.out.write_text(text, encoding="utf-8")
+    print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

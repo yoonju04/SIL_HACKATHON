@@ -78,7 +78,7 @@ results_schema:
   timeseries_store: results/timeseries/
   baseline_timeseries_cache: "results/baselines/{baseline_cache_key}/ (s, a_y, jerk, lane_offset, heading) — matched-position 비교용" 
 
-# ---- 2026-10-27: pipeline/run.py 출력 ----
+# ---- 2026-10-27: run.py 출력 ----
 # run_records.jsonl (모든 런, RUN_RECORD_FIELDS), failure_table.jsonl (위 failure_table 필드 + recovery_labels)
 # 영상 해설은 판정과 분리해 explanations.jsonl 에 따로 저장한다 (monitor_labels_snapshot 은 읽기 전용 사본).
 explanations:

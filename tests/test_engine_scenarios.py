@@ -3,8 +3,8 @@ import random
 
 import pytest
 
-from pipeline.engine import scenarios as SC
-from pipeline.engine.config import FIXTURE_SPACE, import_scenario_space_tool, load_yaml
+from engine import scenarios as SC
+from engine.config import FIXTURE_SPACE, import_scenario_space_tool, load_yaml
 
 ROUTES = ["bench2drive:26956", "town10_long"]
 POOL = ["F-01", "F-02", "F-03", "F-04", "F-05", "F-06", "F-07"]
@@ -51,7 +51,7 @@ def test_detect_route_events():
 
 @pytest.mark.skipif(not os.environ.get("SIM_EVAL_ROOT"), reason="SIM_EVAL_ROOT not set (sim-eval checkout)")
 def test_parity_with_sim_eval_to_cli():
-    from pipeline.engine.config import resolve_scenario_space
+    from engine.config import resolve_scenario_space
     tool = import_scenario_space_tool()
     assert tool is not None
     sp = load_yaml(resolve_scenario_space(allow_fixture=False)[0])

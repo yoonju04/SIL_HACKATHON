@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Deterministic, bounded exploratory ODD candidate generation.
 Never claims to satisfy symbolic runtime arm constraints; non-executable arms are flagged.
-Usage (repository root): python -m pipeline.hypothesis_tools.build_scenario_candidates -o candidates.yaml
+Usage (repository root): python -m engine.hypothesis_tools.build_scenario_candidates -o candidates.yaml
 Lateral demand above the P-02 threshold is tagged stress_test (G-03), never rejected.
 """
 import argparse,hashlib,random,pathlib,re,yaml
 
+from ..config import PIPELINE_DIR
 from ..prior_tools.prior_tools import screen_lateral_demand
 from .space import normalize_space
 
@@ -93,7 +94,7 @@ def lateral_threshold(safety_spec):
     return next((p.get('lateral_acc_threshold_mps2') for p in props if p.get('id')=='P-02'),None)
 
 def main():
-    root=pathlib.Path(__file__).resolve().parents[1]
+    root=PIPELINE_DIR
     ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--hypotheses',default=str(root/'02_hypotheses/hypotheses.yaml'))
     ap.add_argument('--scenario-space',default=str(root/'04_feasibility_expansion/scenario_space.yaml'))

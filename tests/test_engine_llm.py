@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from pipeline.engine.llm import LLMError, TokenFactoryClient, TruncatedOutput, extract_json, role_settings
-from pipeline.engine.config import load_stage_configs
+from engine.llm import LLMError, TokenFactoryClient, TruncatedOutput, extract_json, role_settings
+from engine.config import load_stage_configs
 
 FAKE_KEY = "sk-test-not-a-real-key-123"
 
@@ -60,7 +60,7 @@ def test_length_is_failure(tmp_path):
 
 
 def test_http_error_and_retry(tmp_path, monkeypatch):
-    monkeypatch.setattr("pipeline.engine.llm.time.sleep", lambda s: None)
+    monkeypatch.setattr("engine.llm.time.sleep", lambda s: None)
     c = client(tmp_path, [Resp(503, {}), ok("{}")])
     assert c.chat("m", [{"role": "user", "content": "x"}]).content == "{}"
     c = client(tmp_path, [Resp(400, {"error": "bad schema"})])

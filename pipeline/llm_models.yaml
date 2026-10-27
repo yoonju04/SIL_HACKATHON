@@ -2,7 +2,7 @@
 # 근거: /workspace/nemotron_cosmos_research.md 요약 → docs 아래 README 'Nemotron / Cosmos' 절
 #   Token Factory OpenAI 호환 API, 키는 환경변수 NEBIUS_API_KEY (값을 파일에 쓰지 않는다)
 #   2026-11-09 Serverless 제거 예정: nvidia/nemotron-3-super-120b-a12b, nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B → 쓰지 않는다
-#   reasoning 토큰도 max_tokens를 쓴다 → finish_reason == 'length' 는 실패로 처리 (pipeline/engine/llm.py)
+#   reasoning 토큰도 max_tokens를 쓴다 → finish_reason == 'length' 는 실패로 처리 (engine/llm.py)
 
 meta:
   schema_version: '1.0'

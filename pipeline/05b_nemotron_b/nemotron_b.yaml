@@ -41,7 +41,7 @@ B_question_answering:
 
 feedback_in: none                            # 결과 피드백을 받지 않는다
 
-# ---- 2026-10-27: pipeline/run.py ----
+# ---- 2026-10-27: run.py ----
 code_context:                                   # B가 읽는 파일 (av_stack 기준 상대경로, 줄번호 붙여 전체 전달)
   files:
     - integration/supervised_lateral.py

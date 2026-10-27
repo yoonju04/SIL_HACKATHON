@@ -5,7 +5,7 @@ Path rules (so the same code works before and after new_pipeline + junwoo/sim-ev
                      else $AV_STACK_ROOT, else $SIM_EVAL_ROOT/pipeline/08_carla_paired_run/av_stack
   * scenario space:  <repo>/pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml (sim-eval file)
                      else the same path under $SIM_EVAL_ROOT
-                     else (mock only) pipeline/engine/fixtures/scenario_space_mock.yaml  (SYNTHETIC)
+                     else (mock only) engine/fixtures/scenario_space_mock.yaml  (SYNTHETIC)
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_DIR = REPO_ROOT / "pipeline"
 AV_STACK_REL = Path("pipeline/08_carla_paired_run/av_stack")
 SPACE_REL = Path("pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml")

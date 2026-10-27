@@ -1,12 +1,12 @@
-"""09 monitor on SYNTHETIC run folders (pipeline/engine/fixtures/synthetic_sim.py)."""
+"""09 monitor on SYNTHETIC run folders (engine/fixtures/synthetic_sim.py)."""
 import json
 
 import pytest
 
-from pipeline.engine import judgment as J
-from pipeline.engine.config import load_stage_configs
-from pipeline.engine.fixtures.synthetic_sim import write_run_folder
-from pipeline.engine.monitor import compute_run_record, load_av_stack_run, monitor_timeline
+from engine import judgment as J
+from engine.config import load_stage_configs
+from engine.fixtures.synthetic_sim import write_run_folder
+from engine.monitor import compute_run_record, load_av_stack_run, monitor_timeline
 
 
 @pytest.fixture(scope="module")

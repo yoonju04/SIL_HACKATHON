@@ -1,7 +1,6 @@
-"""Pure judgment / selection functions shared by the pipeline (moved from scripts/runner_skeleton.py).
+"""Pure judgment / selection functions shared by run.py, engine/monitor.py and the tests.
 
-Everything here is deterministic and side-effect free. scripts/runner_skeleton.py re-exports these
-names so its --self-test and the existing tests keep working. Numeric defaults marked PROVISIONAL
+Everything here is deterministic and side-effect free (self-test: tests/test_engine_judgment.py). Numeric defaults marked PROVISIONAL
 are not validated (02 outcome_definitions.recovery_judgment).
 """
 

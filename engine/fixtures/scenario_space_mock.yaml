@@ -1,6 +1,6 @@
 # scenario_space_mock.yaml — SYNTHETIC FIXTURE (mock 모드 전용). 실측 아님.
 # 구조와 범위는 junwoo/sim-eval 9b51151 pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml 에서 복사했고
-# observations(실측 결과)는 지웠다. sim-eval 병합 후에는 이 파일 대신 원본을 읽는다 (pipeline/engine/config.py).
+# observations(실측 결과)는 지웠다. sim-eval 병합 후에는 이 파일 대신 원본을 읽는다 (engine/config.py).
 meta:
   schema_version: '1.2'
   profile_id: sp-av-stack-pdm-supervised

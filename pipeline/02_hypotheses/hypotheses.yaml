@@ -1,6 +1,6 @@
 # hypotheses.yaml — 자동 생성 결과물 (손으로 편집하지 않음)
 # vulnerability_patterns.yaml(틀) + safety_profile.yaml(값) + scenario_space.yaml → 이 파일
-# 재생성: python -m pipeline.hypothesis_tools.generate_hypotheses (저장소 루트에서)
+# 재생성: python -m engine.hypothesis_tools.generate_hypotheses (저장소 루트에서)
 # 실행 중 가설 내용은 바뀌지 않고 tracking/status만 바뀐다.
 
 meta:

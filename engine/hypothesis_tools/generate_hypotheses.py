@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Generate immutable, evidence-linked MPC/LQR hypotheses and scenario search specs.
-Usage (repository root): python -m pipeline.hypothesis_tools.generate_hypotheses
+Usage (repository root): python -m engine.hypothesis_tools.generate_hypotheses
   defaults: 01 safety_profile + 02 vulnerability_patterns + 04 scenario_space -> 02 hypotheses.yaml
 The generated YAML is a PROPOSAL, not executable CARLA scenarios or validated safety claims.
 """
 from __future__ import annotations
 import argparse, ast, copy, datetime as dt, json, math, pathlib, re
 import yaml
+
+from ..config import PIPELINE_DIR
 
 from .space import normalize_space
 
@@ -171,13 +173,13 @@ def generate(profile,cat,space=None,proposals=None):
 
 HEADER='''# hypotheses.yaml — 자동 생성 결과물 (손으로 편집하지 않음)
 # vulnerability_patterns.yaml(틀) + safety_profile.yaml(값) + scenario_space.yaml → 이 파일
-# 재생성: python -m pipeline.hypothesis_tools.generate_hypotheses (저장소 루트에서)
+# 재생성: python -m engine.hypothesis_tools.generate_hypotheses (저장소 루트에서)
 # 실행 중 가설 내용은 바뀌지 않고 tracking/status만 바뀐다.
 
 '''
 
 def main():
-    root=pathlib.Path(__file__).resolve().parents[1]
+    root=PIPELINE_DIR
     ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--profile',default=str(root/'01_safety_profile/safety_profile.yaml'))
     ap.add_argument('--catalog',default=str(root/'02_hypotheses/vulnerability_patterns.yaml'))

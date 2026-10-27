@@ -77,7 +77,7 @@ class BaseRunner:
 
 
 class MockRunner(BaseRunner):
-    """SYNTHETIC: writes run folders with pipeline/engine/fixtures/synthetic_sim.py (no CARLA)."""
+    """SYNTHETIC: writes run folders with engine/fixtures/synthetic_sim.py (no CARLA)."""
 
     def _run(self, c, out, fault_args=None, onset_s=None):
         from .fixtures.synthetic_sim import write_run_folder

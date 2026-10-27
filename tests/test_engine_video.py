@@ -3,10 +3,10 @@ import random
 
 import pytest
 
-from pipeline.engine.explainer import build_messages, stub_explanation, verify
-from pipeline.engine.fixtures.synthetic_sim import write_run_folder
-from pipeline.engine.monitor import compute_run_record, load_av_stack_run, monitor_timeline
-from pipeline.engine.video import extract_clip, ffmpeg_exe
+from engine.explainer import build_messages, stub_explanation, verify
+from engine.fixtures.synthetic_sim import write_run_folder
+from engine.monitor import compute_run_record, load_av_stack_run, monitor_timeline
+from engine.video import extract_clip, ffmpeg_exe
 
 TAX = ["departed_before_switch", "steering_angle_saturation", "stable_recovery", "collision_after_departure",
        "pre_switch_lateral_drift", "late_detection", "steering_rate_limit"]

@@ -8,6 +8,8 @@ from typing import Any
 
 import yaml
 
+from ..config import PIPELINE_DIR
+
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
     data = yaml.safe_load(Path(path).read_text(encoding='utf-8'))
@@ -64,7 +66,7 @@ def screen_lateral_demand(candidate: dict[str, Any], max_lateral_acc_mps2: float
 
 
 def main():
-    root = Path(__file__).resolve().parents[1]
+    root = PIPELINE_DIR
     parser = argparse.ArgumentParser()
     parser.add_argument('--profile', default=str(root/'01_safety_profile/safety_profile.yaml'))
     parser.add_argument('--hypotheses', default=str(root/'02_hypotheses/hypotheses.yaml'))

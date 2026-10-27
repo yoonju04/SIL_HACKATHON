@@ -1,5 +1,5 @@
 import unittest
-from pipeline.prior_tools.prior_tools import make_nemotron_payload, screen_lateral_demand
+from engine.prior_tools.prior_tools import make_nemotron_payload, screen_lateral_demand
 
 
 class PriorToolsTests(unittest.TestCase):

@@ -187,7 +187,7 @@ def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict
     sim = simulate(route, max_speed_kmh, fault, seed, stop_after_fault_s)
     rows = sim["rows"]
     f = fault or {"mode": "none", "start": 20.0, "duration": 5.0, "magnitude": 0.05}
-    marker = {"synthetic_fixture": True, "generator": "pipeline/engine/fixtures/synthetic_sim.py"}
+    marker = {"synthetic_fixture": True, "generator": "engine/fixtures/synthetic_sim.py"}
     config = dict(model=None, planner="pdm", record_front=record_front, controller="supervised",
                   mpc_fault=f["mode"], fault_start=f["start"], fault_duration=f["duration"],
                   fault_magnitude=f["magnitude"], fault_on_s=f.get("on_s", 0.2), fault_off_s=f.get("off_s", 0.2),

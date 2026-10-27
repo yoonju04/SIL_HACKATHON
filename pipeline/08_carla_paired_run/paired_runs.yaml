@@ -64,7 +64,7 @@ execution:
   backend: local_carla                         # CARLA 서버 1대 (Windows start_carla_stable.ps1). Nebius 병렬은 future work
   parallel_workers: 1                          # PROVISIONAL: 동시 실행 안 함 (포트/TM 충돌)
 
-# ---- 2026-10-27: pipeline/engine/carla_runner.py 가 읽는 값 ----
+# ---- 2026-10-27: engine/carla_runner.py 가 읽는 값 ----
 runner:
   entrypoint: pipeline/08_carla_paired_run/av_stack/run_benchmark.py   # sim-eval 병합 후 위치 (없으면 AV_STACK_ROOT/SIM_EVAL_ROOT)
   python_exe: null                             # null이면 av_stack/.venv-tfpp/Scripts/python.exe → bin/python → 환경변수 AV_STACK_PYTHON

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """SIL_HACKATHON one-command loop: 00 prior knowledge -> ... -> 09 monitor -> 10 video explainer -> feedback.
 
-  python -m pipeline.run --mock                       # no CARLA, no network, synthetic fixtures + stub LLMs
-  python -m pipeline.run --mock --ablation-suite      # X-1..X-6 x seeds on the synthetic simulator
-  python -m pipeline.run --real --check               # preflight: av_stack, CARLA port, NEBIUS_API_KEY, models, ffmpeg
-  python -m pipeline.run --real                       # CARLA + Nebius Token Factory
+  python run.py --check                      # stage-YAML null report (exit 2 while required nulls remain)
+  python run.py --mock                       # no CARLA, no network, synthetic fixtures + stub LLMs
+  python run.py --mock --ablation-suite      # X-1..X-6 x seeds on the synthetic simulator
+  python run.py --real --check               # preflight: av_stack, CARLA port, NEBIUS_API_KEY, models, ffmpeg
+  python run.py --real                       # CARLA + Nebius Token Factory
+  (python -m run ... works the same; 09 monitor alone: python -m engine.monitor RUN_DIR [--baseline DIR])
 
 Outputs go to outputs/<mode>_<timestamp>/ (git-ignored). Thresholds are PROVISIONAL (02 outcome_definitions).
 """
@@ -22,24 +24,24 @@ from pathlib import Path
 from typing import Any
 
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import yaml
 
-from pipeline.engine import judgment as J
-from pipeline.engine import nemotron as NM
-from pipeline.engine import scenarios as SC
-from pipeline.engine.carla_runner import CarlaRunner, MockRunner, carla_reachable
-from pipeline.engine.config import (REPO_ROOT, load_stage_configs, load_yaml, resolve_av_stack,
+from engine import judgment as J
+from engine import nemotron as NM
+from engine import scenarios as SC
+from engine.carla_runner import CarlaRunner, MockRunner, carla_reachable
+from engine.config import (REPO_ROOT, load_stage_configs, load_yaml, resolve_av_stack,
                                     resolve_scenario_space)
-from pipeline.engine.explainer import explain, stub_explanation, verify
-from pipeline.engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure,
+from engine.explainer import explain, stub_explanation, verify
+from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
-from pipeline.engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
-from pipeline.engine.monitor import compute_run_record, load_av_stack_run, monitor_timeline, thresholds_from_config
-from pipeline.engine.surrogate import MetricGPs, acquisition_score, select_batch_scored
-from pipeline.engine.video import extract_clip, ffmpeg_exe
-from pipeline.prior_tools.prior_tools import make_nemotron_payload
+from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
+from engine.monitor import compute_run_record, load_av_stack_run, monitor_timeline, thresholds_from_config
+from engine.surrogate import MetricGPs, acquisition_score, select_batch_scored
+from engine.video import extract_clip, ffmpeg_exe
+from engine.prior_tools.prior_tools import make_nemotron_payload
 
 ABLATIONS = {
     "X-1": dict(name="random_space_filling", use_a=False, use_gp=False, use_df=False, use_b=False),
@@ -314,7 +316,7 @@ class Loop:
                                              chat_template_kwargs=self.b_settings.get("chat_template_kwargs_extra"),
                                              response_format={"type": "json_schema", "json_schema": {"name": "b_answers", "schema": schema}},
                                              tag=f"B:{k}:{i}")
-                    from pipeline.engine.llm import extract_json
+                    from engine.llm import extract_json
                     samples.append(extract_json(res.content))
                 except (LLMError, ValueError) as e:
                     self.stats["llm_errors"].append({"role": "B", "key": k, "error": str(e)[:200]})
@@ -627,7 +629,7 @@ def boundary_accuracy(loop: Loop) -> dict | None:
             onset = SC.onset_time(c, loop.route_events(c) or {})
             if onset is None:
                 continue
-            from pipeline.engine.fixtures.synthetic_sim import write_run_folder
+            from engine.fixtures.synthetic_sim import write_run_folder
             d = write_run_folder(tmp / f"t{i}", route=c["route_id"], max_speed_kmh=c["environment"]["max_speed_kmh"],
                                  fault=SC.fault_dict_for_sim(loop.space, c, onset), seed=loop.runner.seed,
                                  stop_after_fault_s=loop.runner.stop_after_fault_s, record_front=False)
@@ -680,7 +682,7 @@ def preflight(cfg: dict) -> int:
         log(f"scenario space: {e}"); ok = False
     rc = cfg["paired_runs"]["runner"]
     if av is not None:
-        from pipeline.engine.carla_runner import default_python
+        from engine.carla_runner import default_python
         py = os.environ.get("AV_STACK_PYTHON") or rc.get("python_exe") or default_python(av)
         log(f"av_stack python: {py} ({'exists' if Path(py).exists() else 'MISSING'})")
     host, port = os.environ.get("CARLA_HOST", rc["host"]), int(os.environ.get("CARLA_PORT", rc["port"]))
@@ -739,10 +741,11 @@ def load_dotenv(path: Path = REPO_ROOT / ".env") -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    g = ap.add_mutually_exclusive_group(required=True)
+    g = ap.add_mutually_exclusive_group()
     g.add_argument("--mock", action="store_true", help="synthetic fixtures + stub LLMs, no CARLA, no network")
     g.add_argument("--real", action="store_true", help="CARLA (sim-eval av_stack) + Nebius Token Factory")
-    ap.add_argument("--check", action="store_true", help="real mode preflight only")
+    ap.add_argument("--check", action="store_true",
+                    help="alone: stage-YAML null report (exit 2 while nulls remain); with --real: CARLA/API preflight only")
     ap.add_argument("--out", type=Path)
     ap.add_argument("--ablation", default="X-5", choices=sorted(ABLATIONS))
     ap.add_argument("--video-explainer", choices=("on", "off"), default="on")
@@ -754,6 +757,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--conditions", nargs="*")
     ap.add_argument("--repeats", type=int)
     args = ap.parse_args(argv)
+    if args.check and not args.real:
+        from engine.config_check import cmd_check
+        return cmd_check()
+    if not (args.mock or args.real):
+        ap.error("one of --mock / --real is required (or --check alone)")
     if args.real:
         load_dotenv()
     if args.real and args.check:

@@ -4,7 +4,7 @@ Patch target: `yoonju04/SIL_HACKATHON`, branch `new_pipeline`. This is an ADDITI
 
 ## Structure
 - `pipeline/00_prior_knowledge/prior_knowledge.yaml`: physics relation and explicitly unverified hypotheses.
-- `pipeline/prior_tools/prior_tools.py`: builds model-independent Nemotron message payload using *verified* safety-profile observations only; includes separate nominal lateral acceleration screening function.
+- `engine/prior_tools/prior_tools.py`: builds model-independent Nemotron message payload using *verified* safety-profile observations only; includes separate nominal lateral acceleration screening function.
 - `tests/test_prior_tools.py`: lightweight smoke tests.
 
 ## Install and run
@@ -12,7 +12,7 @@ From repository root:
 
 ```bash
 python -m pip install pyyaml
-python -m pipeline.prior_tools.prior_tools --output nemotron_prior_payload.json
+python -m engine.prior_tools.prior_tools --output nemotron_prior_payload.json
 python -m unittest discover -s tests -p 'test_prior_tools.py' -v
 ```
 

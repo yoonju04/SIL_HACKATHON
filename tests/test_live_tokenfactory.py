@@ -5,8 +5,8 @@ import os
 
 import pytest
 
-from pipeline.engine.config import load_stage_configs
-from pipeline.engine.llm import TokenFactoryClient, role_settings
+from engine.config import load_stage_configs
+from engine.llm import TokenFactoryClient, role_settings
 
 pytestmark = pytest.mark.skipif(not os.environ.get("NEBIUS_API_KEY"), reason="NEBIUS_API_KEY not set")
 
@@ -39,7 +39,7 @@ def test_super_vl_image(setup):
 
 
 def test_lightning_json_schema(setup):
-    from pipeline.engine.llm import extract_json, json_schema_format
+    from engine.llm import extract_json, json_schema_format
     cfg, c = setup
     s = role_settings(cfg, "A")
     schema = {"type": "object", "properties": {"n": {"type": "integer"}}, "required": ["n"], "additionalProperties": False}
