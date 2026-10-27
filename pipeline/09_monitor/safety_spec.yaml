@@ -1,28 +1,169 @@
-# safety_spec.yaml — 안전 명세 P-01~03 (라벨 정의). 09 Monitor의 측면 입력
+# safety_spec.yaml — 안전 명세 SR1~SR6 (+ 보조 P-02, 충돌). 09 Monitor가 직접 읽는다 (monitor.load_spec)
+# 검증 대상 두 가지:
+#   ① 고장이 났는데 LQR로 전환을 못 하거나 늦는가  → SR1
+#   ② 전환은 했는데 그 순간이나 이후 주행이 불안한가 → SR2, SR4, SR5
+# 근거 문헌은 refs 키로 연결하고, 숫자에 출처가 없으면 basis: design_choice 로 표시한다.
 
 meta:
-  schema_version: '1.0'
+  schema_version: '2.0'
   profile_id: sp-code-aware-mpc-lqr
-  status: template_unverified
+  status: draft_for_freeze
+  frozen_at_commit: null        # 판정 런 전에 이 파일을 커밋하고 해시를 적는다. 이후 수치 변경 금지 (순환성 방지)
 
+references:
+  ISO26262_FTTI: "ISO 26262-1:2018, fault tolerant time interval (FTTI): 고장 발생부터 위험이 생길 수 있는 시점까지의 최소 시간. 감지+반응 시간은 FTTI 안에 끝나야 한다"
+  JAEGER2025: "Jäger, Friedrich, Petersen, Noack, Towards Safe Path Tracking Using the Simplex Architecture, arXiv 2503.10559 (늦은 전환, 백업 제어기 수렴 영역, 전환 과도, dwell time)"
+  ZACCARIAN_TEEL2005: "Zaccarian & Teel, The L2 (l2) bumpless transfer problem for linear plants, Automatica 2005 (제어기 전환 시 과도 현상 최소화)"
+  HESPANHA_MORSE1999: "Hespanha & Morse, Stability of switched systems with average dwell-time, CDC 1999 (잦은 전환과 안정성)"
+  KAYOTEE2019: "Jha et al., Kayotee: A Fault Injection-based System to Assess the Safety and Reliability of Autonomous Vehicles, arXiv 1907.01024 (차선 중심 이탈 0.5 m, 충돌 거리 등 안전 위반 정의)"
+  DRIVEFI2019: "Jha et al., ML-based Fault Injection for Autonomous Vehicles: A Case for Bayesian Fault Injection, DSN 2019 (위험한 순간의 주입, 안전 여유 기반 판정)"
+  AUTOWARE_MPC: "Autoware autoware_mpc_lateral_controller, steer_rate_lim 40-60 deg/s (정상 운용 조향 속도 한계)"
+
+signals:                         # 모든 P/SR은 시뮬레이터 실측값으로 계산한다 (제어기 내부값 아님)
+  lane_offset_m: {source: monitor_probe.jsonl (의도된 차선 기준), fallback: steps.jsonl.e_y_lane}
+  steer_cmd_rad: {source: "behavior.jsonl steer_rad (안전 필터·Supervisor를 거쳐 CARLA로 보낸 값)"}
+  active_controller: {source: "behavior.jsonl active_controller / steer_source"}
+  fault_active: {source: "behavior.jsonl fault_injected (주입기 기록, Supervisor는 못 봄)"}
+  fault_effective: {source: "monitor_probe.jsonl fault_effective (이번 틱에 MPC 출력이 실제로 바뀌었나)"}
+
+requirements:
+  SR1:
+    name: 전환 시간
+    question: "고장이 났을 때 늦지 않게 LQR로 넘어갔나"
+    measure: "latency = 첫 전환 시각 - 실제 고장 시작 시각 (틱 시각 기준, 계획 격자 아님)"
+    applies_if: "고장이 실제로 효과를 냈고, 대응하지 않으면 위험해지는 고장일 때 (FTTI 유한)"
+    limit:
+      source: ftti_measured        # 같은 고장을 Supervisor 없이 돌린 no-reaction 런에서 FTTI 측정
+      ftti_fraction: 0.5           # basis: design_choice — 감지 후 LQR이 회복할 시간을 FTTI 절반으로 남김
+      fixed_fallback_s: 0.5        # no-reaction 런이 없을 때만. basis: design_choice (리뷰 실측 FTTI 0.5~0.7 s)
+    no_reaction_harmless: "no-reaction 런이 창 안에서 SR4를 안 어기면 FTTI=∞ → SR1 미적용 (놓쳐도 무해)"
+    robustness: "(limit - latency) / limit, [-1, 1]. 전환 없음 = -1"
+    refs: [ISO26262_FTTI, JAEGER2025, DRIVEFI2019]
+  SR2:
+    name: 전환 매끄러움
+    question: "전환 순간 조향이 튀지 않았나"
+    measure: "전환 시각 -dt ~ +0.5 s 구간의 최대 |d steer_cmd / dt| (road-wheel, 실제 송신값)"
+    applies_if: "전환이 있었을 때"
+    limit_dps: 60.0                # 정상 운용 한계보다 빠르면 '튐'. basis: AUTOWARE_MPC 상한
+    window_after_switch_s: 0.5
+    robustness: "(limit - max_rate) / limit"
+    refs: [ZACCARIAN_TEEL2005, AUTOWARE_MPC]
+  SR4:
+    name: 차선 유지
+    question: "차체가 의도된 차선 안에 있었나"
+    measure: "min over window( min(w/2 - max c_k, w/2 + min c_k) ), c_k = 차체 네 모서리 횡위치"
+    applies_if: always
+    nominal_margin: "w/2 - half_width (3.5 m 차선, 반폭 0.95 m → 0.80 m)"
+    robustness: "margin / nominal_margin"
+    refs: [KAYOTEE2019, DRIVEFI2019]
+  SR5:
+    name: 회복
+    question: "전환 후 차선 중심 부근으로 돌아왔나"
+    measure: "전환 후 |lane_offset| <= band 가 hold 동안 유지되기 시작한 시각까지 걸린 시간"
+    band_m: 0.3
+    within_s: 3.0
+    hold_s: 1.0
+    enforce: false                 # basis: design_choice, 출처 없음 → 참고 지표 (판정·GP에 미사용)
+    robustness: "(within - t_recover) / within"
+  SR6:
+    name: 액추에이터 한계
+    question: "조향각·조향 속도가 차량 한계 안이었나"
+    max_steer_from: vehicle_params.max_steer_rad
+    max_rate_dps: 90.0             # 액추에이터 한계 (안전 필터 값)
+    note: "안전 필터가 이 한계로 자르므로 구조상 거의 통과한다 — 필터 결함 탐지용"
+    robustness: "min(1 - max|steer|/max_steer, 1 - max_rate/max_rate_dps)"
+
+# ---------------------------------------------------------------------------
+# 러너(scripts/runner_skeleton.py)·후보 생성기(hypothesis_tools)가 읽는 형식. 위 SR과 같은 내용을 옛 P 이름으로 둔다.
 safety_specification:
   properties:
     - id: P-01
-      description: "차선 경계 유지"
+      description: "차선 경계 유지 (= SR4, 차체 네 모서리 기준)"
       robustness: "min_over_window(signed_lane_boundary_margin_m)"
       failure_if: "robustness < 0"
     - id: P-02
-      description: "횡가속도 한계"
+      description: "횡가속도 한계 (보조, 판정에는 안 씀)"
       robustness: "lateral_acc_threshold - max_over_window(abs(lateral_acc))"
       failure_if: "robustness < 0"
-      lateral_acc_threshold_mps2: null         # 근거와 함께 확정
+      lateral_acc_threshold_mps2: 4.41    # 0.5 * mu * g, mu = 0.9 가정. basis: design_choice (planner 속도계획과 같은 식)
     - id: P-03
-      description: "충돌 없음"
+      description: "충돌 없음 (run_record.P03 = true면 충돌 없음)"
       monitor: boolean
   evaluation_window:
-    start: planned_fault_onset_time            # baseline도 같은 시각부터 자름
-    end: simulation_end
+    start: planned_fault_onset_time
+    length_s: 10.0
     align_baseline_to_fault_run: true
-  outcome_categories: [no_trigger, triggered_no_switch, switched_safe,
-                       switched_unsafe, simulation_invalid]
+  outcome_categories: [no_trigger, triggered_no_switch, switched_safe, switched_unsafe, simulation_invalid]
+  outcome_mapping: "switched_safe = 전환함 + SR4·충돌·P-02 통과. 세부 실패 유형(F1~F3)은 metrics.monitor.failure_type"
   simulation_invalid_is_not_safe: true
+
+# 02 vulnerability_patterns.yaml outcome_definitions의 팀 지표 계산 설정 (run_record.metrics)
+team_metrics:
+  t_hold_s: 5.0                          # recovery_robustness / recovery_success 창
+  post_switch_saturation_window_s: 1.0
+  admissible_limits:
+    lateral_error: "차선 반폭 - 차체 반폭 (프로브 실측)"
+    steering_angle: "vehicle_params.max_steer_rad"
+    steering_rate: "SR6 max_rate_dps (90 deg/s)"
+    lateral_accel: "P-02 lateral_acc_threshold_mps2"
+  needs_from_av_stack:
+    deadline_miss_rate: "steps.jsonl solve_ms + --deadline-ms (safety_profile configured_time_limit_ms). 없으면 null"
+    mpc_constraint_violation_rate: "steps.jsonl mpc_constraint_violation (아직 기록 안 함) → 지금은 null"
+  recoverability_label: "switch_state_label은 오라클 산출물(P 행렬, reach table)이 비어 있어 null. 전환 시점 상태는 metrics.monitor.switch_state에 기록"
+
+auxiliary:
+  P-02:
+    name: 횡가속도
+    threshold_policy: friction     # 0.5 * mu * g (planner 속도계획·G-03과 같은 식)
+    role: report_only
+  collision:
+    source: collisions.json
+    role: hard_failure             # 충돌은 SR4 위반과 같은 등급으로 취급
+    on_collision: "SR4 실패, SR4 점수 -2 (최저), unsafe. 충돌로 런이 일찍 끝나도 V-03 무효 아님 (그때까지로 채점)"
+    record: "충돌 시각, 상대 물체, 충격량 (있으면)"
+
+evaluation_window:
+  start: planned_fault_onset_time
+  length_s: 10.0
+  min_length_s: 5.0                # 더 짧으면 invalid (SUT 안전 정지는 예외)
+
+outcome_categories:
+  invalid: "유효성 검사 V-01~V-09 또는 baseline 불완주"
+  no_trigger: "고장이 MPC 출력을 한 번도 바꾸지 않음"
+  F1_no_or_late_switch: "SR1 적용 대상인데 위반 (unsafe 플래그 = SR4·충돌 위반 여부)"
+  F2_switch_transient: "전환했고 SR2 위반"
+  F3_not_recovered: "SR4 또는 충돌 위반 (SR5는 enforce=true일 때만)"
+  pass: "위 어디에도 해당 없음 (놓쳤지만 무해한 경우 note=undetected_harmless)"
+  priority: [invalid, no_trigger, F1_no_or_late_switch, F2_switch_transient, F3_not_recovered, pass]
+
+gp_target:                       # 06 GP가 배우는 값: 기준마다 "얼마나 지켰나/어겼나"
+  scale: "모든 값이 같은 눈금: 1 = 여유 있게 지킴, 0 = 딱 한계, 음수 = 어김 (-1 = 한계만큼 더 어김), [-2, 1]로 자름"
+  per_requirement:
+    SR1: "(한계 - 지연) / 한계. 전환 없음 = -1. 적용 안 되면 null"
+    SR2: "(60 - 최대 조향속도) / 60. 전환 없으면 null"
+    SR4: "차선 여유 / 정상 여유 (0.8 m). 충돌 = -2"
+    SR5: "(3 - 회복시간) / 3. 회복 못 함 = -1. 참고용 (overall에 안 들어감)"
+    SR6: "min(1 - 조향각/최대, 1 - 조향속도/90). 조향 기록 없으면 null"
+  overall: "min(SR1, SR2, SR4) 중 적용된 것 (판정 기준과 같은 0 경계)"
+  null_rule: "적용 안 된 기준은 0이나 1로 채우지 않는다 (안전도 위험도 아님). 그 기준의 GP는 그 행을 건너뜀"
+  measures: "점수 뒤의 원래 값도 함께 보냄: 지연 s, 조향속도 °/s, 차선 여유 m, 고장 영향(여유 변화) m, 회복시간 s"
+  collision_value: -2.0
+  clip: [-2.0, 1.0]
+  excluded_outcomes: [invalid]
+
+validity_checks:
+  V-01: "로그 비어 있음 / 길이 불일치 / NaN"
+  V-02: "틱 간격 이상 (프레임 누락)"
+  V-03: "평가 창이 최소 길이 미만 (안전 정지 예외)"
+  V-04: "평가 창 안에서 기준 경로 변경"
+  V-05: "차선 폭 또는 차체 크기 모름"
+  V-06: "실제 고장 시작이 계획과 1틱 넘게 다름"
+  V-07: "baseline에 고장 켜짐"
+  V-08: "fault / baseline 창 길이 다름"
+  V-09: "fault 런에 주입기 로그 없음"
+  V-11: "collisions.json에 시각(t) 없는 충돌 → 창 안인지 알 수 없음 (조용히 버리지 않음)"
+  V-10: "fault 런이 고장 시작 전에 이미 전환됨 → 전환을 채점할 수 없음"
+  G-04: "baseline(무고장)이 이미 SR4 위반 또는 충돌 → 짝 전체 제외 (고장 탓이 아님)"
+
+calibration:
+  noise_floor: "같은 baseline N회(권장 5) 반복 → SR4 margin 표준편차 → delta_min_m = max(2*noise_floor, 0.1)"
