@@ -1,0 +1,25 @@
+# Environments and caches
+.venv*/
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+
+# Model weights (fetch with tools/fetch_third_party.ps1 -WithModels)
+models/
+*.ckpt
+*.pth
+*.zip
+
+# Third-party code fetched at pinned commits (tools/fetch_third_party.ps1)
+#   carla_garage: MIT but ~635 MB; our changes live in third_party/patches/
+#   bench2drive_tcp: CC BY-NC-ND 4.0, must not be redistributed or modified
+third_party/carla_garage/
+third_party/bench2drive_tcp/
+
+# Experiment outputs and scratch (several GB)
+runs/
+work/
+*.mp4
+*.log
+*_log.txt
