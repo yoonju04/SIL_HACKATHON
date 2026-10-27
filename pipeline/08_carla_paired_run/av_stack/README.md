@@ -108,6 +108,9 @@ An **`av_stack view`** window opens with the chase camera and the steering owner
 | `delay` | availability | answer arrives 75 ms late (> 50 ms period) | immediate (`deadline_miss`) |
 | `bias <rad>` | **integrity** | healthy-looking output + constant offset | only via path divergence, late or never |
 | `drift <rad/s>` | **integrity** | healthy-looking output + growing offset | only via path divergence, late |
+| `intermittent_bias <rad> <on s> <off s>` | **integrity** | offset switched on and off periodically | only via path divergence, late |
+| `saturate <sign>` | **integrity** | steering held exactly at the actuator limit (passes the range check) | via path divergence, after the car has left the lane |
+| `output_delay <ticks>` | **integrity** | command computed N ticks ago, sent with a fresh stamp and sequence | only via path divergence, late or never |
 | `clear` | — | stop injecting (an LQR takeover stays latched) | — |
 
 ### Supervisor checks (per 50 ms sample)
@@ -143,6 +146,19 @@ Bench2Drive score **100**, route 100 %, 0 collisions, 0 lane departures; takeove
 | bias 0.10 rad | switched, **unsafe** | 2.3 s | **1.57 m** |
 | drift 0.05 rad/s | switched, **unsafe** | 2.6 s | **1.46 m** |
 
+**Fault check, 3 routes** (2026-10-27, supervised, fault ~1 s before a turn, one run each; offsets
+are the actor's distance from the intended lane centre, no-fault baseline in brackets):
+
+| Fault | A: 26956 Town05 | B: 28035 Town01 | C: town10_long |
+|---|---|---|---|
+| bias 0.05 rad | **not detected**, 0.93 m (0.46) | **not detected**, 0.90 m (0.34) | **not detected**, 0.76 m (0.22) |
+| drift 0.03 rad/s | 3.45 s late, 1.20 m | 3.05 s late, 1.10 m | 3.75 s late, 1.18 m |
+| intermittent bias 0.10 rad, 0.2 s on / 0.1 s off | 2.45 s late, 1.16 m | 2.85 s late, 1.14 m | 2.10 s late, 1.03 m |
+| output delay 4 ticks | 2.05 s late, 4.86 m, **vehicle collision** | 3.65 s late, 1.47 m | **not detected**, 0.59 m |
+| saturate 0.5 s | 0.75 s, 7.06 m, lane departure | 0.85 s, 8.26 m, lane departure | 0.70 s, 8.84 m, **traffic-light collision** |
+
+Fault table, observations and next hypotheses: [`../../04_feasibility_expansion/README.md`](../../04_feasibility_expansion/README.md).
+
 Availability faults are caught instantly. **Integrity attacks are the supervisor's blind spot**:
 the only check that can see them is path divergence (1 m for 0.25 s), so the car is already past
 the 0.8 m lateral-error safety requirement (SR4) when — or if — the switch happens. Finding such
@@ -167,6 +183,7 @@ cases automatically is the goal of the AI scenario-generation pipeline in [`../p
 | `--record-front` | off | Save `view.mp4` (chase view with label) and `front.mp4` |
 | `--monitor S` | 0 | Also print a status line every S seconds |
 | `--mpc-fault`, `--fault-start`, `--fault-duration`, `--fault-magnitude` | none | Scheduled fault instead of live injection |
+| `--fault-on`, `--fault-off` | 0.2, 0.2 | `intermittent_bias` on / off times [s] |
 | `--stop-after-fault S` | — | End the run S seconds after the fault starts |
 | `--out` | — | Output folder (must be new) |
 

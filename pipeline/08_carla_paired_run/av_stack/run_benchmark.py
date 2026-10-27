@@ -47,8 +47,12 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--timeout", type=float, default=120.0, help="Wall-clock RPC/watchdog timeout, not route duration")
     parser.add_argument("--device", choices=("cuda", "cuda:0"), default="cuda")
-    parser.add_argument("--mpc-fault", choices=("none", "solver_fail", "nan", "stale", "exception", "delay", "bias", "drift"), default="none")
-    parser.add_argument("--fault-magnitude", type=float, default=0.05, help="bias [rad] or drift rate [rad/s]")
+    parser.add_argument("--mpc-fault", choices=("none", "solver_fail", "nan", "stale", "exception", "delay", "bias", "drift",
+                                                "intermittent_bias", "saturate", "output_delay"), default="none")
+    parser.add_argument("--fault-magnitude", type=float, default=0.05,
+                        help="bias [rad], drift rate [rad/s], saturate side (sign) or output_delay ticks")
+    parser.add_argument("--fault-on", type=float, default=0.2, help="intermittent_bias: seconds with the bias on")
+    parser.add_argument("--fault-off", type=float, default=0.2, help="intermittent_bias: seconds with the bias off")
     parser.add_argument("--fault-start", type=float, default=20.0)
     parser.add_argument("--fault-duration", type=float, default=5.0)
     parser.add_argument("--stop-after-fault", type=float, help="end the route this many seconds after fault start (demo videos)")
@@ -82,7 +86,7 @@ def main() -> int:
         parser.error("Timeout must be finite and positive")
     from integration.fault_injection import FaultConfig
     try:
-        FaultConfig(args.mpc_fault, args.fault_start, args.fault_duration, args.fault_magnitude)
+        FaultConfig(args.mpc_fault, args.fault_start, args.fault_duration, args.fault_magnitude, args.fault_on, args.fault_off)
     except ValueError as error:
         parser.error(str(error))
     if args.mpc_fault != "none" and args.controller not in ("supervised", "mpc_unprotected"):
@@ -96,7 +100,7 @@ def main() -> int:
         parser.error("Output already contains results.json; choose a fresh --out directory")
     args.out.mkdir(parents=True, exist_ok=True)
     config = dict(model=None if args.model is None else str(args.model.resolve()), planner=args.planner, record_front=args.record_front, controller=args.controller, longitudinal=args.longitudinal, mpc_extension=args.mpc_extension, speed_policy=args.speed_policy, mpc_fault=args.mpc_fault,
-                  fault_start=args.fault_start, fault_duration=args.fault_duration, fault_magnitude=args.fault_magnitude, stop_after_fault=args.stop_after_fault,
+                  fault_start=args.fault_start, fault_duration=args.fault_duration, fault_magnitude=args.fault_magnitude, fault_on_s=args.fault_on, fault_off_s=args.fault_off, stop_after_fault=args.stop_after_fault,
                   max_speed_kmh=args.max_speed, comfort=not args.no_comfort, monitor_period=args.monitor, view=not args.no_view, green_lights=args.green_lights,
                   out=str(args.out), device=args.device, dt=0.05)
     agent_config = args.out / "agent_config.json"

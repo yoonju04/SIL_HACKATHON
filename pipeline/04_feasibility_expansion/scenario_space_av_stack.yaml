@@ -1,16 +1,21 @@
 # scenario_space_av_stack.yaml — av_stack(PDM-Lite + MPC/LQR 감독기)용 탐색 공간: 환경 × 고장 × 주입 시점
-# 고장 표와 설명은 README.md. 읽기·검증·샘플링·실행 인자 변환은 scenario_space.py.
+# 고장 표와 CARLA 검증 결과는 README.md. 읽기·검증·샘플링·실행 인자 변환은 scenario_space.py.
 # 팀 템플릿 scenario_space.yaml(F-01~03 지연 계열)과 ID가 다르다. 이 파일의 F-01~07은 이 파일 안에서만 쓴다.
+# 위험 고장(F-03~07)은 CARLA 세 경로에서 모두 전환 실패·지연 또는 주행 성능 저하가 확인된 것만 둔다.
 # observations = 실제 실행 결과(조건과 횟수 포함), next_question = 다음에 검증할 가설.
-# 한 번 나온 결과를 모든 상황의 특성으로 일반화하지 않는다.
 
 meta:
-  schema_version: '1.1'
+  schema_version: '1.2'
   profile_id: sp-av-stack-pdm-supervised
   status: draft
   observation_sources:
-    route_26956: "av_stack/runs/campaign_26956_1025_0202/summary.md (PDM, supervised, 주입 11.5 s, 조건당 1회)"
+    check_1027: "av_stack/runs/fault_check_1027 (PDM, supervised, seed 17, 커브 약 1 s 전 주입, 경로당 조건 1회; 기준 실행 3개 포함)"
+    route_26956: "av_stack/runs/campaign_26956_1025_0202/summary.md (이전 코드, PDM, supervised, 주입 11.5 s, 조건당 1회)"
     town10_live: "av_stack/runs/town10_live_check.log (town10_long, 30 km/h, tools/inject.py 라이브 주입)"
+  scenarios_1027:
+    A: {route: "Bench2Drive 26956 (Town05, 신호 교차로 우회전)", onset_s: 11.0, turn_speed_mps: 9.8}
+    B: {route: "Bench2Drive 28035 (Town01, T자 교차로)", onset_s: 45.8, turn_speed_mps: 5.9}
+    C: {route: "town10_long (Town10HD, --green-lights)", onset_s: 52.4, turn_speed_mps: 9.3}
 
 # 감독기 동작 (pipeline/08_carla_paired_run/av_stack/integration/supervised_lateral.py)
 supervisor:
@@ -32,6 +37,7 @@ fault_timing:
   offset_s:    {range: [-1.0, 1.0], unit: s}
 
 # group: control = 대조군, risk = 위험 고장
+# injector_mode = run_benchmark.py --mpc-fault 값 (integration/fault_injection.py)
 faults:
   - id: F-01
     name: solver_fail
@@ -68,17 +74,18 @@ faults:
     name: output_delay
     group: risk
     role: 시간 문제
-    description: "MPC 명령을 k틱 늦게 적용 (원래 시각 유지)"
+    description: "k틱 전에 계산한 명령을 현재 시각·번호로 내보냄 (처리 지연. 옛 시각이면 시작 순간 번호 검사에 걸림)"
     check: "늦은 명령 처리와 전환 지연"
     layer: mpc_output
     injector_mode: output_delay
-    implemented: false
+    implemented: true
     params:
       delay_ticks: {values: [1, 2, 3, 4, 6]}
-      duration_s:  {range: [0.5, 5.0], unit: s}
-    observations: []
-    note: "기존 injector의 delay(75 ms sleep)는 deadline_miss로 0.0 s에 전환되고, 동기 모드라 차량 영향이 없다 (route_26956). 이 고장과 다르다."
-    next_question: "k <= 2틱(0.1 s 이하)은 시각 검사를 통과해 감지 없이 주행에 영향을 주는가"
+    observations:
+      - {source: check_1027, result: "A, 4틱: 2.05 s 뒤 전환, 최대 편차 4.86 m (기준 0.46), 전환 0.65 s 뒤 차량 충돌, 점수 18.1", runs: 1}
+      - {source: check_1027, result: "B, 4틱: 3.65 s 뒤 전환, 최대 편차 1.47 m (기준 0.34), 차체가 차선 넘음", runs: 1}
+      - {source: check_1027, result: "C, 4틱: 전환 못 함, 최대 편차 0.59 m (기준 0.22), 차선 안", runs: 1}
+    next_question: "몇 틱부터 전환이 늦어지고 충돌로 이어지는가. 속도와 곡률에 따라 경계가 어떻게 바뀌는가"
 
   - id: F-04
     name: bias
@@ -92,11 +99,12 @@ faults:
     params:
       magnitude_rad: {range: [0.02, 0.10], unit: rad}
     observations:
+      - {source: check_1027, result: "A, 0.05 rad: 전환 못 함, 최대 편차 0.93 m (기준 0.46), 차체가 차선을 0.10 m 넘음", runs: 1}
+      - {source: check_1027, result: "B, 0.05 rad: 전환 못 함, 최대 편차 0.90 m (기준 0.34)", runs: 1}
+      - {source: check_1027, result: "C, 0.05 rad: 전환 못 함, 최대 편차 0.76 m (기준 0.22)", runs: 1}
       - {source: town10_live, result: "0.05 rad: 전환 못 함", runs: 1}
-      - {source: route_26956, result: "0.02 rad: 전환 못 함, 최대 e_y 0.707 m", runs: 1}
-      - {source: route_26956, result: "0.05 rad: 4.7 s 뒤 전환 (tracking_divergence), 최대 e_y 1.129 m", runs: 1}
-      - {source: route_26956, result: "0.10 rad: 2.3 s 뒤 전환 (tracking_divergence), 최대 e_y 1.566 m", runs: 1}
-    next_question: "속도·곡률·주입 방향을 바꿔도 감지하지 못하는가. 감지 경계 크기는 어디인가"
+      - {source: route_26956, result: "0.02 rad 전환 못 함, 0.05 rad 4.7 s 뒤 전환, 0.10 rad 2.3 s 뒤 전환 (이전 코드)", runs: 3}
+    next_question: "감지 경계 크기는 어디인가. 주입 방향(커브 안쪽/바깥쪽)에 따라 달라지는가"
 
   - id: F-05
     name: drift
@@ -110,9 +118,11 @@ faults:
     params:
       rate_rad_s: {range: [0.005, 0.05], unit: rad/s}
     observations:
-      - {source: route_26956, result: "0.05 rad/s: 2.6 s 뒤 전환 (tracking_divergence), 최대 e_y 1.457 m", runs: 1}
-      - {source: route_26956, result: "0.02 rad/s: 2.0 s 뒤 전환했지만 이유가 deadline_miss (drift 감지 아님)", runs: 1}
-    next_question: "악화 속도와 전환 지연은 어떤 관계인가. 우연한 deadline_miss는 기준 실행에서도 생기는가"
+      - {source: check_1027, result: "A, 0.03 rad/s: 3.45 s 뒤 전환, 최대 편차 1.20 m (기준 0.46), 차체가 차선을 0.37 m 넘음", runs: 1}
+      - {source: check_1027, result: "B, 0.03 rad/s: 3.05 s 뒤 전환, 최대 편차 1.10 m (기준 0.34)", runs: 1}
+      - {source: check_1027, result: "C, 0.03 rad/s: 3.75 s 뒤 전환, 최대 편차 1.18 m (기준 0.22), 차체가 차선을 0.35 m 넘음", runs: 1}
+      - {source: route_26956, result: "0.05 rad/s 2.6 s 뒤 전환. 0.02 rad/s는 deadline_miss로 전환 (drift 감지 아님, 이전 코드)", runs: 2}
+    next_question: "악화 속도와 전환 지연은 어떤 관계인가"
 
   - id: F-06
     name: saturate
@@ -122,12 +132,15 @@ faults:
     check: "급격히 악화된 상태에서의 인계·회복"
     layer: mpc_output
     injector_mode: saturate
-    implemented: false
+    implemented: true
     params:
       duration_s: {range: [0.1, 1.0], unit: s}
-      side:       {values: [left, right]}
-    observations: []
-    next_question: "오차 1 m + 0.25 s 뒤 전환될 때 LQR이 차선 안에서 회복하는가"
+      side:       {values: [positive, negative], note: "MPC 조향 부호"}
+    observations:
+      - {source: check_1027, result: "A, 0.5 s (+): 0.75 s 뒤 전환, 최대 편차 7.06 m, 차선 이탈, 점수 51.1", runs: 1}
+      - {source: check_1027, result: "B, 0.5 s (+): 0.85 s 뒤 전환, 최대 편차 8.26 m, 차선 이탈, 점수 74.8", runs: 1}
+      - {source: check_1027, result: "C, 0.5 s (+): 0.70 s 뒤 전환, 최대 편차 8.84 m, 차선 이탈, 신호등 충돌", runs: 1}
+    next_question: "몇 초 고정부터 전환해도 차선 안에서 회복하지 못하는가"
 
   - id: F-07
     name: intermittent_bias
@@ -137,15 +150,19 @@ faults:
     check: "타이머 리셋으로 인한 전환 누락"
     layer: mpc_output
     injector_mode: intermittent_bias
-    implemented: false
+    implemented: true
     params:
       magnitude_rad: {range: [0.05, 0.15], unit: rad}
       on_s:          {range: [0.1, 1.0], unit: s}
       off_s:         {range: [0.05, 1.0], unit: s}
-    observations: []
-    next_question: "이상 조건이 반복해서 해제돼 감지 타이머가 초기화되는가 (경계 근처 진동 유도는 후속)"
+    observations:
+      - {source: check_1027, result: "A, 0.10 rad 켜짐 0.2 s / 꺼짐 0.1 s: 2.45 s 뒤 전환, 최대 편차 1.16 m (기준 0.46), 차체가 차선을 0.33 m 넘음", runs: 1}
+      - {source: check_1027, result: "B, 같은 조건: 2.85 s 뒤 전환, 최대 편차 1.14 m (기준 0.34)", runs: 1}
+      - {source: check_1027, result: "C, 같은 조건: 2.10 s 뒤 전환, 최대 편차 1.03 m (기준 0.22), 차체가 차선을 0.20 m 넘음", runs: 1}
+      - {source: check_1027, result: "세 경로 모두 타이머 리셋(1 m 초과가 0.25 s 안에 풀림)은 관찰되지 않음", runs: 3}
+    next_question: "꺼짐 시간을 늘리면 타이머 리셋이 생기는가, 아니면 평균 bias가 줄어든 효과뿐인가"
 
-# 확장 목록: 샘플링하지 않음
+# 확장 목록: CARLA에서 아직 검증하지 않음, 샘플링하지 않음
 extensions:
   - {id: E-01, name: header_refresh_replay, description: "값은 고정, 시각·번호는 갱신 (정상 메시지처럼 보임)"}
   - {id: E-02, name: localization_offset, description: "제어기가 받는 차량 위치를 옆으로 틀리게 줌. LQR도 같이 오염되므로 MPC 단독 고장과 분리"}

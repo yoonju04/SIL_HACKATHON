@@ -72,7 +72,7 @@ class SupervisedLateral:
         self.mpc = build_controller('mpc', geometry, dt, trajectory, mpc_cfg=mpc_config)
         self.lqr = build_controller('lqr', geometry, dt, trajectory, lqr_cfg=lqr_config)
         self.monitor = MPCSupervisor(geometry['max_steer_rad'], deadline_ms=dt * 1000)
-        self.injector = MPCFaultInjector(fault)
+        self.injector = MPCFaultInjector(fault, geometry['max_steer_rad'])
         self.dt = dt
         self.active = 'mpc'
         self.reason: str | None = None

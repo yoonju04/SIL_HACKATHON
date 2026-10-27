@@ -125,7 +125,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         self.dt = float(self.options.get('dt', .05))
         self.fault = FaultConfig(self.options['mpc_fault'], float(self.options['fault_start']),
                                  float(self.options['fault_duration']),
-                                 float(self.options.get('fault_magnitude', .05)))
+                                 float(self.options.get('fault_magnitude', .05)),
+                                 float(self.options.get('fault_on_s', .2)), float(self.options.get('fault_off_s', .2)))
         self.mode = self.options['controller']
         self.lateral = None
         self.reference = None

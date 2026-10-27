@@ -55,6 +55,32 @@ def test_fault_is_temporary_and_off_by_default() -> None:
     assert injector.apply(original, 1.2) is original
 
 
+def test_intermittent_bias_alternates_on_and_off() -> None:
+    injector = MPCFaultInjector(FaultConfig('intermittent_bias', 1.0, 10.0, 0.08, on_s=0.2, off_s=0.1))
+    steers = [injector.apply(output(), 1.0 + k * 0.05).steer for k in range(8)]
+    assert [round(steer - 0.1, 3) for steer in steers] == [0.08] * 4 + [0.0] * 2 + [0.08] * 2
+
+
+def test_saturate_holds_exactly_the_limit_and_passes_the_range_check() -> None:
+    for side in (1.0, -1.0):
+        injector = MPCFaultInjector(FaultConfig('saturate', 1.0, 1.0, side), max_steer=0.5)
+        faulty = injector.apply(output(), 1.0)
+        assert faulty.steer == 0.5 * side
+        assert MPCSupervisor(0.5).inspect(faulty, 1.0, 2.0) is None
+
+
+def test_output_delay_sends_an_old_command_under_a_fresh_header() -> None:
+    injector = MPCFaultInjector(FaultConfig('output_delay', 1.0, 1.0, 2))
+    supervisor = MPCSupervisor(0.5)
+    for k in range(6):
+        t = 0.8 + k * 0.05
+        fresh = replace(output(), steer=0.01 * k, seq=k + 1, stamp_s=t)
+        sent = injector.apply(fresh, t)
+        assert sent.seq == fresh.seq and sent.stamp_s == t
+        assert sent.steer == (fresh.steer if t < 1.0 - 1e-9 else round(0.01 * (k - 2), 10))
+        assert supervisor.inspect(sent, t, 2.0) is None
+
+
 def test_real_mpc_to_lqr_switch_latches_after_temporary_failure() -> None:
     params = asdict(PlantParams())
     params.pop('max_steer_rate_rad_s')

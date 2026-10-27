@@ -38,7 +38,8 @@ class LiveFaultCommands:
         if mode not in FAULT_MODES:
             print(f'[inject] ignored unknown mode {mode!r}', flush=True)
             return None
-        return FaultConfig(mode, now_s, OPEN_ENDED_S, float(command.get('magnitude', .05)))
+        return FaultConfig(mode, now_s, OPEN_ENDED_S, float(command.get('magnitude', .05)),
+                           float(command.get('on_s', .2)), float(command.get('off_s', .2)))
 
 
 def describe(fault: FaultConfig) -> str:
@@ -46,6 +47,13 @@ def describe(fault: FaultConfig) -> str:
         return f'bias {fault.magnitude:+.3f} rad ({math.degrees(fault.magnitude):+.1f} deg) on MPC steering'
     if fault.mode == 'drift':
         return f'drift {fault.magnitude:+.3f} rad/s ({math.degrees(fault.magnitude):+.1f} deg/s) on MPC steering'
+    if fault.mode == 'intermittent_bias':
+        return (f'intermittent bias {fault.magnitude:+.3f} rad, on {fault.on_s:.2f} s / off {fault.off_s:.2f} s'
+                ' on MPC steering')
+    if fault.mode == 'saturate':
+        return 'MPC steering held at the %s actuator limit' % ('positive' if fault.magnitude > 0 else 'negative')
+    if fault.mode == 'output_delay':
+        return f'MPC command delayed by {round(fault.magnitude)} ticks (fresh stamp)'
     return {'solver_fail': 'MPC solver failure', 'nan': 'MPC outputs NaN', 'stale': 'MPC repeats a stale sample',
             'exception': 'MPC raises an exception', 'delay': 'MPC answers 75 ms late (> 50 ms deadline)',
             'none': 'fault cleared'}[fault.mode]

@@ -1,11 +1,17 @@
 """Opt-in simulator faults at the MPC output boundary; never changes LQR.
 
 Availability faults (solver_fail, nan, stale, exception, delay) make the MPC output visibly
-unusable. Integrity attacks (bias, drift) keep a healthy-looking output but shift its steering:
-bias adds `magnitude` rad, drift adds `magnitude` rad per second since the fault start.
+unusable. Integrity attacks keep a healthy-looking output but change its steering:
+  bias               adds `magnitude` rad
+  drift              adds `magnitude` rad per second since the fault start
+  intermittent_bias  adds `magnitude` rad for `on_s`, then nothing for `off_s`, repeating
+  saturate           holds steering exactly at the actuator limit, side = sign of `magnitude`
+  output_delay       sends the command computed `magnitude` ticks ago under a fresh stamp and sequence
+                     (processing latency; an old stamp would be caught by the sequence check at onset)
 """
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, replace
 import math
 import time
@@ -14,8 +20,9 @@ from mpc_controller import MPCOutput
 
 
 AVAILABILITY_FAULTS = ('solver_fail', 'nan', 'stale', 'exception', 'delay')
-INTEGRITY_FAULTS = ('bias', 'drift')
+INTEGRITY_FAULTS = ('bias', 'drift', 'intermittent_bias', 'saturate', 'output_delay')
 FAULT_MODES = ('none',) + AVAILABILITY_FAULTS + INTEGRITY_FAULTS
+MAX_DELAY_TICKS = 15
 
 
 @dataclass(frozen=True)
@@ -23,7 +30,9 @@ class FaultConfig:
     mode: str = 'none'
     at_s: float = 25.0
     duration_s: float = 2.0
-    magnitude: float = 0.05  # bias [rad] or drift rate [rad/s]; integrity attacks only
+    magnitude: float = 0.05  # bias [rad], drift rate [rad/s], saturate side (sign) or output_delay ticks
+    on_s: float = 0.2  # intermittent_bias: bias on for on_s, then off for off_s
+    off_s: float = 0.2
 
     def __post_init__(self) -> None:
         if self.mode not in FAULT_MODES:
@@ -34,6 +43,12 @@ class FaultConfig:
             raise ValueError('Fault start must be finite and nonnegative.')
         if not math.isfinite(self.duration_s) or self.duration_s <= 0:
             raise ValueError('Fault duration must be finite and positive.')
+        if not (math.isfinite(self.on_s) and math.isfinite(self.off_s)) or self.on_s <= 0 or self.off_s <= 0:
+            raise ValueError('Intermittent on/off times must be finite and positive.')
+        if self.mode == 'saturate' and self.magnitude == 0:
+            raise ValueError('Saturate needs a nonzero magnitude; its sign picks the side.')
+        if self.mode == 'output_delay' and not 1 <= round(self.magnitude) <= MAX_DELAY_TICKS:
+            raise ValueError('Output delay must be 1..%d ticks.' % MAX_DELAY_TICKS)
 
     def active(self, t: float) -> bool:
         return self.mode != 'none' and self.at_s <= t < self.at_s + self.duration_s
@@ -57,11 +72,13 @@ def _delay(output: MPCOutput) -> MPCOutput:
 
 
 class MPCFaultInjector:
-    """Retain the last clean sample to reproduce a stale-output fault."""
+    """Retain the last clean sample (stale) and recent MPC answers (output_delay)."""
 
-    def __init__(self, config: FaultConfig) -> None:
+    def __init__(self, config: FaultConfig, max_steer: float | None = None) -> None:
         self.config = config
+        self.max_steer = max_steer
         self.previous: MPCOutput | None = None
+        self.history: deque[MPCOutput] = deque(maxlen=MAX_DELAY_TICKS + 1)
 
     @staticmethod
     def _shift(output: MPCOutput, offset: float) -> MPCOutput:
@@ -69,7 +86,24 @@ class MPCFaultInjector:
             return output
         return replace(output, steer=output.steer + offset)
 
+    def _intermittent(self, output: MPCOutput, t: float) -> MPCOutput:
+        # rounded to microseconds so tick times like 1.2 s land in the intended on/off phase
+        period = round(self.config.on_s + self.config.off_s, 6)
+        phase = round(round(t - self.config.at_s, 6) % period, 6)
+        return self._shift(output, self.config.magnitude) if phase < self.config.on_s - 1e-9 else output
+
+    def _saturate(self, output: MPCOutput) -> MPCOutput:
+        if self.max_steer is None:
+            raise ValueError('Saturate fault needs the actuator limit (max_steer).')
+        return replace(output, steer=math.copysign(self.max_steer, self.config.magnitude))
+
+    def _delayed(self, output: MPCOutput) -> MPCOutput:
+        old = self.history[max(0, len(self.history) - 1 - round(self.config.magnitude))]
+        return replace(output, steer=old.steer, raw_steer=old.raw_steer, state=old.state, s=old.s,
+                       kappa=old.kappa, predicted_e_y=old.predicted_e_y, u_sequence=old.u_sequence)
+
     def apply(self, output: MPCOutput, t: float) -> MPCOutput:
+        self.history.append(output)
         if not self.config.active(t):
             self.previous = output
             return output
@@ -81,5 +115,8 @@ class MPCFaultInjector:
             'delay': _delay,
             'bias': lambda value: self._shift(value, self.config.magnitude),
             'drift': lambda value: self._shift(value, self.config.magnitude * (t - self.config.at_s)),
+            'intermittent_bias': lambda value: self._intermittent(value, t),
+            'saturate': self._saturate,
+            'output_delay': self._delayed,
         }
         return faults[self.config.mode](output)

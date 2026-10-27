@@ -108,12 +108,20 @@ def to_cli(space: Dict[str, Any], scenario: Dict[str, Any], onset_s: float) -> L
     if not fault['implemented']:
         raise NotImplementedError('%s (%s) is not in the injector yet' % (fault['id'], fault['name']))
     params = scenario['params']
-    magnitude = params.get('magnitude_rad', params.get('rate_rad_s'))
+    # --fault-magnitude carries the one number each mode needs (see integration/fault_injection.py)
+    if 'delay_ticks' in params:
+        magnitude = params['delay_ticks']
+    elif 'side' in params:
+        magnitude = 1.0 if params['side'] == 'positive' else -1.0
+    else:
+        magnitude = params.get('magnitude_rad', params.get('rate_rad_s'))
     duration = params.get('duration_s', WHOLE_RUN_S)
     args = ['--mpc-fault', fault['injector_mode'], '--fault-start', '%.2f' % onset_s,
             '--fault-duration', '%.2f' % duration]
     if magnitude is not None:
         args += ['--fault-magnitude', '%.4f' % magnitude]
+    if 'on_s' in params:
+        args += ['--fault-on', '%.3f' % params['on_s'], '--fault-off', '%.3f' % params['off_s']]
     for name, value in scenario['environment'].items():
         flag = space['environment'][name].get('cli')
         if flag:

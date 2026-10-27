@@ -25,7 +25,7 @@ class UnprotectedMPC:
     def __init__(self, geometry: dict[str, float], dt: float, trajectory: Trajectory,
                  fault: FaultConfig = FaultConfig(), mpc_config: MPCConfig | None = None) -> None:
         self.mpc = build_controller('mpc', geometry, dt, trajectory, mpc_cfg=mpc_config)
-        self.injector = MPCFaultInjector(fault)
+        self.injector = MPCFaultInjector(fault, geometry['max_steer_rad'])
         self.active = 'mpc'
         self.primary_status = 'not_run'
         self.t = 0.0
