@@ -3,11 +3,11 @@
 | 파일 | 내용 |
 |---|---|
 | [`feasibility_expansion.yaml`](feasibility_expansion.yaml) | G-01~04 게이트, 섭동·중복 제거 (팀 템플릿) |
-| [`scenario_space.yaml`](scenario_space.yaml) | 팀 템플릿 탐색 공간 (지연 계열 F-01~03) |
-| [`scenario_space_av_stack.yaml`](scenario_space_av_stack.yaml) | av_stack(PDM-Lite + MPC/LQR 감독기)용 탐색 공간: 아래 고장 7종 + 확장 5종 |
-| [`scenario_space.py`](scenario_space.py) | 위 YAML 읽기, 검증, 샘플링, `run_benchmark.py` 인자 변환 |
+| [`scenario_space.yaml`](scenario_space.yaml) | 고장 후보 목록 (av_stack용): 아래 고장 7종 + 확장 5종, 주입 시점, 환경 범위. Nemotron B가 여기서 고른다 |
+| [`scenario_space.py`](scenario_space.py) | 위 YAML 읽기, 검증, 무작위 샘플링 (비교용) |
 
-`scenario_space_av_stack.yaml`의 F-01~07은 팀 템플릿 `scenario_space.yaml`의 F-01~03과 다른 고장입니다.
+CARLA 실행 인자 변환(`to_cli`)은 08 단계로 옮겼습니다: [`../08_carla_paired_run/fault_args.py`](../08_carla_paired_run/fault_args.py).
+이 파일이 이전 팀 템플릿(F-01~03 지연 계열)을 대체합니다. F-01~07의 뜻은 이 파일 기준입니다.
 
 ## 우리 감독기는 어떻게 판단하나
 
@@ -109,7 +109,9 @@ F-03을 옛 시각·번호 그대로 늦게 보내면 시작 순간 번호가 �
 {"fault_id": "F-05", "fault": "drift", "params": {"rate_rad_s": 0.040}, "timing": {"onset_event": "straight", "offset_s": -0.02}, "environment": {"max_speed_kmh": 36.8, "tire_friction_scale": 0.57}}
 ```
 
-`to_cli(space, scenario, onset_s)`는 시나리오를 `run_benchmark.py` 인자로 바꿉니다.
+`--sample`은 무작위로 뽑으므로 비교용(무작위 기준선)과 테스트용입니다. 실제 파이프라인에서는 환경을 Nemotron A가, 고장 계획을 Nemotron B가 정합니다.
+
+08 단계의 `fault_args.to_cli(space, scenario, onset_s)`가 고른 계획을 `run_benchmark.py` 인자로 바꿉니다.
 `onset_s`(주입 시각)는 호출하는 쪽이 경로에서 `onset_event` + `offset_s`를 찾아 넘깁니다.
 
 ```

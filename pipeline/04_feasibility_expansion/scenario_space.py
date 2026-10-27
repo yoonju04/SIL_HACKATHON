@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Load, check and sample scenario_space_av_stack.yaml, and turn a scenario into run_benchmark.py arguments.
+"""Load, check and sample scenario_space.yaml (the fault catalog Nemotron B chooses from).
 
   python scenario_space.py --check
   python scenario_space.py --sample 5 --seed 0 [--fault F-03] [--implemented-only]
   python scenario_space.py --self-test
+
+This file only describes and checks the catalog. Turning a scenario into CARLA run
+arguments is stage 08's job: pipeline/08_carla_paired_run/fault_args.py (to_cli).
+--sample draws uniformly at random; in the pipeline Nemotron A sets the environment and
+Nemotron B the fault plan, so sampling is for a random baseline and tests only.
 
 Needs PyYAML (present in av_stack's .venv-tfpp).
 """
@@ -18,9 +23,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-DEFAULT_PATH = Path(__file__).with_name('scenario_space_av_stack.yaml')
+DEFAULT_PATH = Path(__file__).with_name('scenario_space.yaml')
 GROUPS = ('control', 'risk')
-WHOLE_RUN_S = 500.0  # fault window for faults without a duration: stays on until the route ends
 
 
 def load(path: Path = DEFAULT_PATH) -> Dict[str, Any]:
@@ -101,34 +105,6 @@ def sample(space: Dict[str, Any], rng: random.Random, fault_id: Optional[str] = 
     }
 
 
-def to_cli(space: Dict[str, Any], scenario: Dict[str, Any], onset_s: float) -> List[str]:
-    """run_benchmark.py arguments for a scenario. onset_s is the absolute fault start the caller
-    found for timing.onset_event + offset_s on its route (event detection is not done here)."""
-    fault = find_fault(space, scenario['fault_id'])
-    if not fault['implemented']:
-        raise NotImplementedError('%s (%s) is not in the injector yet' % (fault['id'], fault['name']))
-    params = scenario['params']
-    # --fault-magnitude carries the one number each mode needs (see integration/fault_injection.py)
-    if 'delay_ticks' in params:
-        magnitude = params['delay_ticks']
-    elif 'side' in params:
-        magnitude = 1.0 if params['side'] == 'positive' else -1.0
-    else:
-        magnitude = params.get('magnitude_rad', params.get('rate_rad_s'))
-    duration = params.get('duration_s', WHOLE_RUN_S)
-    args = ['--mpc-fault', fault['injector_mode'], '--fault-start', '%.2f' % onset_s,
-            '--fault-duration', '%.2f' % duration]
-    if magnitude is not None:
-        args += ['--fault-magnitude', '%.4f' % magnitude]
-    if 'on_s' in params:
-        args += ['--fault-on', '%.3f' % params['on_s'], '--fault-off', '%.3f' % params['off_s']]
-    for name, value in scenario['environment'].items():
-        flag = space['environment'][name].get('cli')
-        if flag:
-            args += [flag, '%.1f' % value]
-    return args
-
-
 def _self_test() -> None:
     space = load()
     assert check(space) == [], check(space)
@@ -141,19 +117,10 @@ def _self_test() -> None:
                 assert spec['range'][0] <= value <= spec['range'][1], (fault['id'], name, value)
             elif 'ranges' in spec:
                 assert any(low <= value <= high for low, high in spec['ranges']), (fault['id'], name, value)
-        if fault['implemented']:
-            args = to_cli(space, scenario, onset_s=12.0)
-            assert args[1] == fault['injector_mode'] and '--fault-start' in args
-        else:
-            try:
-                to_cli(space, scenario, onset_s=12.0)
-            except NotImplementedError:
-                pass
-            else:
-                raise AssertionError('%s should not produce CLI args' % fault['id'])
+        assert set(scenario['timing']) == set(space['fault_timing'])
     pool = {sample(space, rng, implemented_only=True)['fault_id'] for _ in range(200)}
     assert pool == {f['id'] for f in space['faults'] if f['implemented']}, pool
-    print('self-test passed: %d faults, check, sample, to_cli' % len(space['faults']))
+    print('self-test passed: %d faults, check, sample' % len(space['faults']))
 
 
 def main() -> int:
