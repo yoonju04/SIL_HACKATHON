@@ -14,7 +14,8 @@ meta:
 results_schema:
   run_record: [run_id, scenario_id, seed_scenario_id, round, selector, profile_id,
                source_commit, feature_schema_version, hypothesis_ids, parameters,
-               planned_fault_onset, actual_fault_onset, trigger_time, switch_time,
+               planned_fault_onset, actual_fault_onset, trigger_time, trigger_source,
+               trigger_attribution, switch_time,
                switch_count, outcome_category, P01, P02, P03, margin_delta_m,
                switch_state_label, metrics, baseline_metrics, gp_targets,
                gp_mean, gp_std, sim_status, invalid_reason]
@@ -26,7 +27,16 @@ results_schema:
                  switch_count, lateral_error_rmse_m, deadline_miss_rate,
                  mpc_constraint_violation_rate, post_switch_saturation_ratio,
                  command_jump_rad, max_steering_rate_dps, margin_delta_m]
+  # trigger_source: 감독기가 전환한 이유 = av_stack supervisor_reason (behavior.jsonl, sim-eval
+  #   integration/monitor_logs.py:123-124). 값은 safety_profile.yaml switching.triggers 이름과 같다
+  #   (integration/supervised_lateral.py:28-52, 109-112). 전환이 없으면 null.
+  trigger_source_values: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range,
+                          deadline_miss, stale_output, stale_sequence, tracking_divergence,
+                          controller_exception, null]
+  # trigger_attribution: 모니터가 사후에 계산 (감독기는 주입 여부를 보지 않음, supervised_lateral.py:20).
+  #   fault 설정(mode, fault_start, duration)과 trigger_time을 비교한다. S3/S4 원인 구분용.
+  trigger_attribution_values: [no_fault_configured, inside_fault_window, outside_fault_window, no_switch]
   failure_table: [scenario_id, violated_property, originating_evidence_ids,
-                  hypothesis_ids, environment, fault, onset_event,
+                  hypothesis_ids, trigger_source, trigger_attribution, environment, fault, onset_event,
                   observed_switch_behavior, robustness, reproduction_count]
   timeseries_store: results/timeseries/

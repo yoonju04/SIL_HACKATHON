@@ -17,7 +17,11 @@ carla:
 paired_runs:
   modes: [no_fault_baseline, fault_injected]
   match: [map, route_id, initial_state, seed, weather, traffic, speed_mps,
-          tire_friction_scale]
+          tire_friction_scale, vehicle_mass_scale, maneuver, velocity_disturbance,
+          steering_disturbance, max_speed_kmh, planner]
+  # 2026-10-27 추가: vehicle_mass_scale·maneuver·velocity/steering_disturbance (S3 stress 축, 다르면 다른 baseline),
+  #   max_speed_kmh·planner (sim-eval run_benchmark.py:25, 33. planner마다 LQR 설정이 다름: safety_profile O-016).
+  #   지금 runner에 없는 축(질량·마찰·maneuver·외란)은 값이 null로 들어가며, 구현되면 그대로 키가 된다.
   search_target:
     per_metric: true                         # 06 surrogate.yaml target_forms 참조
     defined_in: 02_hypotheses/vulnerability_patterns.yaml#metric_rules.*.gp
@@ -28,6 +32,12 @@ paired_runs:
     enabled: true
     key: match                                 # 같은 key면 baseline 1회만 실행
   detector_cannot_see_injected_fault: true
+  # 런마다 09 run_record로 넘길 감독기 기록 (sim-eval av_stack 로그 기준)
+  supervisor_log_fields:
+    trigger_source: 'behavior.jsonl supervisor_reason / control log supervisor_reason (integration/monitor_logs.py:123-124, supervised_lateral.py:140-144)'
+    switch_time: 'switched_at_s'
+    switch_count: 'switch_count'
+    fault_config: 'fault_mode, fault_magnitude, fault_injected (integration/pdm_agent.py:284-296)'
 
 execution:
   backend: nebius_ai_cloud                     # 병렬 워커

@@ -1,0 +1,65 @@
+# S2_fault_timing_detection_delay_boundary.yaml — S2 = H-02 + H-06 (search_objective v0.2)
+# 현재 파이프라인은 이 파일을 읽지 않는다. 근거 코드: junwoo/sim-eval 9b51151 (AV = pipeline/08_carla_paired_run/av_stack/)
+
+meta:
+  schema: search_objective
+  schema_version: '0.2'
+  status: design_draft_not_consumed_by_pipeline
+  supersedes: [P-DELAYED-SWITCH-H-02, P-UNRECOVERABLE-SWITCH-H-06]
+  kind: recovery_boundary_exploration
+
+id: S2
+legacy_ids: [H-02, H-06]
+title: Fault Timing and Detection-Delay Recovery Boundary
+
+objective:
+  question_ko: >
+    고장이 어디서(직선/커브 진입/정점/탈출) 언제 시작되고, 감독기가 얼마나 늦게 알아채면
+    LQR이 넘겨받아도 복구하지 못하는가?
+  not_a_hypothesis_test: true
+
+# 코드 확인 결과:
+#   감지 후 전환은 같은 루프 반복 (switch_latency 0, O-021). 옛 H-06의 'F-04 전환 명령 지연' 같은
+#   supervisor 출력 지연 주입기는 없다 (fault_injection.py는 MPC 출력만 바꿈, :1). → 그 축은 미구현.
+#   지연은 '감지 지연'에서만 생긴다: 즉시 검사(T-01~07)를 피하고 tracking_divergence(T-08, |e_y|>1.0 m
+#   또는 |e_psi|>0.6 rad가 0.25 s)로만 잡히는 고장들.
+#   옛 H-02의 hold_last 전제도 성립하지 않음: T-08 hold 동안 오염된 MPC 명령이 그대로 적용됨 (safety_profile O-023).
+
+search_dimensions:
+  - {name: onset_event, values: [straight, curve_entry, curve_apex, curve_exit]}   # scenario_space_av_stack.yaml:36
+  - {name: offset_s, range: [-1.0, 1.0]}                                           # :37
+  - name: detection_delaying_fault                                                  # 감지 지연을 만드는 고장
+    choices:
+      output_delay: {delay_ticks: [1, 2, 3, 4, 6]}                    # :83 (구현 1..15, fault_injection.py:25, 50)
+      drift: {rate_rad_s: [0.005, 0.05]}                              # :119
+      bias: {magnitude_rad: [0.02, 0.10]}                             # :100
+      intermittent_bias: {magnitude_rad: [0.05, 0.15], on_s: [0.1, 1.0], off_s: [0.05, 1.0]}   # :155-157
+  - {name: max_speed_kmh, range: [10, 40], role: secondary}
+  - name: switch_command_delay_ms                                                   # 옛 H-06 F-04
+    available: false
+    todo: 'supervisor 출력 지연 주입기 없음. 필요하면 감독기 코드 변경 필요 (사용자 결정)'
+
+switch_trigger:
+  mechanism: injected_fault
+  expected_trigger: tracking_divergence        # 대부분. 단, 관측에서 drift가 deadline_miss로 전환된 사례 있음 (scenario_space_av_stack.yaml:124, 이전 코드)
+  comparison_reference: solver_fail            # 지연 0 기준 (S1과 같은 고장)
+
+evaluation:
+  - {name: detection_delay_s, definition: 'switched_at_s - fault_start_s', source: 'summary/control log switched_at_s (supervised_lateral.py:140-144)', note: '전환 없으면 null'}
+  - {name: pre_switch_max_lateral_error_m, defined_in: 'outcome_definitions.pre_switch_max_lateral_error_m'}
+  - {name: recovery_robustness, role: gp_target, defined_in: 'outcome_definitions.recovery_robustness'}
+  - {name: recovery_success, role: recorded_label}
+  - {name: outcome_category, note: 'no_trigger / triggered_no_switch 도 결과다. 관측: output_delay 4틱 경로 C, bias 0.05 rad 세 경로 모두 "전환 못 함" (scenario_space_av_stack.yaml:87, 102-104)'}
+  - {name: trigger_source}
+
+search_strategy:
+  steps:
+    - {name: sweep_detection_delay, description: '고장 크기(틱·rate·magnitude)로 감지 지연을 0부터 키워가며 샘플'}
+    - {name: refine_recovery_boundary, description: '복구 성공↔실패가 바뀌는 지연·지점 근처 정밀화'}
+  observation_requirement: '_common.yaml 참고. 현재 관측은 조건당 1회라 경계 추정 근거로 부족'
+  arms: none
+
+limitations: {see: _common.yaml#limitations}
+todo:
+  - fault_start(절대 시각) ↔ onset_event 변환 규칙 확정 (scenario_space.py:104-106은 호출자에게 맡김)
+  - switch_command_delay 축 추가 여부 결정

@@ -1,0 +1,75 @@
+# S3_natural_mpc_degradation.yaml — S3 = H-10 + H-08 + H-11 (search_objective v0.2)
+# 현재 파이프라인은 이 파일을 읽지 않는다. 근거 코드: junwoo/sim-eval 9b51151 (AV = pipeline/08_carla_paired_run/av_stack/)
+
+meta:
+  schema: search_objective
+  schema_version: '0.2'
+  status: design_draft_not_consumed_by_pipeline
+  supersedes: [P-MPC-DEADLINE-H-10, P-MPC-MODEL-MISMATCH-H-08, P-MPC-CONSTRAINT-STRESS-H-11]
+  kind: natural_switch_exploration
+
+id: S3
+legacy_ids: [H-10, H-08, H-11]
+title: Natural MPC Degradation -> Switch -> Recovery
+
+objective:
+  question_ko: >
+    고장을 주입하지 않아도 MPC가 스스로 나빠져 전환이 일어나는 상황이 있는가?
+    있다면 그 전환 뒤 LQR은 복구하는가?
+  fault_injection: none                          # run_benchmark.py --mpc-fault none (기본값)
+  not_a_hypothesis_test: true
+
+feasibility:                                     # 실제 트리거 기준 판단 (safety_profile.yaml switching.triggers)
+  verdict: partially_feasible
+  natural_triggers_possible:
+    tracking_divergence: '계획 경로 대비 |e_y|>1.0 m 또는 |e_psi|>0.6 rad가 0.25 s 지속 (supervised_lateral.py:45-51). 고속 급커브·모델 불일치에서 자연 발생 가능'
+    deadline_miss: 'MPC 호출 wall time > 50 ms (supervised_lateral.py:38-39, 74). 자연 발생 가능하지만 머신 부하에 좌우됨. 관측: drift 0.02 rad/s 런이 drift 감지가 아니라 deadline_miss로 전환 (scenario_space_av_stack.yaml:124, 이전 코드)'
+    solver_failure: 'QP status가 error일 때만 (mpc.py:239). max_iter는 ok=True라 트리거 안 됨 (qp.py:47, 97)'
+    controller_exception: 'MPC 계산 중 예외 (supervised_lateral.py:109-112). 드묾'
+  natural_triggers_practically_impossible:
+    steer_out_of_range: 'MPC 출력이 이미 lim으로 clip됨 (mpc.py:247)'
+    stale_output: 'MPC가 매 호출 stamp_s=t로 출력 (mpc.py:252-254)'
+    stale_sequence: 'MPC가 매 호출 seq 증가 (mpc.py:91 주석)'
+  no_trigger_for: 'MPC 제약 위반율·횡가속도 자체는 트리거가 아님 (트리거 목록에 없음). H-11의 제약 스트레스는 추종 오차로 번질 때만 전환으로 이어짐'
+  stress_knobs_available_now: [route_id (Bench2Drive), max_speed_kmh, planner (transfuserpp/tcp/pdm), seed]   # run_benchmark.py:22-47
+  stress_knobs_not_implemented:
+    vehicle_mass_scale: 'runner 인자 없음 (H-08)'
+    tire_friction_scale: 'scenario_space_av_stack.yaml:33 미지원 (H-08, H-09)'
+    maneuver_lane_change: 'runner 인자 없음, 경로가 정함 (H-10)'
+    velocity_disturbance / steering_disturbance: 'runner 인자 없음 (H-10)'
+  prior_evidence: '기준 실행(무고장) 3개는 전환 없이 최대 편차 0.46/0.34/0.22 m (scenario_space_av_stack.yaml:85-87 기준값). 40 km/h 이하에서는 자연 전환이 드물 수 있음'
+
+search_dimensions:
+  - {name: route_id, available: true}
+  - {name: max_speed_kmh, range: [10, 40], available: true}
+  - {name: planner, values: [transfuserpp, tcp, pdm], available: true, note: 'planner마다 LQR 설정이 다름 (safety_profile O-016)'}
+  - {name: vehicle_mass_scale, available: false, todo: runner 인자 추가}
+  - {name: tire_friction_scale, available: false, todo: runner 인자 추가}
+  - {name: maneuver / disturbances, available: false, todo: runner 인자 추가 또는 경로 선택으로 대체}
+
+switch_trigger:
+  mechanism: natural_mpc_degradation
+  expected_triggers: [tracking_divergence, deadline_miss, solver_failure]
+
+evaluation:
+  - {name: outcome_category, note: 'no_trigger 비율이 1차 결과. 전환이 일어난 영역이 S3의 탐색 대상'}
+  - {name: trigger_source}
+  - {name: natural_switch_rate, definition: '전환 런 수 / 전체 런 수 (조건별)', note: '옛 H-08 mpc_switch_trigger_rate (정의 없던 지표)를 이 정의로 대체 제안'}
+  - {name: deadline_miss_rate, defined_in: outcome_definitions.deadline_miss_rate, note: 'primary_elapsed_ms는 전환 후 갱신 안 됨 (SUPERVISOR.md:24)'}
+  - {name: lateral_error_rmse_m, defined_in: outcome_definitions.lateral_error_rmse_m}
+  - {name: recovery_robustness, role: gp_target_if_switched, note: '전환 없으면 undefined'}
+  - {name: recovery_success, role: recorded_label}
+
+risks:
+  - 'deadline_miss는 wall-clock이라 Nebius 병렬 워커·부하에 따라 결과가 달라짐. 워커 사양과 step_time_s(pdm_agent.py:284-296 control log)를 함께 기록'
+  - '자연 전환이 드물면 예산 대부분이 no_trigger. 먼저 속도 상한·급커브 경로로 범위 확인'
+  - 'G-03 stress_test 태그(횡가속도 요구 > P-02)는 물리 한계 실패와 섞이므로 따로 분석'
+
+search_strategy:
+  steps:
+    - {name: map_natural_switch_region, description: '경로 × 속도에서 전환이 일어나는 영역 찾기 (no_trigger 포함 기록)'}
+    - {name: recovery_in_switch_region, description: '전환이 일어난 영역 안에서 recovery_robustness 경계 추정'}
+  observation_requirement: '_common.yaml 참고'
+  arms: none
+
+limitations: {see: _common.yaml#limitations}

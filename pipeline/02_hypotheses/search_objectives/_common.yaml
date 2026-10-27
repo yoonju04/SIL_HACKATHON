@@ -1,0 +1,41 @@
+# _common.yaml — S-세트 공통 규칙 (search_objective v0.2). 현재 파이프라인은 이 디렉터리를 읽지 않는다.
+# 근거 코드: junwoo/sim-eval 9b51151, AV = pipeline/08_carla_paired_run/av_stack/
+
+meta:
+  schema: search_objective_common
+  schema_version: '0.2'
+  status: design_draft_not_consumed_by_pipeline
+
+set:
+  S1: {file: S1_operating_condition_recovery_boundary.yaml, kind: recovery_boundary_exploration, source_hypotheses: [H-01, H-09]}
+  S2: {file: S2_fault_timing_detection_delay_boundary.yaml, kind: recovery_boundary_exploration, source_hypotheses: [H-02, H-06]}
+  S3: {file: S3_natural_mpc_degradation.yaml, kind: natural_switch_exploration, source_hypotheses: [H-10, H-08, H-11]}
+  S4: {file: S4_stress_plus_fault.yaml, kind: optional, source_hypotheses: [S2, S3]}
+  A:  {file: A_switch_analysis_layer.yaml, kind: recorded_on_every_run, source_hypotheses: [H-04, H-05]}
+  R:  {file: R_regression_verification.yaml, kind: regression_verification, source_hypotheses: [H-03, H-08, H-10, H-11]}
+on_hold: [H-07]   # 오라클 방법 검증용, 보류
+
+# 실제 감독기 트리거 이름 (safety_profile.yaml switching.triggers, AV/integration/supervised_lateral.py:28-52, 109-112)
+trigger_names: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range, deadline_miss,
+                stale_output, stale_sequence, tracking_divergence, controller_exception]
+
+# 실제 주입기 모드 (AV/integration/fault_injection.py:22-23). 주입 위치는 모두 MPC 출력 (fault_injection.py:1, 105-122)
+# 주의: 템플릿 scenario_space.yaml의 F-01~04와 scenario_space_av_stack.yaml의 F-01~07은 ID가 다르다.
+#       S-세트는 혼동을 피하려고 injector_mode 이름으로 적는다.
+injector_modes:
+  availability: [solver_fail, nan, stale, exception, delay]
+  integrity: [bias, drift, intermittent_bias, saturate, output_delay]
+  timing_args: 'run_benchmark.py --fault-start (시뮬 초), --fault-duration (AV/run_benchmark.py:56-57). onset_event+offset_s → 절대 시각 변환은 호출자 몫 (pipeline/04_feasibility_expansion/scenario_space.py:104-106, sim-eval)'
+
+observation_requirement: >
+  모든 탐색 목표는 복구 성공 런과 실패 런을 모두 관측해야 경계를 추정한 것으로 본다.
+  전환이 일어나지 않은 런(no_trigger / triggered_no_switch)도 결과로 기록한다.
+  한쪽만 관측되면 '경계 미추정'으로 보고한다.
+
+limitations:
+  claims_not_made:
+    - 복구 성공 영역을 '측정'한 것은 그 영역의 안전성을 '수학적으로 보증'한 것이 아니다.
+    - 샘플 사이·밖의 영역에서 복구가 성공한다고 보장하지 않는다 (GP 예측은 추정치).
+    - 실패를 찾지 못했다고 안전이 증명되지 않는다.
+    - 결과는 CARLA 0.9.15, 사용한 경로·planner·차량·고장 모델에 한정된다.
+    - deadline_miss는 wall-clock 기준(AV/SUPERVISOR.md:13-14)이라 하드웨어 실시간성 보장이 아니다.

@@ -1,0 +1,36 @@
+# R_regression_verification.yaml — 회귀 검증 (H-03 등). 경계 탐색과 별개.
+# 현재 파이프라인은 이 파일을 읽지 않는다. 근거 코드: junwoo/sim-eval 9b51151 (AV = pipeline/08_carla_paired_run/av_stack/)
+
+meta:
+  schema: regression_spec
+  schema_version: '0.2'
+  status: design_draft_not_consumed_by_pipeline
+  supersedes: [P-CHATTERING-H-03]
+
+id: R
+legacy_ids: [H-03, H-08, H-10, H-11]
+title: Old-vs-New System Regression on Frozen Scenarios
+
+question_ko: '감독기·MPC·LQR을 고친 뒤 같은 시나리오에서 전환·복구 성능이 나빠졌는가?'
+comparison_baseline: old_system_version_vs_new_system_version   # 버전 식별자 = git commit (run_record source_commit)
+
+frozen_scenarios:
+  seed_set: 'scenario_space_av_stack.yaml:15-18 의 A/B/C (Bench2Drive 26956, 28035, town10_long, onset_s 고정)'
+  faults: 'scenario_space_av_stack.yaml F-01~F-07 (injector_mode 고정 파라미터)'
+  plus: 'S1~S3에서 찾은 경계 근처 시나리오를 동결해서 추가'
+  must_fix: [route_id, seed, planner, max_speed_kmh, injector_mode, fault_start, fault_duration, fault_magnitude, carla_version]
+
+metrics:
+  switching: [trigger_source, detection_delay_s, switch_count]
+  recovery: [recovery_robustness, recovery_success, margin_delta_m]
+  mpc_only: [lateral_error_rmse_m, deadline_miss_rate, mpc_constraint_violation_rate]   # H-08/H-10/H-11의 MPC 단독 지표는 여기로
+  decision: '구버전 대비 악화 판정 기준(허용 폭, 반복 수)은 미정 (TODO)'
+
+h03_chattering:
+  status: not_applicable_now
+  reason: 'return_to_mpc 없음, latch (safety_profile O-021; SUPERVISOR.md:11-12). MPC 재진입 기능이 추가되면 switch_count로 회귀 검사'
+
+optional_configuration_comparison:
+  note: '--controller mpc_unprotected (감독기·LQR 없음, SUPERVISOR.md:30-39) 대 supervised 비교는 버전 회귀가 아니라 구성 비교. 필요하면 별도 표시'
+
+limitations: {see: _common.yaml#limitations}

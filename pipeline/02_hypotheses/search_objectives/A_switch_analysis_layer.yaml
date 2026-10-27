@@ -1,0 +1,37 @@
+# A_switch_analysis_layer.yaml — 공통 분석 기록 (H-04 + H-05). 모든 S 런에 붙인다.
+# 현재 파이프라인은 이 파일을 읽지 않는다. 근거 코드: junwoo/sim-eval 9b51151 (AV = pipeline/08_carla_paired_run/av_stack/)
+
+meta:
+  schema: analysis_layer
+  schema_version: '0.2'
+  status: design_draft_not_consumed_by_pipeline
+  supersedes: [P-UNRECOVERABLE-SWITCH-H-04, P-BACKUP-SATURATION-H-05]
+
+id: A
+legacy_ids: [H-04, H-05]
+title: Switch-Moment State and Handover Command Analysis
+
+purpose: 'condition/control 검정 대신, 모든 런의 전환 순간 상태와 인계 명령을 기록해 S1~S4 결과를 설명하는 축으로 쓴다'
+
+record_at_switch:
+  switch_time: 'switched_at_s (supervised_lateral.py:115, record() :140-144)'
+  trigger_source: 'supervisor_reason (behavior.jsonl, monitor_logs.py:123-124)'
+  vehicle_state: 'steps.jsonl t, vx, vy, yaw_rate, e_y_lane, e_psi를 switch_time에 join (monitor_logs.py:121-122)'
+  lane_state: 'monitor_probe.jsonl lane_offset_m, lane_heading_err_rad, lane_width_m, ay_mps2, bbox_half_width_m (monitor_logs.py:80-91)'
+  applied_steer_before_after: 'PDM control log steer(정규화), source (pdm_agent.py:284-286)'
+
+derived:
+  command_jump_rad:
+    definition: 'outcome_definitions.command_jump_rad = abs(u_LQR(t_sw) - u_MPC(t_sw - dt))'
+    status: partially_available
+    note: 'LQR은 전환 전에는 계산되지 않음 (supervised_lateral.py:118 active=="lqr"일 때만). 그래서 전환 전 MPC-LQR 출력 차이(state_at_switch.mpc_lqr_command_gap_rad, docs/ARCHITECTURE.md:34)는 현재 로그로 계산 불가. 전환 직후 적용 조향과 직전 적용 조향 차이만 가능. control log steer는 CARLA 정규화값(to_carla_steer, carla_io.py:29-31)이라 max_steer_rad로 되돌려야 함 (TODO: max_steer_rad 기록)'
+  post_switch_saturation_ratio:
+    definition: 'outcome_definitions.post_switch_saturation_ratio'
+    rate_limit: '90 deg/s (safety_profile O-017)'
+    angle_limit: 'max_steer_rad 런타임 (O-007), 로그 미기록 TODO'
+  recoverability_label:
+    from: H-04
+    status: on_hold
+    note: 'P_matrix / level_c / reach_table 없음 (safety_profile recoverability). LQR이 속도별 gain이라 오라클도 속도별로 계산해야 함'
+
+limitations: {see: _common.yaml#limitations}

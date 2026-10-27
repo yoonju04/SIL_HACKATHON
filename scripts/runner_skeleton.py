@@ -76,6 +76,12 @@ BASELINE_MATCH_FIELDS = (
     "traffic",
     "speed_mps",
     "tire_friction_scale",
+    "vehicle_mass_scale",
+    "maneuver",
+    "velocity_disturbance",
+    "steering_disturbance",
+    "max_speed_kmh",
+    "planner",
 )
 
 # 09 run_record 스키마 (error_table.yaml의 results_schema.run_record 그대로).
@@ -83,7 +89,7 @@ RUN_RECORD_FIELDS = (
     "run_id", "scenario_id", "seed_scenario_id", "round", "selector",
     "profile_id", "source_commit", "feature_schema_version", "hypothesis_ids",
     "parameters", "planned_fault_onset", "actual_fault_onset", "trigger_time",
-    "switch_time", "switch_count", "outcome_category", "P01", "P02", "P03",
+    "trigger_source", "trigger_attribution", "switch_time", "switch_count", "outcome_category", "P01", "P02", "P03",
     "margin_delta_m", "switch_state_label", "metrics", "baseline_metrics", "gp_targets",
     "gp_mean", "gp_std", "sim_status", "invalid_reason",
 )

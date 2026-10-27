@@ -1,0 +1,101 @@
+# S1_operating_condition_recovery_boundary.yaml — S1 = H-01 + H-09 (search_objective v0.2)
+# 옛 파일명: H-01_lqr_off_design_recovery_boundary.yaml. 공통 규칙은 _common.yaml.
+# 현재 파이프라인은 이 파일을 읽지 않는다. 근거 코드: junwoo/sim-eval 9b51151 (AV = pipeline/08_carla_paired_run/av_stack/)
+
+meta:
+  schema: search_objective
+  schema_version: '0.2'
+  status: design_draft_not_consumed_by_pipeline
+  supersedes: [P-OFF-DESIGN-H-01, P-UNRECOVERABLE-SWITCH-H-09]
+  kind: recovery_boundary_exploration          # condition/control arm 없음
+
+id: S1
+legacy_ids: [H-01, H-09]
+title: Operating-Condition Recovery Boundary (was LQR Off-Design Recovery Boundary)
+
+objective:
+  description: >
+    Estimate the region where LQR recovery remains successful as operating
+    conditions (speed, curvature, friction) vary.
+  question_ko: >
+    MPC가 즉시 감지되는 고장으로 멈췄을 때, 속도·곡률·마찰이 어디까지면 LQR이 차선 안에서 복구하는가?
+  not_a_hypothesis_test: true
+
+# 코드 확인 결과 (safety_profile.yaml O-014, O-015):
+#   LQR gain은 속도 0.25 m/s 단위로 재계산(gain_scheduled)하고 곡률은 feed-forward로 보상한다.
+#   그래서 옛 H-01의 "고정 gain 설계점(속도·곡률)에서 벗어남" 전제는 이 코드에서는 성립하지 않는다.
+#   S1은 '설계점 편차'가 아니라 '운용 조건 자체'를 탐색 축으로 쓴다.
+design_point:
+  status: not_applicable_gain_scheduled          # O-014, O-015
+  remaining_off_design_sources:                  # 코드에 있는 모델 가정 (검증 전)
+    - 'cf/cr는 기본값을 질량 비율로 스케일 (AV/integration/carla_io.py:37-39, 70-72) → 실제 타이어와 불일치 가능'
+    - '마찰 파라미터 없음 (O-004) → 저마찰에서 모델 불일치 (H-09 출처)'
+    - '선형 오차 모델 (AV/lqr_controller/lqr.py:11-18) → 큰 e_y/e_psi에서 전환 시 성능 미지수'
+
+search_dimensions:
+  - name: max_speed_kmh
+    range: [10, 40]                              # scenario_space_av_stack.yaml:32 (cli --max-speed)
+    available: true
+  - name: route_and_onset_event                  # 곡률은 자유 변수가 아니라 경로·지점으로 정해짐
+    onset_event: [straight, curve_entry, curve_apex, curve_exit]   # scenario_space_av_stack.yaml:36
+    offset_s: [-1.0, 1.0]                        # :37
+    available: true
+  - name: tire_friction_scale                    # H-09에서 가져온 축
+    range: [0.3, 1.0]
+    available: false                             # scenario_space_av_stack.yaml:33 "run_benchmark 미지원. 추가 전까지 1.0"
+    todo: 'CARLA physics control로 마찰을 바꾸는 runner 인자 추가 필요'
+
+derived_features:
+  - name: nominal_lateral_acc_mps2               # DF-05, PK-001
+    formula: 'speed_mps^2 * abs(road_curvature_per_m)'
+  - name: speed_deviation_mps                    # 옛 H-01 / DF-01
+    status: not_applicable                       # 단일 설계 속도 없음 (O-014)
+  - name: curvature_deviation_per_m              # 옛 H-01 / DF-02
+    status: not_applicable                       # 설계 곡률 없음 (O-015)
+
+switch_trigger:
+  mechanism: injected_fault
+  injector_mode: solver_fail                     # AV/integration/fault_injection.py:111
+  expected_trigger: solver_failure               # supervised_lateral.py:29-30, 즉시 전환
+  why: '감지 지연이 0인 고장이라 LQR 복구 능력만 분리해서 볼 수 있음. 관측: "0.0 s에 전환" (scenario_space_av_stack.yaml:54-55, 1회씩)'
+  duration_s: [0.1, 3.0]                         # :52 (전환은 latch라 고장 길이는 복구에 영향 적음)
+
+evaluation:
+  - name: recovery_robustness
+    role: gp_target
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_robustness
+    boundary_level: 0
+    runtime_limits_from_logs:                    # 상수가 아니라 런마다 로그에서 읽음
+      lane_half_width: 'monitor_probe.jsonl lane_width_m / 2 (AV/integration/monitor_logs.py:84)'
+      vehicle_half_width: 'monitor_probe.jsonl bbox_half_width_m (monitor_logs.py:89)'
+      lateral_accel: 'monitor_probe.jsonl ay_mps2 (monitor_logs.py:87); 한계 a_y_max = safety_spec P-02 (null, TODO)'
+      steering_angle: 'max_steer_rad = CARLA 런타임 값 (O-007). 현재 로그 파일에 기록되지 않음 (TODO)'
+      steering_rate: '90 deg/s (O-017)'
+  - name: recovery_success
+    role: recorded_label
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_success
+    open_items: ['T_settle_s null, 인증서 없음 → 인증서 없이 쓸 판정 기준 확정 필요 (TODO)']
+  - name: margin_delta_m
+    role: secondary_recorded
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.margin_delta_m
+    note: '같은 경로·속도·시드의 무고장 baseline 필요 (paired_runs.yaml baseline_cache)'
+  - name: trigger_source
+    role: sanity_check
+    expect: solver_failure                       # 다른 값이면 S1 런으로 쓰지 않음 (S3 성격)
+
+search_strategy:
+  steps:
+    - {name: explore_operating_conditions, description: '속도 × 지점(곡률)을 공간 채우기로 넓게 샘플'}
+    - {name: refine_recovery_boundary, description: 'recovery_robustness 예측 ≈ 0 이고 불확실성 큰 점 우선. 획득 함수 미정 (TODO)'}
+  observation_requirement: '_common.yaml 참고 (성공·실패 모두 관측)'
+  arms: none
+
+scope_distinction: {see: R_regression_verification.yaml, note: '경계 탐색과 회귀 검증(구버전 vs 신버전)은 다른 목표'}
+limitations: {see: _common.yaml#limitations}
+
+todo:
+  - tire_friction_scale runner 인자 추가 (H-09 축)
+  - max_steer_rad를 summary/monitor 로그에 기록
+  - safety_spec P-02 lateral_acc_threshold_mps2 확정
+  - recovery_success 판정 기준(T_settle_s) 확정
+  - 경계 추정용 획득 함수 정의
