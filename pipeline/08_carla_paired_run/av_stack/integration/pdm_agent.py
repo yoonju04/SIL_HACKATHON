@@ -68,6 +68,7 @@ from integration.episode import build_controller, step_controller
 from integration.fault_injection import FaultConfig
 from integration.chase_view import ChaseView
 from integration.live_control import CapturingLongitudinal, ComfortPedals, LiveFaultCommands, SupervisorConsole
+from integration.monitor_logs import MonitorLogs
 from srunner.scenariomanager.timer import GameTime
 from integration.supervised_lateral import SupervisedLateral
 from integration.unprotected_lateral import UnprotectedMPC
@@ -157,6 +158,15 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             video = Path(self.options['out']) / 'view.mp4' if self.options.get('record_front', False) else None
             self.view = ChaseView(carla, self._world, self._vehicle, video)
             self.resources.callback(self.view.close)
+        self.monitor_logs = None
+        if self.options.get('monitor_logs', True):
+            # Intended lane for the 09 Monitor: the route before PDM-Lite's obstacle shifts, 1 m spacing.
+            route = np.array(self._waypoint_planner.original_route_points[::10, :2], float)
+            self.monitor_logs = MonitorLogs(carla, self._world, self._vehicle, route, Path(self.options['out']),
+                                            meta=dict(planner='PDM-Lite', controller=self.mode,
+                                                      fault_mode=self.fault.mode, fault_start=self.fault.at_s,
+                                                      fault_magnitude=self.fault.magnitude))
+            self.resources.callback(self.monitor_logs.close)
 
     def _hold_lights_green(self) -> None:
         """--green-lights: the light the ego approaches turns green, its junction's others red.
@@ -286,6 +296,11 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             record.update(self.lateral.record())
         self.control_log.write(json.dumps(record)+chr(10))
         self.control_log.flush()
+        if getattr(self, 'monitor_logs', None) is not None and result is not None:
+            _, _, _, vx, vy, yaw_rate = read_state(self._vehicle)
+            self.monitor_logs.record(self.elapsed, vx, vy, yaw_rate, float(result.e_y), float(result.e_psi),
+                                     active, getattr(self.lateral, 'reason', None),
+                                     self.fault.active(self.elapsed), safe_stop)
         stop_after = self.options.get('stop_after_fault')
         self.stop_requested = bool(stop_after is not None and self.fault.config_active_since(self.elapsed, stop_after))
         return control

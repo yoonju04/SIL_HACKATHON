@@ -3,11 +3,13 @@
 #   powershell -ExecutionPolicy Bypass -File .\start_carla_stable.ps1 [-Quality Epic]
 param([ValidateSet('Low', 'Epic')][string]$Quality = 'Epic')
 $ErrorActionPreference = 'Stop'
-# CARLA_ROOT (the WindowsNoEditor folder) if set, else the CARLA folder next to the repository.
+# CARLA_ROOT (the WindowsNoEditor folder) if set, else a CARLA folder in a parent directory, e.g. next to the repository.
 $carlaRoot = $env:CARLA_ROOT
-if (-not $carlaRoot) {
-    $carlaRoot = @('CARLA_0.9.15', 'CALRA 0.9.15') | ForEach-Object { Join-Path $PSScriptRoot "..\..\$_\WindowsNoEditor" } |
+$parent = Split-Path $PSScriptRoot -Parent
+while (-not $carlaRoot -and $parent) {
+    $carlaRoot = @('CARLA_0.9.15', 'CALRA 0.9.15') | ForEach-Object { Join-Path $parent "$_\WindowsNoEditor" } |
         Where-Object { Test-Path $_ } | Select-Object -First 1
+    $parent = Split-Path $parent -Parent
 }
 $carlaProgram = Join-Path $carlaRoot 'CarlaUE4.exe'
 $runningCarla = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'CarlaUE4-Win64-Shipping.exe' }

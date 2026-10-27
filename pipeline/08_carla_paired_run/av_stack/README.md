@@ -68,7 +68,7 @@ flowchart LR
 Requirements: CARLA 0.9.15 (Windows build) next to this repository or `CARLA_ROOT` set to its
 `WindowsNoEditor` folder; Python 3.10 environment `.venv-tfpp` (see [Setup](#setup)); a GPU is not needed for the PDM-Lite path.
 
-All commands run in PowerShell from the `av_stack` folder.
+All commands run in PowerShell from the `pipeline/08_carla_paired_run/av_stack` folder (pipeline stage 08).
 
 **1. Start CARLA**
 ```powershell
@@ -202,7 +202,7 @@ python run_offline.py --controller mpc --plot
 ## Repository layout
 
 ```
-av_stack/
+pipeline/08_carla_paired_run/av_stack/
 ├─ planner/            reference trajectory (cubic spline, speed profile, lane change)
 ├─ mpc_controller/     Autoware MPC port + ADMM QP solver
 ├─ lqr_controller/     Apollo LQR port

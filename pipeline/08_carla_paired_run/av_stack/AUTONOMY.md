@@ -57,7 +57,7 @@ Start `C:\Users\dongh\Desktop\junwoo\CALRA 0.9.15\WindowsNoEditor\CarlaUE4.exe`
 yourself. Keep SimLingo and other synchronous tick-driving clients stopped.
 
 ```powershell
-cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\av_stack"
+cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack"
 $PY = "C:\Users\dongh\.conda\envs\carla\python.exe"
 $env:OPENBLAS_NUM_THREADS = "1"
 $env:OMP_NUM_THREADS = "1"

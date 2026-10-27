@@ -15,7 +15,7 @@
 공식 PID의 run_step은 실행하지 않습니다. 긴급 정지 판단은 가속을 차단하고 제동합니다.
 
 ```powershell
-cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\av_stack"
+cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack"
 $PY = "C:\Users\dongh\.conda\envs\carla\python.exe"
 # CARLA 서버는 먼저 직접 실행합니다.
 & $PY run_autonomy.py --controller lqr --town Town04 --spawn 10 --speed 5 --route-length 300 --duration 90 --follow --plot --out runs\autonomy_lqr

@@ -43,7 +43,7 @@ Start-Process -FilePath "C:\Users\dongh\Desktop\junwoo\CALRA 0.9.15\WindowsNoEdi
 Then, after the server is ready:
 
 ```powershell
-cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\av_stack"
+cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack"
 $PY = "C:\Users\dongh\.conda\envs\carla\python.exe"
 & $PY tools\wait_carla.py
 
@@ -101,7 +101,7 @@ The stock tool accepts the recorded filename and an actor ID to follow. Use the
 `ego_actor_id` in that run's scenario.json, not a hardcoded ID from another run:
 
 ```powershell
-$RUN = "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\av_stack\runs\urban_mpc"
+$RUN = "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack\runs\urban_mpc"
 $EGO_ID = (Get-Content "$RUN\scenario.json" -Raw | ConvertFrom-Json).ego_actor_id
 & $PY "..\..\CALRA 0.9.15\WindowsNoEditor\PythonAPI\examples\start_replaying.py" -f "$RUN\replay.log" -c $EGO_ID --move-spectator
 ```
