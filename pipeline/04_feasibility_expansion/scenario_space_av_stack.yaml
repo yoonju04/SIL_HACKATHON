@@ -1,18 +1,24 @@
 # scenario_space_av_stack.yaml — av_stack(PDM-Lite + MPC/LQR 감독기)용 탐색 공간: 환경 × 고장 × 주입 시점
 # 고장 표와 설명은 README.md. 읽기·검증·샘플링·실행 인자 변환은 scenario_space.py.
-# 팀 템플릿 scenario_space.yaml(F-01~03 지연 계열)과 ID가 다르다. 이 파일의 F-01~09는 이 파일 안에서만 쓴다.
+# 팀 템플릿 scenario_space.yaml(F-01~03 지연 계열)과 ID가 다르다. 이 파일의 F-01~07은 이 파일 안에서만 쓴다.
+# observations = 실제 실행 결과(조건과 횟수 포함), next_question = 다음에 검증할 가설.
+# 한 번 나온 결과를 모든 상황의 특성으로 일반화하지 않는다.
 
 meta:
-  schema_version: '1.0'
+  schema_version: '1.1'
   profile_id: sp-av-stack-pdm-supervised
   status: draft
-  expectation_basis: "measured = CARLA 실측, estimated = 감독기 코드 구조와 논문 기반 추정"
+  observation_sources:
+    route_26956: "av_stack/runs/campaign_26956_1025_0202/summary.md (PDM, supervised, 주입 11.5 s, 조건당 1회)"
+    town10_live: "av_stack/runs/town10_live_check.log (town10_long, 30 km/h, tools/inject.py 라이브 주입)"
 
 # 감독기 동작 (pipeline/08_carla_paired_run/av_stack/integration/supervised_lateral.py)
 supervisor:
   period_s: 0.05
   instant_checks: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range,
                    deadline_miss, stale_output, stale_sequence]
+  stale_output_tolerance_s: 0.1                 # |t - stamp| > 0.1 s면 전환
+  steer_out_of_range: "최대각 초과만 검사 (정확히 최대각은 통과)"
   tracking_divergence: {e_y_m: 1.0, e_psi_rad: 0.6, hold_s: 0.25,
                         note: "MPC가 보고한 오차를 씀. 정상 샘플 하나면 타이머 리셋"}
   latched: true                                 # LQR로 넘어가면 MPC로 돌아오지 않음
@@ -25,108 +31,124 @@ fault_timing:
   onset_event: {values: [straight, curve_entry, curve_apex, curve_exit]}
   offset_s:    {range: [-1.0, 1.0], unit: s}
 
-# expectation 등급: low, low_medium, medium, medium_high, high, very_high
-# layer: mpc_output = MPC 조향 출력, mpc_report = 감독기에 보고하는 오차, state_input = 제어기 입력 위치
+# group: control = 대조군, risk = 위험 고장
 faults:
   - id: F-01
     name: solver_fail
     group: control
+    role: 명시적 계산 실패
     description: "MPC가 '답을 못 구했다'고 보고"
+    check: "실패 상태를 받으면 정상 전환하는가"
     layer: mpc_output
     injector_mode: solver_fail
     implemented: true
-    expectation: {switch_failure: low, post_switch_instability: low, basis: measured}
     params:
       duration_s: {range: [0.1, 3.0], unit: s}
+    observations:
+      - {source: route_26956, result: "0.0 s에 전환 (solver_failure), 최대 e_y 0.625 m, 차선 이탈 0%, 점수 100", runs: 1}
+      - {source: town10_live, result: "0.0 s에 전환 (30 km/h, 60 km/h 각 1회)", runs: 2}
+    next_question: "커브 정점·고속에서 전환 직후 조향 점프와 회복 거리는 얼마인가"
 
   - id: F-02
     name: stale
     group: control
-    description: "MPC가 직전에 낸 답을 그대로 반복"
+    role: 오래된 메시지
+    description: "직전 메시지를 값·시각·번호까지 통째로 반복 (freshness 단서가 남는 경우)"
+    check: "출력 중단을 제때 감지하는가"
     layer: mpc_output
     injector_mode: stale
     implemented: true
-    expectation: {switch_failure: low, post_switch_instability: low, basis: estimated}
     params:
       duration_s: {range: [0.1, 3.0], unit: s}
+    observations:
+      - {source: route_26956, result: "0.0 s에 전환 (stale_sequence)", runs: 1}
+    next_question: "값만 고정하고 시각·번호를 갱신하면 감지되는가 (확장 E-01)"
 
   - id: F-03
+    name: output_delay
+    group: risk
+    role: 시간 문제
+    description: "MPC 명령을 k틱 늦게 적용 (원래 시각 유지)"
+    check: "늦은 명령 처리와 전환 지연"
+    layer: mpc_output
+    injector_mode: output_delay
+    implemented: false
+    params:
+      delay_ticks: {values: [1, 2, 3, 4, 6]}
+      duration_s:  {range: [0.5, 5.0], unit: s}
+    observations: []
+    note: "기존 injector의 delay(75 ms sleep)는 deadline_miss로 0.0 s에 전환되고, 동기 모드라 차량 영향이 없다 (route_26956). 이 고장과 다르다."
+    next_question: "k <= 2틱(0.1 s 이하)은 시각 검사를 통과해 감지 없이 주행에 영향을 주는가"
+
+  - id: F-04
     name: bias
     group: risk
-    description: "조향값에 작은 각도를 계속 더함"
+    role: 은밀한 값 오염
+    description: "조향값에 일정한 각도를 계속 더함"
+    check: "감지 누락과 전환 후 회복"
     layer: mpc_output
     injector_mode: bias
     implemented: true
-    expectation: {switch_failure: high, post_switch_instability: medium, basis: measured}
     params:
       magnitude_rad: {range: [0.02, 0.10], unit: rad}
+    observations:
+      - {source: town10_live, result: "0.05 rad: 전환 못 함", runs: 1}
+      - {source: route_26956, result: "0.02 rad: 전환 못 함, 최대 e_y 0.707 m", runs: 1}
+      - {source: route_26956, result: "0.05 rad: 4.7 s 뒤 전환 (tracking_divergence), 최대 e_y 1.129 m", runs: 1}
+      - {source: route_26956, result: "0.10 rad: 2.3 s 뒤 전환 (tracking_divergence), 최대 e_y 1.566 m", runs: 1}
+    next_question: "속도·곡률·주입 방향을 바꿔도 감지하지 못하는가. 감지 경계 크기는 어디인가"
 
-  - id: F-04
+  - id: F-05
     name: drift
     group: risk
+    role: 점진적 값 오염
     description: "조향 오차가 시간이 갈수록 커짐"
+    check: "악화 속도에 따른 감지·전환 지연"
     layer: mpc_output
     injector_mode: drift
     implemented: true
-    expectation: {switch_failure: high, post_switch_instability: medium_high, basis: measured}
     params:
       rate_rad_s: {range: [0.005, 0.05], unit: rad/s}
-
-  - id: F-05
-    name: scale
-    group: risk
-    description: "조향값을 일정 비율로 줄이거나 키움 (커브에서만 티 남)"
-    layer: mpc_output
-    injector_mode: scale
-    implemented: false
-    expectation: {switch_failure: medium, post_switch_instability: medium, basis: estimated}
-    params:
-      factor: {ranges: [[0.5, 0.9], [1.1, 1.5]]}
+    observations:
+      - {source: route_26956, result: "0.05 rad/s: 2.6 s 뒤 전환 (tracking_divergence), 최대 e_y 1.457 m", runs: 1}
+      - {source: route_26956, result: "0.02 rad/s: 2.0 s 뒤 전환했지만 이유가 deadline_miss (drift 감지 아님)", runs: 1}
+    next_question: "악화 속도와 전환 지연은 어떤 관계인가. 우연한 deadline_miss는 기준 실행에서도 생기는가"
 
   - id: F-06
     name: saturate
     group: risk
-    description: "조향을 최대각에 고정"
+    role: 급격한 이상
+    description: "조향을 정확히 최대각에 고정 (범위 검사 통과)"
+    check: "급격히 악화된 상태에서의 인계·회복"
     layer: mpc_output
     injector_mode: saturate
     implemented: false
-    expectation: {switch_failure: low_medium, post_switch_instability: high, basis: estimated}
     params:
       duration_s: {range: [0.1, 1.0], unit: s}
       side:       {values: [left, right]}
+    observations: []
+    next_question: "오차 1 m + 0.25 s 뒤 전환될 때 LQR이 차선 안에서 회복하는가"
 
   - id: F-07
-    name: localization_offset
+    name: intermittent_bias
     group: risk
-    description: "제어기가 받는 차량 위치를 옆으로 틀리게 줌 (LQR도 같이 틀림)"
-    layer: state_input
-    injector_mode: localization_offset
-    implemented: false
-    expectation: {switch_failure: high, post_switch_instability: high, basis: estimated}
-    params:
-      lateral_offset_m: {range: [0.1, 0.6], unit: m}
-      latency_ms:       {range: [0, 200], unit: ms}
-
-  - id: F-08
-    name: covert
-    group: risk
-    description: "조향을 틀리게 하면서 감독기에 보고하는 오차는 정상값으로 거짓 보고"
-    layer: [mpc_output, mpc_report]
-    injector_mode: covert
-    implemented: false
-    expectation: {switch_failure: very_high, post_switch_instability: high, basis: estimated}
-    params:
-      bias_rad: {range: [0.05, 0.2], unit: rad}
-
-  - id: F-09
-    name: threshold_dither
-    group: risk
-    description: "횡오차가 1 m 감지선 근처를 오르내리게 해서 감지 타이머를 계속 리셋"
+    role: 감독기 취약점
+    description: "bias를 간헐·주기적으로 켜고 끔"
+    check: "타이머 리셋으로 인한 전환 누락"
     layer: mpc_output
-    injector_mode: threshold_dither
+    injector_mode: intermittent_bias
     implemented: false
-    expectation: {switch_failure: high, post_switch_instability: medium_high, basis: estimated}
     params:
-      base_bias_rad: {range: [0.06, 0.12], unit: rad}
-      dither_rad:    {range: [0.01, 0.05], unit: rad}
-      period_s:      {range: [0.2, 1.0], unit: s}
+      magnitude_rad: {range: [0.05, 0.15], unit: rad}
+      on_s:          {range: [0.1, 1.0], unit: s}
+      off_s:         {range: [0.05, 1.0], unit: s}
+    observations: []
+    next_question: "이상 조건이 반복해서 해제돼 감지 타이머가 초기화되는가 (경계 근처 진동 유도는 후속)"
+
+# 확장 목록: 샘플링하지 않음
+extensions:
+  - {id: E-01, name: header_refresh_replay, description: "값은 고정, 시각·번호는 갱신 (정상 메시지처럼 보임)"}
+  - {id: E-02, name: localization_offset, description: "제어기가 받는 차량 위치를 옆으로 틀리게 줌. LQR도 같이 오염되므로 MPC 단독 고장과 분리"}
+  - {id: E-03, name: covert, description: "조향 오염 + 감독기에 보고하는 오차 위조. 감독기가 쓰는 정보의 출처에 따라 시험 의미가 달라짐"}
+  - {id: E-04, name: scale, description: "조향 × k. 첫 버전은 bias·drift에 탐색 집중"}
+  - {id: E-05, name: threshold_dither, description: "횡오차를 1 m 경계 근처에서 오르내리게 유도 (F-07 후속)"}

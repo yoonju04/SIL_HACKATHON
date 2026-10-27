@@ -20,7 +20,6 @@ import yaml
 
 DEFAULT_PATH = Path(__file__).with_name('scenario_space_av_stack.yaml')
 GROUPS = ('control', 'risk')
-LEVELS = ('low', 'low_medium', 'medium', 'medium_high', 'high', 'very_high')
 WHOLE_RUN_S = 500.0  # fault window for faults without a duration: stays on until the route ends
 
 
@@ -43,17 +42,21 @@ def _check_param(name: str, spec: Dict[str, Any]) -> List[str]:
 def check(space: Dict[str, Any]) -> List[str]:
     """Return problems in the space; an empty list means it is usable."""
     problems: List[str] = []
-    ids = [fault.get('id') for fault in space.get('faults', [])]
+    ids = [item.get('id') for item in space.get('faults', []) + space.get('extensions', [])]
     if len(ids) != len(set(ids)):
         problems.append('duplicate fault ids')
+    sources = space.get('meta', {}).get('observation_sources', {})
     for fault in space.get('faults', []):
         fid = fault.get('id', '?')
         if fault.get('group') not in GROUPS:
             problems.append('%s: group must be one of %s' % (fid, GROUPS))
-        expectation = fault.get('expectation', {})
-        for key in ('switch_failure', 'post_switch_instability'):
-            if expectation.get(key) not in LEVELS:
-                problems.append('%s: expectation.%s must be one of %s' % (fid, key, LEVELS))
+        if not fault.get('next_question'):
+            problems.append('%s: next_question is empty' % fid)
+        for observation in fault.get('observations', []):
+            if observation.get('source') not in sources:
+                problems.append('%s: observation source %r not in meta.observation_sources' % (fid, observation.get('source')))
+            if not isinstance(observation.get('runs'), int) or observation['runs'] < 1:
+                problems.append('%s: observation runs must be a positive integer' % fid)
         for name, spec in fault.get('params', {}).items():
             problems += _check_param('%s.%s' % (fid, name), spec)
     for name, spec in space.get('environment', {}).items():
@@ -165,10 +168,11 @@ def main() -> int:
         return 1
     if args.check or not args.sample:
         for fault in space['faults']:
-            expectation = fault['expectation']
-            print('%s %-20s %-7s switch_failure=%-11s post_switch=%-11s %s' % (
-                fault['id'], fault['name'], fault['group'], expectation['switch_failure'],
-                expectation['post_switch_instability'], 'ready' if fault['implemented'] else 'not in injector'))
+            print('%s %-18s %-7s %-16s observations=%d' % (
+                fault['id'], fault['name'], fault['group'],
+                'ready' if fault['implemented'] else 'not in injector', len(fault.get('observations', []))))
+        for extension in space.get('extensions', []):
+            print('%s %-18s (extension, not sampled)' % (extension['id'], extension['name']))
     if args.sample:
         rng = random.Random(args.seed)
         for _ in range(args.sample):
