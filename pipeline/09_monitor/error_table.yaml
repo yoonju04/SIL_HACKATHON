@@ -16,7 +16,7 @@ results_schema:
                source_commit, feature_schema_version, hypothesis_ids, parameters,
                planned_fault_onset, actual_fault_onset, trigger_time, trigger_source,
                trigger_attribution, switch_time,
-               switch_count, outcome_category, P01, P02, P03, margin_delta_m,
+               switch_count, switch_state, handover_saturation, outcome_category, P01, P02, P03, margin_delta_m,
                switch_state_label, metrics, baseline_metrics, gp_targets,
                gp_mean, gp_std, sim_status, invalid_reason]
   # metrics / baseline_metrics: 02 metric_rules의 모든 지표 + 보조 지표 (정의: 02 outcome_definitions)
@@ -36,6 +36,26 @@ results_schema:
   # trigger_attribution: 모니터가 사후에 계산 (감독기는 주입 여부를 보지 않음, supervised_lateral.py:20).
   #   fault 설정(mode, fault_start, duration)과 trigger_time을 비교한다. S3/S4 원인 구분용.
   trigger_attribution_values: [no_fault_configured, inside_fault_window, outside_fault_window, no_switch]
+  # switch_state / handover_saturation: S1 탐색 축 (02 search_objectives/S1_...yaml derived_axes).
+  #   전환이 없으면 null. 계산 불가 하위 필드는 null (0 금지). 출처는 sim-eval 9b51151 av_stack 런 출력.
+  switch_state_fields:
+    e_y_at_switch:   {source: 'agent_controls.jsonl tracking_error @ t = switched_at_s (integration/pdm_agent.py:287)', available: true}
+    e_psi_at_switch: {source: 'agent_controls.jsonl heading_error @ t = switched_at_s (pdm_agent.py:288)', available: true}
+    e_y_dot_at_switch: {source: 'steps.jsonl vx, vy + heading_error, vx*sin(e_psi)+vy*cos(e_psi) (lqr_controller/reference.py:72)', available: derived}
+    e_psi_dot_at_switch: {source: 'yaw_rate - kappa*vx (reference.py:73)', available: false, todo: 'kappa 로깅 (S1 logging_todo L-3)'}
+    normalized_switch_error: {source: 'max(|e_y|/1.0, |e_psi|/0.6), supervised_lateral.py:45 임계값', available: true}
+    speed_at_switch_mps: {source: 'steps.jsonl vx', available: true}
+    kappa_at_switch: {source: null, available: false, todo: L-3}
+  handover_saturation_fields:
+    window_s: 1.0     # outcome_definitions.post_switch_saturation_ratio와 같은 창
+    max_steer_rad: {source: 'agent_config.json geometry.max_steer_rad (integration/tfpp_benchmark.py:111-113)', available: true}
+    rate_limit_dps: {source: '구성 상수 PDM 90 (pdm_agent.py:86) / TF++ 60 (supervised_lateral.py:82)', available: 'config, 런 메타에는 없음 (L-2)'}
+    angle_saturation_ratio: {source: 'agent_controls.jsonl steer, |steer| >= 1-eps (integration/carla_io.py:29-31)', available: true}
+    rate_saturation_ratio: {source: '|Δsteer|*max_steer_rad/0.05 >= rate_limit-eps', available: true}
+    time_in_saturation_s: {source: '각도 또는 속도 포화 틱 수 * 0.05', available: true}
+    first_lqr_command_unclipped_rad: {source: null, available: false, todo: 'LQROutput steer_feedback+steer_feedforward 기록 (L-1)'}
+    predicted_first_lqr_command_ratio: {source: 'first_lqr_command_unclipped_rad / max_steer_rad', available: false, todo: L-1}
+    required_steer_rate_ratio: {source: '|u_unclipped(t_sw) - u_applied(t_sw-dt)|/dt / rate_limit', available: false, todo: L-1}
   failure_table: [scenario_id, violated_property, originating_evidence_ids,
                   hypothesis_ids, trigger_source, trigger_attribution, environment, fault, onset_event,
                   observed_switch_behavior, robustness, reproduction_count]

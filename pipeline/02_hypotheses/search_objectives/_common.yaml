@@ -7,11 +7,11 @@ meta:
   status: design_draft_not_consumed_by_pipeline
 
 set:
-  S1: {file: S1_operating_condition_recovery_boundary.yaml, kind: recovery_boundary_exploration, source_hypotheses: [H-01, H-09]}
+  S1: {file: S1_operating_condition_recovery_boundary.yaml, kind: recovery_boundary_exploration, source_hypotheses: [H-01, H-04, H-05, H-09]}
   S2: {file: S2_fault_timing_detection_delay_boundary.yaml, kind: recovery_boundary_exploration, source_hypotheses: [H-02, H-06]}
   S3: {file: S3_natural_mpc_degradation.yaml, kind: natural_switch_exploration, source_hypotheses: [H-10, H-08, H-11]}
   S4: {file: S4_stress_plus_fault.yaml, kind: optional, source_hypotheses: [S2, S3]}
-  A:  {file: A_switch_analysis_layer.yaml, kind: recorded_on_every_run, source_hypotheses: [H-04, H-05]}
+  A:  {file: A_switch_analysis_layer.yaml, kind: recorded_on_every_run, source_hypotheses: []}   # H-04/H-05는 S1로 이동
   R:  {file: R_regression_verification.yaml, kind: regression_verification, source_hypotheses: [H-03, H-08, H-10, H-11]}
 on_hold: [H-07]   # 오라클 방법 검증용, 보류
 

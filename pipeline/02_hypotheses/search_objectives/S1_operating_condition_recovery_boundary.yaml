@@ -1,76 +1,170 @@
-# S1_operating_condition_recovery_boundary.yaml — S1 = H-01 + H-09 (search_objective v0.2)
-# 옛 파일명: H-01_lqr_off_design_recovery_boundary.yaml. 공통 규칙은 _common.yaml.
-# 현재 파이프라인은 이 파일을 읽지 않는다. 근거 코드: junwoo/sim-eval 9b51151 (AV = pipeline/08_carla_paired_run/av_stack/)
+# S1_operating_condition_recovery_boundary.yaml — S1 (search_objective v0.3)
+# S1 = LQR 인계 경계: 전환 순간 오차 상태(선형화 가정) × 액추에이터 한계(조향각·조향속도 포화)
+# 출처 가설: H-01(복구 경계 틀), H-04(전환 순간 상태), H-05(포화), H-09(마찰, 선택 축)
+# 파일명은 추적을 위해 유지 (옛 이름 H-01_lqr_off_design_recovery_boundary.yaml). 공통 규칙은 _common.yaml.
+# 현재 파이프라인은 이 파일을 읽지 않는다.
+# 근거 코드: junwoo/sim-eval 9b51151, AV = pipeline/08_carla_paired_run/av_stack/
 
 meta:
   schema: search_objective
-  schema_version: '0.2'
+  schema_version: '0.3'
   status: design_draft_not_consumed_by_pipeline
-  supersedes: [P-OFF-DESIGN-H-01, P-UNRECOVERABLE-SWITCH-H-09]
+  supersedes: [P-OFF-DESIGN-H-01, P-UNRECOVERABLE-SWITCH-H-04, P-BACKUP-SATURATION-H-05, P-UNRECOVERABLE-SWITCH-H-09]
   kind: recovery_boundary_exploration          # condition/control arm 없음
 
 id: S1
-legacy_ids: [H-01, H-09]
-title: Operating-Condition Recovery Boundary (was LQR Off-Design Recovery Boundary)
+legacy_ids: [H-01, H-04, H-05, H-09]
+title: LQR Handover Boundary — Switch-Moment Error State x Actuator Limits
 
 objective:
   description: >
-    Estimate the region where LQR recovery remains successful as operating
-    conditions (speed, curvature, friction) vary.
+    Estimate where LQR recovery remains successful as a function of (a) the error state
+    at the moment of the MPC->LQR switch, which tests LQR's small-error linear-model
+    assumption, and (b) how strongly the first LQR commands are clipped by the steering
+    angle and steering-rate limits.
   question_ko: >
-    MPC가 즉시 감지되는 고장으로 멈췄을 때, 속도·곡률·마찰이 어디까지면 LQR이 차선 안에서 복구하는가?
+    전환 순간 차가 경로에서 얼마나 벗어나 있으면(오차 상태), 그리고 LQR 명령이 조향각·조향속도
+    한계에 얼마나 걸리면, LQR이 차선 안에서 복구하지 못하는가?
   not_a_hypothesis_test: true
 
-# 코드 확인 결과 (safety_profile.yaml O-014, O-015):
-#   LQR gain은 속도 0.25 m/s 단위로 재계산(gain_scheduled)하고 곡률은 feed-forward로 보상한다.
-#   그래서 옛 H-01의 "고정 gain 설계점(속도·곡률)에서 벗어남" 전제는 이 코드에서는 성립하지 않는다.
-#   S1은 '설계점 편차'가 아니라 '운용 조건 자체'를 탐색 축으로 쓴다.
-design_point:
-  status: not_applicable_gain_scheduled          # O-014, O-015
-  remaining_off_design_sources:                  # 코드에 있는 모델 가정 (검증 전)
-    - 'cf/cr는 기본값을 질량 비율로 스케일 (AV/integration/carla_io.py:37-39, 70-72) → 실제 타이어와 불일치 가능'
-    - '마찰 파라미터 없음 (O-004) → 저마찰에서 모델 불일치 (H-09 출처)'
-    - '선형 오차 모델 (AV/lqr_controller/lqr.py:11-18) → 큰 e_y/e_psi에서 전환 시 성능 미지수'
+dropped_framing:
+  design_point_deviation: >
+    옛 H-01의 '고정 gain 설계점(속도·곡률)에서 벗어남' 틀은 버린다. LQR gain은 속도 0.25 m/s 단위로
+    Riccati를 다시 풀어 쓰고(AV/lqr_controller/lqr.py:21-22, 140-148), 곡률은 feed-forward로
+    보상한다(lqr.py:23-24, 150-155). 속도·곡률은 문맥 축으로만 남는다.
 
-search_dimensions:
-  - name: max_speed_kmh
-    range: [10, 40]                              # scenario_space_av_stack.yaml:32 (cli --max-speed)
-    available: true
-  - name: route_and_onset_event                  # 곡률은 자유 변수가 아니라 경로·지점으로 정해짐
-    onset_event: [straight, curve_entry, curve_apex, curve_exit]   # scenario_space_av_stack.yaml:36
-    offset_s: [-1.0, 1.0]                        # :37
-    available: true
-  - name: tire_friction_scale                    # H-09에서 가져온 축
-    range: [0.3, 1.0]
-    available: false                             # scenario_space_av_stack.yaml:33 "run_benchmark 미지원. 추가 전까지 1.0"
-    todo: 'CARLA physics control로 마찰을 바꾸는 runner 인자 추가 필요'
+# ---------------------------------------------------------------- 대상 구성
+system_under_test:
+  lqr_error_state: '[e_y, e_y_dot, e_psi, e_psi_dot] (AV/lqr_controller/reference.py:66-74)'
+  error_definitions:
+    e_y: '경로 최근접 선분 기준 횡오차, 왼쪽 + (reference.py:35, 60)'
+    e_y_dot: 'vx*sin(e_psi) + vy*cos(e_psi) (reference.py:72)'
+    e_psi: 'wrap(yaw - yaw_ref) (reference.py:69)'
+    e_psi_dot: 'yaw_rate - kappa*vx (reference.py:73)'
+  linear_model: 'x_dot = A(v) x + B delta, 선형 오차 모델 (lqr.py:11-18)'
+  command: 'delta = clip(-K x + delta_ff, ±limit) (lqr.py:166-172), limit = max_steer_rad (max_lat_acc 옵션은 미사용)'
+  rate_limit_after_takeover: 'supervised_lateral.py:131-133, 직전 적용 조향 기준 ±rate*dt'
+  configs:                                   # planner 선택은 아직 미정 (remaining decision)
+    pdm: {Q: '(0.5, 0, 1, 0)', R: 1.0, preview_s: 0.2, rate_limit_dps: 90, source: 'AV/integration/pdm_agent.py:85-86, 227-229'}
+    tfpp_default: {Q: '(0.05, 0, 1, 0)', R: 1.0, preview_s: 0.0, rate_limit_dps: 60, source: 'lqr.py:66-73; supervised_lateral.py:82; tfpp_control.py:52'}
+  max_steer_rad: 'CARLA 앞바퀴 max_steer_angle 평균 (AV/integration/carla_io.py:48-49), 런 출력 agent_config.json의 geometry에 저장 (tfpp_benchmark.py:111-113; run_benchmark.py:106-107)'
+  steering_normalization: 'CARLA steer = -delta/max_steer, [-1,1] clip (carla_io.py:29-31). steering curve를 1.0으로 평탄화해서 이 관계가 모든 속도에서 성립 (carla_io.py:75-80; tfpp_benchmark.py:109-110)'
 
-derived_features:
-  - name: nominal_lateral_acc_mps2               # DF-05, PK-001
-    formula: 'speed_mps^2 * abs(road_curvature_per_m)'
-  - name: speed_deviation_mps                    # 옛 H-01 / DF-01
-    status: not_applicable                       # 단일 설계 속도 없음 (O-014)
-  - name: curvature_deviation_per_m              # 옛 H-01 / DF-02
-    status: not_applicable                       # 설계 곡률 없음 (O-015)
+# ---------------------------------------------------------------- 전환 순간 상태를 만드는 방법
+# 전환 순간 오차는 입력이 아니라 결과다. 아래 '제어 입력'으로 간접 조절한다.
+switch_state_control:
+  natural_switch_bound: >
+    tracking_divergence는 |e_y|>1.0 m 또는 |e_psi|>0.6 rad가 0.25 s 지속될 때 울린다
+    (AV/integration/supervised_lateral.py:45-51). 그래서 이 트리거로 전환되면 전환 순간 오차는
+    대략 임계값 이상(+0.25 s 동안 더 커진 만큼)으로 고정된다. 임계값보다 작은 오차에서의 전환은
+    즉시 검사 트리거(solver_failure 등)로만 만들 수 있고, 임계값보다 훨씬 큰 오차는 감지가 늦어질 때만 생긴다.
+  detection_delay_sources_seen:
+    output_delay: '옛 상태(state)를 감독기에 보냄 (AV/integration/fault_injection.py:100-103) → 추종 오차 감지가 늦어짐. 관측 최대 편차 4.86 m (pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:85)'
+    saturate: '최대각 정확히 = 범위 검사 통과 (AV/integration/fault_injection.py:95-98; supervised_lateral.py:36). 관측 0.70~0.85 s 뒤 전환, 최대 편차 7~9 m (pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:140-142)'
+  methods:
+    - id: M-1
+      name: single_fault_natural_detection
+      supported_now: true
+      how: '열화 고장 하나(bias/drift/intermittent_bias/saturate/output_delay) + 크기 + 시작 시각. 전환 시각은 감독기가 정함'
+      reachable_region: '오차 ≥ 대략 tracking_divergence 임계값 (또는 감지 지연 고장이면 더 큼)'
+      cli: '--mpc-fault MODE --fault-magnitude M --fault-start T --fault-duration D [--fault-on/--fault-off] (AV/run_benchmark.py:50-57)'
+    - id: M-2
+      name: single_fault_immediate_switch
+      supported_now: true
+      how: 'solver_fail를 원하는 시각에 주입 → 같은 틱 전환 (AV/integration/fault_injection.py:111; supervised_lateral.py:29-30, 113-117)'
+      reachable_region: '그 순간의 정상 MPC 추종 오차 (작음, 무고장 기준 최대 편차 0.22~0.46 m, pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:85-87)'
+    - id: M-3
+      name: two_stage_degrade_then_force_switch
+      supported_now: false
+      why_not: >
+        FaultConfig는 모드 하나·시작·길이 하나만 가진다 (AV/integration/fault_injection.py:28-35), MPCFaultInjector.apply도
+        config 하나만 본다 (fault_injection.py:105-122). 실행 중 모드를 바꾸는 길은 live 명령 파일뿐인데
+        (AV/integration/live_control.py:28-41, pdm_agent.py:256-262), 발행 시각이 wall-clock(tools/inject.py:32)이고
+        시작 시각이 '도착한 틱'이라 시뮬레이션 시각으로 재현할 수 없다.
+      how: '열화 고장으로 오차를 키운 뒤, 정한 시각 t_force에 solver_fail로 즉시 전환 → 임계값 아래·위 오차를 고르게 만들 수 있음'
+      minimal_code_change_proposal:   # sim-eval 코드는 수정하지 않음. 제안만
+        - 'AV/integration/fault_injection.py: FaultConfig에 force_switch_at_s: float | None = None 추가. apply()에서 t >= force_switch_at_s면 solver_fail 결과(:111)를 반환 (열화 모드보다 우선)'
+        - 'run_benchmark.py / supervisor_cli.py: --force-switch-at 인자 추가 후 FaultConfig로 전달 (run_benchmark.py:89 검증, :102-103 agent_config 전달)'
+        - 'monitor_logs meta (pdm_agent.py:167-169)에 force_switch_at_s 기록'
+      caveat: '열화 단계에서 tracking_divergence가 먼저 울리면 강제 전환 전에 전환됨 → trigger_source로 구분 (solver_failure여야 M-3 런)'
 
-switch_trigger:
-  mechanism: injected_fault
-  injector_mode: solver_fail                     # AV/integration/fault_injection.py:111
-  expected_trigger: solver_failure               # supervised_lateral.py:29-30, 즉시 전환
-  why: '감지 지연이 0인 고장이라 LQR 복구 능력만 분리해서 볼 수 있음. 관측: "0.0 s에 전환" (scenario_space_av_stack.yaml:54-55, 1회씩)'
-  duration_s: [0.1, 3.0]                         # :52 (전환은 latch라 고장 길이는 복구에 영향 적음)
+# ---------------------------------------------------------------- 입력 (조절 변수)
+control_inputs:
+  degrade_fault:
+    mode: [bias, drift, intermittent_bias, saturate, output_delay]     # fault_injection.py:23
+    magnitude: {bias_rad: [0.02, 0.10], drift_rad_s: [0.005, 0.05], intermittent_bias_rad: [0.05, 0.15],
+                saturate_side: [positive, negative], output_delay_ticks: [1, 2, 3, 4, 6]}   # pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:83-157
+    duration_s: 'saturate [0.1, 1.0] (:137); 나머지는 fault_duration'
+  fault_start: {onset_event: [straight, curve_entry, curve_apex, curve_exit], offset_s: [-1.0, 1.0]}   # :36-37
+  forced_switch_time_s: {requires: M-3, status: todo, definition: 'fault_start 이후 경과 시간'}
+context_axes:
+  max_speed_kmh: {range: [10, 40], available: true}                   # pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:32
+  route_curvature_at_switch: {available: from_logs_todo, note: '경로가 정함. kappa는 현재 로그에 없음 (logging TODO L-3)'}
+  curvature_rate: {values: [curve_entry, curve_exit], available: 'onset_event로 간접', note: '곡률 변화율 자체는 미기록'}
+  tire_friction_scale: {available: false, note: 'pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:33 미지원 (H-09)'}
+  vehicle_mass_scale: {available: false}
 
+# ---------------------------------------------------------------- 탐색 축 (결과에서 계산)
+derived_axes:
+  switch_state:
+    e_y_at_switch: {source: 'agent_controls.jsonl tracking_error at t = switched_at_s (pdm_agent.py:287, 296-297)', note: '전환 틱의 result는 LQR 출력이라 LQR 자신의 오차 (supervised_lateral.py:118-120)', loggable_now: true}
+    e_psi_at_switch: {source: 'agent_controls.jsonl heading_error at t = switched_at_s (pdm_agent.py:288)', loggable_now: true}
+    e_y_dot_at_switch: {formula: 'vx*sin(e_psi) + vy*cos(e_psi)', source: 'steps.jsonl vx, vy + heading_error (monitor_logs.py:121-122)', loggable_now: derivable}
+    e_psi_dot_at_switch: {formula: 'yaw_rate - kappa*vx', loggable_now: false, needs: L-3 (kappa)}
+    normalized_switch_error:
+      formula: 'max(|e_y_at_switch| / 1.0, |e_psi_at_switch| / 0.6)'
+      basis: '감독기 tracking_divergence 임계값 (supervised_lateral.py:45). 1 = 자연 전환 경계'
+      loggable_now: true
+    linearization_validity:
+      status: todo
+      note: '저장소에 선형화 유효 범위 정의 없음. 정의를 만들지 않고 비워둔다 (사용자 결정 필요)'
+  actuator_limits:
+    predicted_first_lqr_command_ratio:
+      formula: '|-K x(t_sw) + delta_ff| / max_steer_rad  (클립 전)'
+      loggable_now: false
+      needs: [L-1]
+      offline_alternative: 'K(v)는 lqr.py gain()을 geometry(agent_config.json)와 Q로 재계산 가능하지만 x 전체(e_psi_dot)와 delta_ff(kappa)가 필요 → L-3'
+    required_steer_rate_ratio:
+      formula: '|u_lqr_unclipped(t_sw) - u_applied(t_sw - dt)| / dt / rate_limit'
+      loggable_now: false
+      needs: [L-1]
+    angle_saturation_ratio:
+      formula: '전환 후 창의 틱 중 |steer| >= 1 - eps 비율'
+      source: 'agent_controls.jsonl steer (정규화, carla_io.py:29-31)'
+      loggable_now: true
+    rate_saturation_ratio:
+      formula: '전환 후 창의 틱 중 |Δsteer| * max_steer_rad / dt >= rate_limit - eps 비율'
+      source: 'agent_controls.jsonl steer + agent_config.json geometry.max_steer_rad + dt 0.05'
+      loggable_now: true
+      note: '적용값만으로 판정. 클립 전 명령 크기(얼마나 깎였는지)는 L-1 없이는 모름'
+    time_in_saturation_s:
+      formula: '(각도 또는 속도 포화 틱 수) * dt, 전환 후 창'
+      loggable_now: true
+    post_switch_saturation_ratio:
+      defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.post_switch_saturation_ratio
+      note: '"t_sw 이후 1 s 동안 조향각 또는 조향속도 포화 스텝 비율" — angle/rate ratio의 합집합'
+
+logging_todo:   # sim-eval 코드는 수정하지 않음. 필요한 최소 추가만 적는다
+  L-1:
+    what: 'LQR 클립 전 명령(steer_feedback + steer_feedforward), 클립 후(steer), 속도 제한 후 적용값'
+    where: 'supervised_lateral.py:120 step_controller 호출부는 LQROutput을 버린다 (AV/integration/episode.py:53-55). SupervisedLateral에 last_lqr_unclipped / last_lqr_clipped / last_applied 필드를 두고 record()(:140-144)에 포함'
+  L-2:
+    what: 'max_steer_rad, rate_dps, LQR Q/R/preview를 런 메타에 기록'
+    where: 'monitor_logs meta (pdm_agent.py:167-169). 현재 max_steer는 agent_config.json에만 있음'
+  L-3:
+    what: '경로 곡률 kappa (와 가능하면 e_y_dot, e_psi_dot)'
+    where: 'LateralResult.kappa는 이미 있음 (AV/integration/episode.py:41). agent_controls.jsonl record (pdm_agent.py:284-296)에 kappa=result.kappa 추가'
+  L-4:
+    what: 'force_switch_at_s (M-3 구현 시)'
+    where: 'monitor_logs meta'
+
+# ---------------------------------------------------------------- 평가
 evaluation:
   - name: recovery_robustness
     role: gp_target
     defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_robustness
     boundary_level: 0
-    runtime_limits_from_logs:                    # 상수가 아니라 런마다 로그에서 읽음
-      lane_half_width: 'monitor_probe.jsonl lane_width_m / 2 (AV/integration/monitor_logs.py:84)'
-      vehicle_half_width: 'monitor_probe.jsonl bbox_half_width_m (monitor_logs.py:89)'
-      lateral_accel: 'monitor_probe.jsonl ay_mps2 (monitor_logs.py:87); 한계 a_y_max = safety_spec P-02 (null, TODO)'
-      steering_angle: 'max_steer_rad = CARLA 런타임 값 (O-007). 현재 로그 파일에 기록되지 않음 (TODO)'
-      steering_rate: '90 deg/s (O-017)'
+    runtime_limits: 'lane_width_m/2, bbox_half_width_m, ay_mps2 (monitor_probe.jsonl, monitor_logs.py:84-89); max_steer_rad (agent_config.json); rate 90/60 deg/s; a_y_max = safety_spec P-02 (null, TODO)'
   - name: recovery_success
     role: recorded_label
     defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_success
@@ -78,24 +172,39 @@ evaluation:
   - name: margin_delta_m
     role: secondary_recorded
     defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.margin_delta_m
-    note: '같은 경로·속도·시드의 무고장 baseline 필요 (paired_runs.yaml baseline_cache)'
   - name: trigger_source
-    role: sanity_check
-    expect: solver_failure                       # 다른 값이면 S1 런으로 쓰지 않음 (S3 성격)
+    role: run_classification
+    expect: {M-1: [tracking_divergence], M-2: [solver_failure], M-3: [solver_failure]}
+    note: '기대와 다른 trigger_source(예: deadline_miss)는 S1 경계 학습에서 따로 표시'
+
+boundary:
+  space: '(normalized_switch_error, e_y_dot/e_psi_dot 가능 시) × (angle_saturation_ratio, rate_saturation_ratio, 가능 시 predicted_first_lqr_command_ratio) | 문맥: max_speed_kmh, onset_event'
+  gp:
+    inputs: 'switch_state + actuator_limits 축 (결과에서 계산된 값) + 문맥 축'
+    target: recovery_robustness
+    note: '탐색 축이 결과에서 나오므로, 다음 런 선택은 control_inputs에 대해 하고 GP는 control_inputs → (switch_state, recovery_robustness)를 함께 예측해야 함 (설계 TODO)'
+  level: 'recovery_robustness = 0'
 
 search_strategy:
   steps:
-    - {name: explore_operating_conditions, description: '속도 × 지점(곡률)을 공간 채우기로 넓게 샘플'}
-    - {name: refine_recovery_boundary, description: 'recovery_robustness 예측 ≈ 0 이고 불확실성 큰 점 우선. 획득 함수 미정 (TODO)'}
-  observation_requirement: '_common.yaml 참고 (성공·실패 모두 관측)'
+    - {name: cover_switch_state_range, description: 'M-2(작은 오차) + M-1(임계값 근처·이상)으로 normalized_switch_error 0~>1을 고르게 채움. M-3 구현 시 빈 구간 보강'}
+    - {name: refine_handover_boundary, description: 'recovery_robustness 예측 ≈ 0, 불확실성 큰 control_inputs 우선. 획득 함수 미정 (TODO)'}
+  observation_requirement: >
+    복구 성공 런과 실패 런을 모두 관측해야 경계를 추정한 것으로 본다. 오차가 작은 쪽(성공 예상)과
+    포화가 큰 쪽(실패 예상)을 둘 다 채운다. no_trigger / triggered_no_switch 런도 기록한다.
   arms: none
 
-scope_distinction: {see: R_regression_verification.yaml, note: '경계 탐색과 회귀 검증(구버전 vs 신버전)은 다른 목표'}
-limitations: {see: _common.yaml#limitations}
+limitations:
+  see: _common.yaml#limitations
+  specific:
+    - '복구 성공 영역을 측정한 것은 그 영역의 안전성을 수학적으로 보증한 것이 아니다.'
+    - '결과는 선택한 planner 구성(PDM: Q=(0.5,0,1,0), 90 deg/s / TF++: 기본 Q, 60 deg/s)과 차량(max_steer)에 한정된다. planner 선택은 미정.'
+    - '전환 순간 상태는 조절 입력의 결과라 분포가 고르지 않을 수 있다 (M-3 없으면 임계값 근처가 비기 쉬움).'
+    - '선형화 유효 범위는 정의하지 않았다. normalized_switch_error는 감독기 임계값 기준이지 선형화 오차가 아니다.'
 
-todo:
-  - tire_friction_scale runner 인자 추가 (H-09 축)
-  - max_steer_rad를 summary/monitor 로그에 기록
-  - safety_spec P-02 lateral_acc_threshold_mps2 확정
-  - recovery_success 판정 기준(T_settle_s) 확정
-  - 경계 추정용 획득 함수 정의
+remaining_decisions:
+  - 'planner 구성: PDM vs TF++'
+  - 'M-3(2단계 고장) 코드 변경 승인 여부'
+  - 'L-1~L-3 로깅 추가 승인 여부'
+  - 'linearization_validity 정의 (또는 생략)'
+  - 'recovery_success 판정 기준, P-02 a_y_max'

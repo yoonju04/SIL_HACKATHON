@@ -89,7 +89,8 @@ RUN_RECORD_FIELDS = (
     "run_id", "scenario_id", "seed_scenario_id", "round", "selector",
     "profile_id", "source_commit", "feature_schema_version", "hypothesis_ids",
     "parameters", "planned_fault_onset", "actual_fault_onset", "trigger_time",
-    "trigger_source", "trigger_attribution", "switch_time", "switch_count", "outcome_category", "P01", "P02", "P03",
+    "trigger_source", "trigger_attribution", "switch_time", "switch_count",
+    "switch_state", "handover_saturation", "outcome_category", "P01", "P02", "P03",
     "margin_delta_m", "switch_state_label", "metrics", "baseline_metrics", "gp_targets",
     "gp_mean", "gp_std", "sim_status", "invalid_reason",
 )

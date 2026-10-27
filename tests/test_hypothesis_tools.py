@@ -91,6 +91,23 @@ class SearchObjectiveTests(unittest.TestCase):
     if 'defined_in' in e:
      name=e['name']
      self.assertIn(name,defs,f+':'+name)
+ def test_s1_names_exist(self):
+  s1=load(SO+'S1_operating_condition_recovery_boundary.yaml')
+  modes=self.common['injector_modes']
+  modes=set(modes) if isinstance(modes,list) else {m for v in modes.values() for m in v}
+  for m in s1['control_inputs']['degrade_fault']['mode']:self.assertIn(m,modes)
+  trig=next(e for e in s1['evaluation'] if e['name']=='trigger_source')
+  for names in trig['expect'].values():
+   for n in names:self.assertIn(n,self.common['trigger_names'])
+  self.assertTrue({'H-04','H-05'}<=set(s1['legacy_ids']))
+  self.assertFalse({'H-04','H-05'}&set(load(SO+'A_switch_analysis_layer.yaml')['legacy_ids']))
+ def test_s1_switch_axes_in_error_table(self):
+  s1=load(SO+'S1_operating_condition_recovery_boundary.yaml')['derived_axes']
+  rs=load('09_monitor/error_table.yaml')['results_schema']
+  for k in ('e_y_at_switch','e_psi_at_switch','e_y_dot_at_switch','e_psi_dot_at_switch','normalized_switch_error'):
+   self.assertIn(k,s1['switch_state']);self.assertIn(k,rs['switch_state_fields'])
+  for k in ('angle_saturation_ratio','rate_saturation_ratio','time_in_saturation_s','predicted_first_lqr_command_ratio','required_steer_rate_ratio'):
+   self.assertIn(k,s1['actuator_limits']);self.assertIn(k,rs['handover_saturation_fields'])
  def test_limitation_stated(self):
   self.assertTrue(any('수학적으로 보증' in x for x in self.common['limitations']['claims_not_made']))
   self.assertIn('성공 런과 실패 런을 모두',self.common['observation_requirement'])

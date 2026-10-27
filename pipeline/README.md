@@ -38,7 +38,7 @@ flowchart TD
 | 01 Safety profile | [`01_safety_profile/safety_profile.yaml`](01_safety_profile/safety_profile.yaml) | 코드에서 추출한 관측 사실(O-xxx)과 근거 |
 | 02 Hypotheses | [`02_hypotheses/vulnerability_patterns.yaml`](02_hypotheses/vulnerability_patterns.yaml) | 취약 패턴 카탈로그 v2(틀, 11개) + 지표 규칙·GP 타깃 규칙 + 판정 절차 |
 | | [`02_hypotheses/hypotheses.yaml`](02_hypotheses/hypotheses.yaml) | 패턴 × 프로필로 생성된 가설 (자동 생성). 활성 패턴이 없어 지금은 비어 있음 |
-| | [`02_hypotheses/search_objectives/`](02_hypotheses/search_objectives/) | **S-세트** (새 스키마 초안, 파이프라인 미연결): S1 운용 조건별 복구 경계(H-01+H-09), S2 고장 시점·감지 지연(H-02+H-06), S3 자연 MPC 열화(H-10+H-08+H-11, 고장 주입 없음), S4 선택, A 전환 순간 분석층(H-04+H-05), R 회귀 검증(H-03 등). H-07 보류. 공통 규칙 `_common.yaml` |
+| | [`02_hypotheses/search_objectives/`](02_hypotheses/search_objectives/) | **S-세트** (새 스키마 초안, 파이프라인 미연결): S1 LQR 인계 경계: 전환 순간 오차 × 조향 포화(H-01+H-04+H-05+H-09), S2 고장 시점·감지 지연(H-02+H-06), S3 자연 MPC 열화(H-10+H-08+H-11, 고장 주입 없음), S4 선택, A 모든 런 공통 전환 기록, R 회귀 검증(H-03 등). H-07 보류. 공통 규칙 `_common.yaml` |
 | | [`hypothesis_tools/`](hypothesis_tools/) | 가설 생성기 · 시나리오 후보 샘플러 · 예시 입력 |
 | 03 Nemotron A | [`03_nemotron_a/nemotron_a.yaml`](03_nemotron_a/nemotron_a.yaml) | 시나리오 후보 생성 (실패 few-shot 입력) |
 | 04 타당성 검사 + 후보 확장 | [`04_feasibility_expansion/feasibility_expansion.yaml`](04_feasibility_expansion/feasibility_expansion.yaml) | G-01~04 게이트, 섭동·중복 제거 |
