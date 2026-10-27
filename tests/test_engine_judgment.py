@@ -1,7 +1,7 @@
 """Pure judgment functions (formerly the runner skeleton --self-test). Numbers are arbitrary test values, not repo values."""
 from engine.config_check import PIPELINE_FILES, cmd_check, collect_missing, load_pipeline
 from engine.config import PIPELINE_DIR
-from engine.judgment import (beta_schedule, candidate_lcb, classify_outcome, classify_recovery, cold_start_split,
+from engine.judgment import (PROVISIONAL_RECOVERY, beta_schedule, candidate_lcb, classify_outcome, classify_recovery, cold_start_split,
                              compute_df, excess_over_baseline, feasibility_gate, final_safe_recovery, gp_targets,
                              lane_margin_m, lane_recovery_robustness, lateral_jerk, lcb, margin_delta_m,
                              recovery_labels, robustness_p01, robustness_p02, select_batch, travelled_distance)
@@ -36,7 +36,7 @@ def test_judgment_self_test():
                             final_safe=None) == "switched_unsafe"
     assert classify_outcome(simulation_invalid=True, triggered=True, switched=True,
                             final_safe=True) == "simulation_invalid"
-    # recovery_outcome: 100틱 = 5 s 창, 1 s 유지 = 20틱
+    # recovery_outcome: 100틱 창 (기본 3 s 창보다 길게 줘도 됨), 1 s 유지 = 20틱
     ok_m, ok_e = [0.5] * 100, [0.1] * 100
     kw = dict(switched=True, window_complete=True, collision=False)
     assert classify_recovery(margins=ok_m, e_y=ok_e, e_psi=[0.0] * 100, **kw) == "safe_recovery"
@@ -51,7 +51,7 @@ def test_judgment_self_test():
                              window_complete=False, collision=False) == "simulation_invalid"
     assert classify_recovery(margins=ok_m, e_y=ok_e, e_psi=[0.0] * 100, switched=False,
                              window_complete=True, collision=False) == "no_switch"
-    labels = recovery_labels(acc_excess=1.0, acc_total_max=4.0, jerk_excess=2.0,
+    labels = recovery_labels(acc_excess=1.0, acc_total_max=5.0, jerk_excess=2.0,
                              jerk_total_max=6.0, margin_at_switch=-0.2, safe_stop=False)
     assert labels["lat_acc_excess"] == {"primary": False, "secondary": True}
     assert labels["departed_at_switch"] is True
@@ -59,7 +59,9 @@ def test_judgment_self_test():
     assert final_safe_recovery("unsettled", labels) is False
     assert lane_margin_m(3.5, 0.5, 0.9) == 0.35
     assert abs(lane_recovery_robustness([0.85, 0.0], [3.5, 3.5], 0.9, False) - 0.0) < 1e-9
-    assert lane_recovery_robustness([0.85], [3.5], 0.9, True) == -1.0
+    assert lane_recovery_robustness([0.85], [3.5], 0.9, True) == -2.0     # 팀원 SR4 충돌 값
+    assert lane_recovery_robustness([5.0], [3.5], 0.9, False) == 1.0      # [-2, 1] 로 자름
+    assert PROVISIONAL_RECOVERY["window_s"] == 3.0 and PROVISIONAL_RECOVERY["lat_acc_threshold_mps2"] == 4.41
     s = travelled_distance([10.0] * 5)
     assert s == [0.0, 0.5, 1.0, 1.5, 2.0]
     assert excess_over_baseline([0.25, 1.0], [2.0, 5.0], [0.0, 0.5, 1.0], [1.0, 1.0, 1.0]) == 4.0

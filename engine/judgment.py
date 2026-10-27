@@ -270,10 +270,12 @@ def robustness_p02(lateral_acc_values: list[float], threshold_mps2: float) -> fl
 
 
 # 2026-10-27 recovery_judgment (02 outcome_definitions). 아래 기본 수치는 PROVISIONAL (검증 안 됨).
+# 실제 값은 09 safety_spec.yaml (safety_specification.recovery_judgment / P-02 / P-04) 에서 읽는다 (engine.monitor).
+# 팀원 기준 (junwoo/sim-eval a5242b2): window 3 s (SR5 within_s), 횡가속도 0.5*0.9*9.81 = 4.41, 충돌 -2, clip [-2, 1].
 PROVISIONAL_RECOVERY = {
-    "e_settle_m": 0.3, "psi_settle_rad": 0.1, "settle_hold_s": 1.0, "window_s": 5.0,
-    "lat_acc_threshold_mps2": 3.0, "lat_jerk_threshold_mps3": 5.0, "filter_s": 0.5,
-    "collision_penalty": -1.0,
+    "e_settle_m": 0.3, "psi_settle_rad": 0.1, "settle_hold_s": 1.0, "window_s": 3.0,
+    "lat_acc_threshold_mps2": 4.41, "lat_jerk_threshold_mps3": 5.0, "filter_s": 0.5,
+    "collision_penalty": -2.0, "robustness_clip_min": -2.0, "robustness_clip_max": 1.0,
 }
 
 
@@ -362,10 +364,13 @@ def excess_over_baseline(s_fault: list[float], v_fault: list[float],
 
 def lane_recovery_robustness(margins: list[float], lane_widths: list[float],
                              bbox_half_width_m: float, collision: bool,
-                             penalty: float = PROVISIONAL_RECOVERY["collision_penalty"]) -> float:
-    """min margin/(lane_width/2 - 반폭). 1 = 중앙, 0 = 경계, <0 이탈. 충돌이면 penalty와 min."""
+                             penalty: float = PROVISIONAL_RECOVERY["collision_penalty"],
+                             clip: tuple[float, float] | None = (PROVISIONAL_RECOVERY["robustness_clip_min"],
+                                                                 PROVISIONAL_RECOVERY["robustness_clip_max"])) -> float:
+    """min margin/(lane_width/2 - 반폭). 1 = 중앙, 0 = 경계, <0 이탈. 충돌이면 penalty와 min. clip=[lo, hi] (팀원 SR4 눈금)."""
     value = min(m / (w / 2.0 - bbox_half_width_m) for m, w in zip(margins, lane_widths))
-    return min(value, penalty) if collision else value
+    value = min(value, penalty) if collision else value
+    return value if clip is None else max(clip[0], min(clip[1], value))
 
 
 def recovery_labels(*, acc_excess: float | None, acc_total_max: float | None,

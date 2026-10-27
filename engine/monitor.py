@@ -127,8 +127,8 @@ def _finite(x: Any) -> bool:
 
 
 def thresholds_from_config(stage_cfg: dict | None) -> dict[str, float]:
-    """PROVISIONAL thresholds. Recovery geometry from 02 outcome_definitions.recovery_judgment; lateral acc / jerk
-    thresholds and the after-switch window from 09 safety_spec.yaml (P-02, P-04, after_switch_window_s)."""
+    """PROVISIONAL thresholds. 02 outcome_definitions.recovery_judgment first, then 09 safety_spec.yaml overrides
+    (P-02, P-04, after_switch_window_s, safety_specification.recovery_judgment) — safety_spec is the single source."""
     th = dict(J.PROVISIONAL_RECOVERY)
     od = ((stage_cfg or {}).get("vulnerability_patterns") or {}).get("outcome_definitions") or {}
     rj = (od.get("recovery_judgment") or {}).get("thresholds") or {}
@@ -143,6 +143,13 @@ def thresholds_from_config(stage_cfg: dict | None) -> dict[str, float]:
         th["lat_jerk_threshold_mps3"] = float(props["P-04"]["lateral_jerk_threshold_mps3"])
     if _finite(ss.get("after_switch_window_s")):
         th["window_s"] = float(ss["after_switch_window_s"])
+    rjs = ss.get("recovery_judgment") or {}          # safety_spec wins over 02 (single source of thresholds)
+    for k in ("e_settle_m", "psi_settle_rad", "settle_hold_s", "window_s", "filter_s", "collision_penalty"):
+        if _finite(rjs.get(k)):
+            th[k] = float(rjs[k])
+    clip = rjs.get("robustness_clip")
+    if isinstance(clip, (list, tuple)) and len(clip) == 2 and all(_finite(x) for x in clip):
+        th["robustness_clip_min"], th["robustness_clip_max"] = float(clip[0]), float(clip[1])
     return th
 
 
@@ -304,7 +311,8 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
     lrr = None
     if switched and outcome != "simulation_invalid" and margins:
         lrr = J.lane_recovery_robustness(margins, [float(r["lane_width_m"]) for r in win],
-                                         float(win[0]["bbox_half_width_m"]), bool(col_in), th["collision_penalty"])
+                                         float(win[0]["bbox_half_width_m"]), bool(col_in), th["collision_penalty"],
+                                         (th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)))
     # P-01..03 over the evaluation window (planned onset .. end)
     ewin = _window(ticks, eval_start, end_t)
     em = margins_of([r for r in ewin if _finite(r.get("lane_width_m"))])

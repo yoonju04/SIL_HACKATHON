@@ -80,14 +80,14 @@ outcome_definitions:
     lateral_accel: abs(a_y) <= a_y_max_mps2
   recovery_success:
     definition: final_safe_recovery (binary). 전환이 없으면 false, simulation_invalid면 판정에서 제외
-    T_hold_s: 5.0
+    T_hold_s: 3.0
     T_settle_s: null
     legacy_definition_v2_1: 'After switch: no constraints violated during T_hold and enters certified invariant
       region by T_settle if such certificate is available; otherwise outcome unavailable.'
     changed: 2026-10-27 인증서 없이 판정 가능한 recovery_judgment로 교체 (사용자 승인)
   recovery_judgment:
     status: provisional_not_validated
-    window: '[t_sw, t_sw + T_hold_s]  (T_hold_s = 5.0)'
+    window: '[t_sw, t_sw + T_hold_s]  (T_hold_s = 3.0, 팀원 SR5 기준. 실제 값은 09 safety_spec.yaml recovery_judgment)'
     signals:
       lane_margin_m: lane_width_m/2 - |lane_offset_m| - bbox_half_width_m  (monitor_probe.jsonl, sim-eval integration/monitor_logs.py:82-89).
         방향각 무시 근사 (04_feasibility_expansion/README.md:51과 같은 정의)
@@ -107,7 +107,7 @@ outcome_definitions:
         value: 1.0
         status: provisional
       window_s:
-        value: 5.0
+        value: 3.0
         status: provisional
         same_as: recovery_success.T_hold_s
       calibration:
@@ -115,7 +115,7 @@ outcome_definitions:
         margin: null
         data: 팀원 PC av_stack/runs/fault_check_1027 의 무고장 기준 런 (경로 A/B/C, PDM, seed 17)
         procedure:
-        - baseline의 monitor_probe.jsonl에서 고장 런 창과 같은 경로 구간(onset ~ onset+5 s, 경로 진행 거리로 정렬)을 자른다
+        - baseline의 monitor_probe.jsonl에서 고장 런 창과 같은 경로 구간(onset ~ onset+3 s, 경로 진행 거리로 정렬)을 자른다
         - '|lane_offset_m|, |lane_heading_err_rad| 의 p95를 경로별로 구한다'
         - e_settle = max_route(p95_e_y) + margin, psi_settle = max_route(p95_e_psi) + margin (경로별 값을 쓸지도 결정)
         caution: 기존 관측 무고장 최대 편차 0.22~0.46 m (04 README:55, 최대값이지 p95 아님) → 0.3 m 임시값은 경로 A에서 기준 런도 unsettled로 볼
@@ -135,10 +135,10 @@ outcome_definitions:
   recovery_labels:
     multi_label: true
     lat_acc_excess:
-      primary: max_t |a_y_fault(t) - a_y_baseline(s(t))| > 3.0 m/s^2  (경로 진행 위치 s로 맞춘 baseline 대비)
-      secondary: max_t |a_y_fault(t)| > 3.0 m/s^2  (전체 값. 경로 곡률 수요 포함)
+      primary: max_t |a_y_fault(t) - a_y_baseline(s(t))| > 4.41 m/s^2  (경로 진행 위치 s로 맞춘 baseline 대비)
+      secondary: max_t |a_y_fault(t)| > 4.41 m/s^2  (전체 값. 경로 곡률 수요 포함)
       threshold_mps2:
-        value: 3.0
+        value: 4.41
         status: provisional
         reference:
         - E-01

@@ -675,7 +675,9 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
              f"- 영상 해설: {m['explanations']}건, 검증 통과 {m['explanations_accepted']}건 (환각률 {m['hallucination_rate']})",
              f"- recovery_outcome 분포: {m['outcome_counts']}", f"- trigger_source 분포: {m['trigger_counts']}",
              f"- SR 검사 (engine/sr_checks.py, 참고) sr_outcome 분포: {m.get('sr_outcome_counts')}; 화면: `screen/campaign.html`", "",
-             "## 주의", "- 판정 임계값(0.3 m, 0.1 rad, 1 s, 5 s, 3 m/s², 5 m/s³)은 PROVISIONAL 이다. 인증 기준이 아니다.",
+             "## 주의", f"- 판정 임계값({loop.th['e_settle_m']} m, {loop.th['psi_settle_rad']} rad, {loop.th['settle_hold_s']} s 유지, "
+             f"{loop.th['window_s']} s 창, {loop.th['lat_acc_threshold_mps2']} m/s², {loop.th['lat_jerk_threshold_mps3']} m/s³, "
+             f"충돌 {loop.th['collision_penalty']}; 09 safety_spec.yaml)은 PROVISIONAL 이다. 인증 기준이 아니다.",
              "- 측정된 복구 성공 영역은 수학적 안전 보증이 아니다.",
              "- 영상 해설은 판정을 바꾸지 않는다. 검증을 통과한 해설만 피드백에 쓴다.",
              "- monitor_rule_candidates.yaml 은 사람 검토용 제안이다 (자동 적용 안 함)."]

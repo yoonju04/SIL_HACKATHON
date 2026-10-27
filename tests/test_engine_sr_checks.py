@@ -80,8 +80,8 @@ def test_config_reads_our_safety_spec():
     spec = load_yaml(PIPELINE_DIR / "09_monitor" / "safety_spec.yaml")
     cfg = SR.config_from_spec(spec, lane_width_default_m=3.5)
     assert cfg.sr2_limit_dps == 60.0 and cfg.sr1_ftti_fraction == 0.5 and cfg.sr6_max_rate_dps == 90.0
-    assert cfg.min_window_s == spec["safety_specification"]["after_switch_window_s"] == 5.0
-    assert math.isinf(cfg.window_s)       # evaluation_window.end = simulation_end
+    assert cfg.window_s == 10.0 and cfg.min_window_s == 5.0     # teammate: onset + 10 s, min 5 s
+    assert cfg.sr1_fixed_limit_s == 0.5
     assert cfg.gp_clip == (-2.0, 1.0) and cfg.lane_width_default_m == 3.5
 
 
@@ -245,11 +245,18 @@ def test_fault_in_baseline_is_invalid():
     assert "V-07" in invalid_text(g)
 
 
-def test_baseline_longer_than_fault_run_is_cut_not_invalid():
-    """Fault runs stop after the fault (--stop-after-fault); the baseline drives the whole route."""
+def test_window_is_onset_plus_10s_for_fault_and_baseline():
+    """Teammate's original: both runs use [onset, onset + 10 s]; a longer baseline log is fine."""
     g = grade(trace(drift(0.3, 0.2), T=25.0, fault_at=ONSET, switch_at=10.2), trace(T=60.0), ONSET, CFG,
               dangerous_no_reaction())
-    assert g["valid"] and g["evaluation_window"][1] == pytest.approx(24.95), invalid_text(g)
+    assert g["valid"] and g["evaluation_window"][1] == pytest.approx(ONSET + 10.0), invalid_text(g)
+
+
+def test_fault_run_shorter_than_baseline_window_is_v08():
+    """Fault log ends 7 s after onset (>= 5 s min) but the baseline has the full 10 s -> V-08 (original)."""
+    g = grade(trace(drift(0.3, 0.2), T=17.0, fault_at=ONSET, switch_at=10.2), trace(T=60.0), ONSET, CFG,
+              dangerous_no_reaction())
+    assert g["sr_outcome"] == "invalid" and "V-08" in invalid_text(g), invalid_text(g)
 
 
 def test_no_baseline_is_not_graded():

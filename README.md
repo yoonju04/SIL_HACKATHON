@@ -328,5 +328,5 @@ flowchart LR
 
 ### PROVISIONAL 값 (사용자 확인 전)
 
-복구 판정 0.3 m / 0.1 rad / 1 s / 5 s / 3 m/s² / 5 m/s³, onset 이벤트 검출 κ 1/60·1/300 m⁻¹, fault 런
+복구 판정 0.3 m / 0.1 rad / 1 s / 3 s / 4.41 m/s² / 5 m/s³ (팀원 기준, 09 safety_spec.yaml), onset 이벤트 검출 κ 1/60·1/300 m⁻¹, fault 런
 `--stop-after-fault 15`, 속도 격자 5 km/h, 예산 72 런(cold 24 + 12×4), straddle β 1.96, 해설 선택 |robustness|<0.15.

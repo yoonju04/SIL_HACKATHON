@@ -204,7 +204,8 @@ def _limits(spec: dict | None) -> dict:
     ss = (spec or {}).get("safety_specification") or {}
     p02 = next((p for p in ss.get("properties") or [] if p.get("id") == "P-02"), {})
     return {"sr2": (sc.get("SR2") or {}).get("limit_dps", 60.0), "sr6": (sc.get("SR6") or {}).get("max_rate_dps", 90.0),
-            "acc": p02.get("lateral_acc_threshold_mps2", 3.0), "win": ss.get("after_switch_window_s", 5.0)}
+            "acc": p02.get("lateral_acc_threshold_mps2", 4.41), "win": ss.get("after_switch_window_s", 3.0),
+            "rj": ss.get("recovery_judgment") or {}}
 
 
 def _switch(r) -> tuple[str, str]:
@@ -248,9 +249,10 @@ def _checks(r, lim: dict) -> list[tuple]:
          "없음"),
         ("회복 (recovery v2)", None if ro in (None, "no_switch", "simulation_invalid") else ro == "safe_recovery",
          RECOVERY_KO.get(ro, ro or "–") + (f" · lrr {_f(r.get('lane_recovery_robustness'))}" if switched else ""),
-         f"{_f(lim['win'], 0)} s 창, 0.3 m · 0.1 rad · 1 s 유지"),
+         f"{_f(lim['win'], 0)} s 창, {_f(lim['rj'].get('e_settle_m', 0.3), 1)} m · {_f(lim['rj'].get('psi_settle_rad', 0.1), 1)} rad · "
+         f"{_f(lim['rj'].get('settle_hold_s', 1.0), 0)} s 유지"),
         ("횡가속도 (P-02, baseline 대비)", None if acc is None else not acc,
-         _f(r.get("lat_acc_excess_mps2"), 2, " m/s²"), f"{_f(lim['acc'], 1)} m/s² 이하"),
+         _f(r.get("lat_acc_excess_mps2"), 2, " m/s²"), f"{_f(lim['acc'], 2)} m/s² 이하"),
         ("조향 한계 (SR6)", s6.get("pass") if s6.get("applies") else None,
          f"{_f(s6.get('max_steer_deg'), 0, '°')} · {_f(s6.get('max_rate_dps'), 0, ' °/s')}" if s6.get("applies") else "기록 없음",
          f"차량 한계 · {_f(lim['sr6'], 0)} °/s"),

@@ -11,10 +11,11 @@ What this module still decides (the teammate's judgment parts that our recovery 
 What it does NOT decide any more (our implementation wins where the two overlapped):
   SR5 recovery and the F3 outcome  -> engine.judgment.classify_recovery / final_safe_recovery (recovery v2).
                                       SR5 is only a derived view of recovery_outcome.
-  P-02 lateral acceleration (teammate: 0.5*mu*g = 4.41 m/s^2) -> recovery_labels.lat_acc_excess (3.0 m/s^2, our spec).
+  P-02 lateral acceleration -> recovery_labels.lat_acc_excess (threshold now the teammate's 0.5*mu*g = 4.41 m/s^2).
   team metrics / runner_skeleton 28-field run_record / feedback / explain -> engine.monitor / engine.feedback / engine.explainer.
 
-All numbers come from pipeline/09_monitor/safety_spec.yaml (section sr_checks + evaluation_window). PROVISIONAL.
+All numbers come from pipeline/09_monitor/safety_spec.yaml section sr_checks = the teammate's original values
+(window onset + 10 s, min 5 s; SR1 0.5 x FTTI / 0.5 s; SR2 60 deg/s in 0.5 s; SR6 90 deg/s). PROVISIONAL.
 Input: our engine's av_stack run folder, already loaded by engine.monitor.load_av_stack_run (RunData).
 Output: a plain dict that engine.monitor.evaluate() spreads into run_record fields (sr_outcome, sr_checks, ...).
 """
@@ -34,8 +35,8 @@ FAIL_OUTCOMES = ("F1_no_or_late_switch", "F2_switch_transient", "F3_not_recovere
 @dataclass
 class SRConfig:
     dt: float = 0.05
-    window_s: float = math.inf          # our evaluation_window: planned onset .. simulation_end
-    min_window_s: float = 5.0           # = safety_spec after_switch_window_s (our recovery window)
+    window_s: float = 10.0              # teammate's evaluation window: planned onset + 10 s
+    min_window_s: float = 5.0           # shorter -> V-03 invalid (safe stop / crash excepted)
     tick_tolerance: float = 0.25
     onset_tolerance_s: float = 0.051
     sr1_ftti_fraction: float = 0.5
@@ -52,15 +53,14 @@ class SRConfig:
 
 
 def config_from_spec(spec: dict | None, **overrides) -> SRConfig:
-    """SRConfig from OUR safety_spec.yaml dict (sr_checks section; window from evaluation_window/after_switch_window_s)."""
-    s = (spec or {}).get("safety_specification") or {}
+    """SRConfig from our safety_spec.yaml dict, section sr_checks (the teammate's original numbers)."""
     sc = (spec or {}).get("sr_checks") or {}
     cfg = SRConfig()
-    if s.get("after_switch_window_s") is not None:
-        cfg.min_window_s = float(s["after_switch_window_s"])
-    end = (s.get("evaluation_window") or {}).get("end")
-    if isinstance(end, (int, float)):
-        cfg.window_s = float(end)
+    ew = sc.get("evaluation_window") or {}
+    if ew.get("length_s") is not None:
+        cfg.window_s = float(ew["length_s"])
+    if ew.get("min_length_s") is not None:
+        cfg.min_window_s = float(ew["min_length_s"])
     sr1, sr2, sr6 = sc.get("SR1") or {}, sc.get("SR2") or {}, sc.get("SR6") or {}
     val, gp = sc.get("validity") or {}, sc.get("gp_score") or {}
     for attr, src, key in (("sr1_ftti_fraction", sr1, "ftti_fraction"), ("sr1_fixed_limit_s", sr1, "fixed_fallback_s"),
@@ -211,9 +211,9 @@ class RunCheck:
     nominal_margin: float | None = None
 
 
-def check_run(tr: Trace, onset: float, cfg: SRConfig, kind: str, end: float | None = None) -> RunCheck:
+def check_run(tr: Trace, onset: float, cfg: SRConfig, kind: str) -> RunCheck:
     """Validity (V-01..V-11) and the SR4 footprint margin series. kind: fault | baseline | no_reaction.
-    end: explicit window end (the baseline is cut at the fault run's end so both windows match)."""
+    Window = [onset, min(onset + window_s, end of log)] for every run (teammate's original)."""
     t = np.asarray(tr.t, float)
     reasons: list[str] = []
     chans = [tr.vx, tr.vy, tr.yaw_rate, tr.lane_offset_m]
@@ -223,13 +223,11 @@ def check_run(tr: Trace, onset: float, cfg: SRConfig, kind: str, end: float | No
         reasons.append(f"{kind}: V-01 non-finite values")
     if np.any(np.abs(np.diff(t) - cfg.dt) > cfg.tick_tolerance * cfg.dt):
         reasons.append(f"{kind}: V-02 irregular ticks")
-    explicit_end = end is not None      # baseline cut to the fault run's window: its length was checked there
-    end = min(onset + cfg.window_s if end is None else end, float(t[-1]))
+    end = min(onset + cfg.window_s, float(t[-1]))
     ended_by_crash = any(onset - 1e-9 <= c <= end + cfg.dt for c in tr.collisions_t)
     if tr.collisions_untimed:
         reasons.append(f"{kind}: V-11 collision logged without time (cannot place it in the window)")
-    if end - onset < cfg.min_window_s and not tr.safe_stop and not ended_by_crash and kind != "no_reaction" \
-            and not explicit_end:
+    if end - onset < cfg.min_window_s and not tr.safe_stop and not ended_by_crash and kind != "no_reaction":
         reasons.append(f"{kind}: V-03 window shorter than minimum")
     win = (t >= onset - 1e-9) & (t <= end + 1e-9)
     if not win.any():
@@ -287,7 +285,7 @@ def grade(fault: Trace, baseline: Trace | None, onset: float, cfg: SRConfig | No
         out["invalid_reasons"] = ["no baseline run (SR4 needs the paired no-fault run)"]
         return out
     fc = check_run(fault, onset, cfg, "fault")
-    bc = check_run(baseline, onset, cfg, "baseline", end=fc.window[1] if fc.window[1] > onset else None)
+    bc = check_run(baseline, onset, cfg, "baseline")
     reasons = fc.reasons + bc.reasons
     t = np.asarray(fault.t, float)
     actual_onset = trigger = None

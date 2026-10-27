@@ -197,7 +197,7 @@ boundary:
     target: lane_recovery_robustness
     secondary_target: lat_acc_excess_mps2
     note: '탐색 축이 결과에서 나오므로, 다음 런 선택은 control_inputs에 대해 하고 GP는 control_inputs → (switch_state, lane_recovery_robustness)를 함께 예측해야 함 (설계 TODO)'
-  level: 'lane_recovery_robustness = 0 (차선 경계). 가속도 경계는 lat_acc_excess_mps2 = 3.0 (provisional)로 따로 그린다'
+  level: 'lane_recovery_robustness = 0 (차선 경계). 가속도 경계는 lat_acc_excess_mps2 = 4.41 (provisional, 팀원 P-02)로 따로 그린다'
 
 search_strategy:
   steps:

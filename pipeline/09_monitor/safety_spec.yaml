@@ -15,11 +15,12 @@ safety_specification:
       description: "횡가속도 한계"
       robustness: "lateral_acc_threshold - max_over_window(abs(lateral_acc))"
       failure_if: "robustness < 0"
-      lateral_acc_threshold_mps2: 3.0          # PROVISIONAL, 검증 안 됨. 사용자 제공 참고값 ISO 11270:2014 / UN R79 (02 references E-01, E-02)
+      lateral_acc_threshold_mps2: 4.41         # 2026-10-27 팀원 기준 (junwoo/sim-eval a5242b2 P-02): 0.5 * mu * g, mu = 0.9 가정 (planner 속도계획과 같은 식). basis: design_choice. 이전 3.0 (ISO 11270 / UN R79 참고값, 02 E-01/E-02)
+      lateral_acc_formula: {mu: 0.9, g_mps2: 9.81, factor: 0.5}
       role: label_not_failure                  # 2026-10-27: P-02 위반은 recovery_labels.lat_acc_excess 라벨. 차선·충돌 판정과 분리
-      primary: baseline_relative               # |a_y_fault - a_y_baseline(같은 경로 위치)| > 3.0
-      secondary: total                         # |a_y_fault| > 3.0 (경로 곡률 수요 포함 → 정상 커브에서도 넘을 수 있음)
-      note: "G-03 (04) 도 이 값을 쓴다: 공칭 수요 v^2*kappa > 3.0 이면 stress_test 태그 (버리지 않음). 참고 규격은 운전자 개입 LKAS 대상이라 인증 기준 아님"
+      primary: baseline_relative               # |a_y_fault - a_y_baseline(같은 경로 위치)| > 4.41
+      secondary: total                         # |a_y_fault| > 4.41 (경로 곡률 수요 포함. 팀원 P-02 는 이 전체 값으로 잼)
+      note: "G-03 (04) 도 이 값을 쓴다: 공칭 수요 v^2*kappa > 4.41 이면 stress_test 태그 (버리지 않음). 인증 기준 아님"
     - id: P-04
       description: "횡 저크 한계 (라벨)"
       robustness: "lateral_jerk_threshold - max_over_window(abs(movavg_0.5s(d a_y/dt)))"
@@ -38,7 +39,16 @@ safety_specification:
                        switched_unsafe, simulation_invalid]
   # 2026-10-27: 전환 후 판정 세분화 (정의: 02 vulnerability_patterns.yaml outcome_definitions.recovery_judgment)
   #   outcome_category 5분류는 유지 (역추적용). switched_* 는 recovery_outcome + 라벨로 결정한다.
-  after_switch_window_s: 5.0                   # PROVISIONAL (= T_hold_s)
+  after_switch_window_s: 3.0                   # 2026-10-27 팀원 기준 SR5 within_s 3.0 (이전 5.0). PROVISIONAL (= T_hold_s)
+  # 우리 recovery v2 판정·GP 타깃이 쓰는 수치는 전부 여기서 읽는다 (engine.monitor.thresholds_from_config; 02 값보다 우선)
+  recovery_judgment:
+    e_settle_m: 0.3            # = 팀원 SR5 band_m 0.3
+    psi_settle_rad: 0.1        # 우리 값 (팀원 SR5 에는 방향각 조건 없음)
+    settle_hold_s: 1.0         # = 팀원 SR5 hold_s 1.0
+    window_s: 3.0              # = 팀원 SR5 within_s 3.0 (이전 5.0)
+    filter_s: 0.5              # 횡가속도·저크 이동평균 (우리 값)
+    collision_penalty: -2.0    # lane_recovery_robustness 충돌 값 = 팀원 SR4 collision_value -2.0 (이전 -1.0)
+    robustness_clip: [-2.0, 1.0]   # lane_recovery_robustness 자르기 = 팀원 gp_target clip (이전 없음)
   recovery_outcomes: [safe_recovery, recovered_after_departure, unsettled, unrecovered,
                       simulation_invalid, no_switch]
   recovery_labels: [lat_acc_excess, lat_jerk_excess, departed_at_switch, safe_stop]
@@ -51,14 +61,15 @@ safety_specification:
   infraction_reference: "CARLA Leaderboard 2.1 (02 references E-03): 충돌 → collisions.json / evaluation_events.json, 경로 이탈 → evaluation_events.json"
   simulation_invalid_is_not_safe: true
 
-# 2026-10-27 integration: 팀원 Monitor v2(junwoo/sim-eval a5242b2)의 고유 검사 SR1/SR2/SR4/SR6 수치 (engine/sr_checks.py).
-# 전부 PROVISIONAL (팀원 값 그대로 옮김). 결과는 run_record 의 sr_* 참고 필드로만 남고, 우리 판정(recovery_outcome,
-# final_safe_recovery, outcome_category, GP 타깃)은 바꾸지 않는다.
-# 겹치는 부분은 위 우리 정의를 따른다:
-#   SR5 회복 (팀원: 0.3 m 띠, 3 s 안, 1 s 유지)  → recovery_judgment (02) + after_switch_window_s 5.0
-#   P-02 횡가속도 (팀원: 0.5*mu*g = 4.41 m/s^2)  → P-02 lateral_acc_threshold_mps2 3.0 (recovery_labels)
-#   평가 창 (팀원: onset + 10 s, 최소 5 s)        → evaluation_window (onset .. simulation_end), 최소 = after_switch_window_s
+# 2026-10-27 integration: 팀원 Monitor v2(junwoo/sim-eval a5242b2 safety_spec.yaml requirements)의 SR1/SR2/SR4/SR6
+# 수치를 팀원 원본 그대로 둔다 (engine/sr_checks.py). 결과는 run_record 의 sr_* 참고 필드로만 남고 final_safe_recovery 는 바꾸지 않는다.
+# SR5 는 위 recovery_judgment (팀원 band/within/hold 와 같은 값) 로 정한 우리 recovery_outcome 에서 파생한다.
 sr_checks:
+  evaluation_window:         # 팀원 원본: 계획 고장 시각부터 10 s, 5 s 보다 짧으면 invalid (안전 정지·충돌 예외)
+    start: planned_fault_onset_time
+    length_s: 10.0
+    min_length_s: 5.0
+    align_baseline_to_fault_run: true   # baseline 도 같은 시각부터 같은 길이 (다르면 V-08)
   SR1:   # 고장이 실제로 MPC 출력을 바꾼 시각 → LQR 전환까지 지연 <= ftti_fraction * FTTI
     ftti_fraction: 0.5
     fixed_fallback_s: 0.5            # no-reaction 런이 없을 때 쓰는 고정 한계
@@ -68,6 +79,11 @@ sr_checks:
     window_after_switch_s: 0.5
   SR4:   # 차체 사각형(방향각 포함) 기준 차선 여유 + 충돌. G-04: baseline 이 SR4 위반이면 쌍 거절
     footprint: rectangle_with_heading
+  SR5:   # 참고: 팀원 원본 값. 판정은 recovery_judgment 가 한다
+    band_m: 0.3
+    within_s: 3.0
+    hold_s: 1.0
+    enforce: false
   SR6:   # 조향각 <= 차량 max_steer, 조향 변화율 <= max_rate_dps (평가 창 전체)
     max_rate_dps: 90.0
   validity:

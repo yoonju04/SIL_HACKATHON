@@ -62,9 +62,10 @@ F3는 전환한 런이면 `final_safe_recovery == false` (우리 판정), 전환
 
 | 항목 | 팀원 (a5242b2) | 지금 |
 |---|---|---|
-| 회복 판정 | SR5: ±0.3 m 띠에 1 s, 3 s 안 (참고용) | recovery v2: 0.3 m·0.1 rad·1 s 유지, **5 s** 창, 6분류 + 라벨 |
-| 횡가속도 | P-02 0.5·μ·g = **4.41 m/s²** | P-02 **3.0 m/s²** (baseline 대비, 라벨) |
-| 평가 창 | onset + 10 s (최소 5 s) | onset ~ simulation_end (safety_spec evaluation_window), 최소 = after_switch_window_s 5 s. baseline은 fault 런 끝에서 자름 |
+| 회복 판정 | SR5: ±0.3 m 띠에 1 s, 3 s 안 (참고용) | recovery v2 6분류 + 라벨. 수치는 팀원 기준: 0.3 m·1 s 유지·**3 s** 창 (+ 우리 0.1 rad 방향각 조건) |
+| 횡가속도 | P-02 0.5·μ·g = **4.41 m/s²** (전체 값, 보고용) | P-02 **4.41 m/s²** (팀원 값), baseline 대비 primary 라벨로 final_safe_recovery 에 반영 |
+| SR 평가 창 | onset + 10 s (최소 5 s), baseline 같은 길이 (V-08) | 같음 (팀원 원본, `sr_checks.evaluation_window`) |
+| 충돌 GP 값 | SR4 충돌 −2, clip [−2, 1] | lane_recovery_robustness 충돌 −2, [−2, 1]로 자름 (이전 −1, 자르지 않음) |
 | run_record | runner_skeleton 28필드 + metrics.monitor | 우리 RUN_RECORD_FIELDS + `sr_*` |
 | 팀 지표·GP 타깃 | run_metrics / runner_gp_targets | engine.monitor + engine.judgment.gp_targets |
 | 피드백 (2·3·6단계) | feedback.py (가설 추적 bootstrap, failure_table, gp_training) | engine/feedback.py + run.py |

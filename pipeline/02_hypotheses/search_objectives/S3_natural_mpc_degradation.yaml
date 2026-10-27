@@ -65,7 +65,7 @@ evaluation:
 risks:
   - 'deadline_miss는 wall-clock이라 Nebius 병렬 워커·부하에 따라 결과가 달라짐. 워커 사양과 step_time_s(pdm_agent.py:284-296 control log)를 함께 기록'
   - '자연 전환이 드물면 예산 대부분이 no_trigger. 먼저 속도 상한·급커브 경로로 범위 확인'
-  - 'G-03 stress_test 태그(공칭 횡가속도 수요 v^2*kappa > P-02 3.0 provisional)는 물리 한계 실패와 섞이므로 따로 분석'
+  - 'G-03 stress_test 태그(공칭 횡가속도 수요 v^2*kappa > P-02 4.41 provisional)는 물리 한계 실패와 섞이므로 따로 분석'
 
 search_strategy:
   steps:
