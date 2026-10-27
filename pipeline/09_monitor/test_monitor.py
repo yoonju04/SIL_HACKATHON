@@ -261,6 +261,19 @@ def test_stage2_excludes_invalid_runs():
     recs += [{"sim_status": "invalid", "outcome_category": "invalid", "hypothesis_arms": {"H-01": "control"}}]
     h = hypothesis_tracking(recs, delta_min_m=0.1)["hypotheses"]["H-01"]
     assert h["excluded_runs"] == 1 and h["runs_control"] == 10
+    assert h["descriptive"]["condition"]["n"] == 10
+    assert h["descriptive"]["condition"]["mean"] == -0.5
+    assert h["descriptive"]["control"]["mean"] == 0.0
+    assert h["descriptive"]["mean_difference"] == -0.5
+
+
+def test_hypothesis_partial_samples_show_descriptive_stats_without_decision():
+    recs = [_rec(-0.2, "condition"), _rec(-0.4, "condition"), _rec(0.0, "control")]
+    recs.append(_rec(float('nan'), "control"))
+    h = hypothesis_tracking(recs)["hypotheses"]["H-01"]
+    assert h['status'] == 'testing' and h['ci'] is None and h['d_estimate'] is None
+    assert h['excluded_runs'] == 1 and h['descriptive']['control']['n'] == 1
+    assert abs(h['descriptive']['mean_difference'] + 0.3) < 1e-10
 
 
 def test_stage2_chattering_refute_needs_repeated_switch():
@@ -411,7 +424,7 @@ def test_dashboard_one_page_latest_left_all_right():
         page = refresh(recs, os.path.join(d, "screen")).read_text(encoding="utf-8")
         assert 'http-equiv="refresh"' in page and 'data-latest="r3"' in page
         assert page.count('class="run"') == 3 and page.count("<tr data-id=") == 3
-        assert "F1 전환 실패" in page and "통과 (전환 불필요)" in page and "V-04" in page
+        assert "F1 전환 실패" in page and "통과 (관측 창 내 전환 불필요)" in page and "V-04" in page
         assert not os.path.exists(os.path.join(d, "screen", "runs"))
         empty = refresh(os.path.join(d, "none.jsonl"), os.path.join(d, "s2")).read_text(encoding="utf-8")
         assert "아직 끝난 시나리오가 없습니다" in empty

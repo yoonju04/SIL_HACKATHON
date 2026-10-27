@@ -1,4 +1,4 @@
-"""09 Monitor v2: grades MPC->LQR switching safety on SR1..SR6 (safety_spec.yaml).
+"""09 Monitor v3: grades MPC->LQR switching safety on SR1..SR6 (safety_spec.yaml).
 
 What is verified
   (1) a fault happened but the switch to LQR did not happen or came too late  -> SR1 (F1)
@@ -21,6 +21,7 @@ for stages 2, 3 and 6).
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -59,6 +60,14 @@ class MonitorConfig:
     # SR6
     max_steer_rad: float | None = None
     sr6_max_rate_dps: float = 90.0
+    # Diagnostic literature references, not safety label thresholds.
+    diagnostic_low_speed_mps: float = 0.5
+    diagnostic_post_window_s: float = 5.0
+    comfort_reference_limits: dict = field(default_factory=lambda: {
+        "max_abs_lateral_accel_mps2": 4.89, "max_abs_yaw_rate_rad_s": 0.95,
+        "max_abs_yaw_accel_rad_s2": 1.93})
+    sr6_enforce: bool = True
+    spec_provenance: dict = field(default_factory=lambda: {"status": "inline_unversioned"})
     # auxiliary
     mu: float = 0.9
     ay_smoothing_ticks: int = 5
@@ -101,9 +110,27 @@ def load_spec(path: str | Path, **overrides) -> MonitorConfig:
     p02 = next((x for x in (s.get("safety_specification") or {}).get("properties", []) if x.get("id") == "P-02"), {})
     if p02.get("lateral_acc_threshold_mps2") is not None:
         cfg.a_y_max_mps2 = float(p02["lateral_acc_threshold_mps2"])
+    diagnostics = s.get("diagnostics") or {}
+    cfg.diagnostic_low_speed_mps = float(diagnostics.get("low_speed_exclusion_mps", 0.5))
+    cfg.diagnostic_post_window_s = float(diagnostics.get("post_switch_window_s", 5.0))
+    if diagnostics.get("comfort_reference_limits") is not None:
+        cfg.comfort_reference_limits = dict(diagnostics["comfort_reference_limits"])
+    cfg.sr6_enforce = bool(r["SR6"].get("enforce", True))
+    cfg.spec_provenance = {"schema_version": s.get("meta", {}).get("schema_version"),
+                           "status": s.get("meta", {}).get("status"),
+                           "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest()}
     for k, v in overrides.items():
         if v is not None:
             setattr(cfg, k, v)
+    for key in ('dt','window_s','min_window_s','sr1_ftti_fraction','sr1_fixed_limit_s','sr2_limit_dps',
+                'sr2_window_s','sr5_band_m','sr5_within_s','sr5_hold_s','sr6_max_rate_dps',
+                'diagnostic_post_window_s','diagnostic_low_speed_mps','mu'):
+        if not math.isfinite(getattr(cfg,key)) or getattr(cfg,key) <= 0:
+            raise ValueError(f"invalid positive spec parameter: {key}")
+    if cfg.sr1_ftti_fraction > 1 or cfg.min_window_s > cfg.window_s:
+        raise ValueError('invalid FTTI fraction or evaluation window')
+    if cfg.a_y_max_mps2 is not None and (not math.isfinite(cfg.a_y_max_mps2) or cfg.a_y_max_mps2 <= 0):
+        raise ValueError('invalid lateral acceleration limit')
     return cfg
 
 
@@ -190,7 +217,12 @@ def check_run(tr: Trace, onset: float, cfg: MonitorConfig, kind: str) -> RunChec
     chans = [tr.vx, tr.vy, tr.yaw_rate, tr.lane_offset_m]
     if len(t) < 2 or any(len(c) != len(t) for c in chans):
         return RunCheck(False, [f"{kind}: V-01 empty or misaligned log"], (onset, onset))
-    if not all(np.all(np.isfinite(np.asarray(c, float))) for c in chans):
+    for channel in (tr.lane_heading_err, tr.lane_width_m, tr.ay_mps2, tr.steer_cmd_rad, tr.fault_active,
+                    tr.fault_effective, tr.route_revision):
+        if channel is not None and len(channel) != len(t):
+            return RunCheck(False, [f"{kind}: V-01 optional channel misaligned"], (onset, onset))
+    numeric_optional = [x for x in (tr.lane_heading_err, tr.lane_width_m, tr.ay_mps2, tr.steer_cmd_rad) if x is not None]
+    if not all(np.all(np.isfinite(np.asarray(c, float))) for c in [t, *chans, *numeric_optional]):
         reasons.append(f"{kind}: V-01 non-finite values")
     if np.any(np.abs(np.diff(t) - cfg.dt) > cfg.tick_tolerance * cfg.dt):
         reasons.append(f"{kind}: V-02 irregular ticks")
@@ -211,6 +243,9 @@ def check_run(tr: Trace, onset: float, cfg: MonitorConfig, kind: str) -> RunChec
         reasons.append("baseline: V-07 fault active in baseline")
     if kind in ("fault", "no_reaction") and tr.fault_active is None:
         reasons.append(f"{kind}: V-09 no injector log")
+    if any(value is not None and (not math.isfinite(value) or value <= 0)
+           for value in (tr.half_width_m, tr.half_length_m, tr.max_steer_rad)):
+        reasons.append(f"{kind}: V-05 non-positive vehicle parameter")
     half_w = tr.half_width_m or cfg.vehicle_half_width_m
     half_l = tr.half_length_m or cfg.vehicle_half_length_m
     lane_w = tr.lane_width_m if tr.lane_width_m is not None else (
@@ -218,6 +253,8 @@ def check_run(tr: Trace, onset: float, cfg: MonitorConfig, kind: str) -> RunChec
     margin = nominal = None
     if half_w is None or half_l is None or lane_w is None:
         reasons.append(f"{kind}: V-05 lane width or vehicle footprint unknown")
+    elif half_w <= 0 or half_l <= 0 or np.any(np.asarray(lane_w, float) <= 2*half_w):
+        reasons.append(f"{kind}: V-05 invalid lane width or vehicle footprint")
     else:
         margin = footprint_lane_margin(tr.lane_offset_m, tr.lane_heading_err, lane_w, half_w, half_l)
         nominal = float(0.5 * np.median(np.asarray(lane_w, float)[win]) - half_w)
@@ -318,10 +355,10 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
                "ftti_s": None}
     else:
         limit = cfg.sr1_ftti_fraction * ftti if ftti is not None else cfg.sr1_fixed_limit_s
-        limit = max(limit, cfg.dt)  # FTTI of ~0 would make every switch "late"; one tick is the floor
+        # Never expand a hazard budget to one simulation tick; a sub-tick budget is still binding.
         latency = (switch_time - actual_onset) if switch_time is not None else math.inf
-        rob = -1.0 if math.isinf(latency) else _clip((limit - latency) / limit, -1.0, 1.0)
-        sr1 = {"applies": True, "pass": latency <= limit, "robustness": rob, "latency_s": _num(latency),
+        rob = -1.0 if limit <= 0 or math.isinf(latency) else _clip((limit - latency) / limit, -1.0, 1.0)
+        sr1 = {"applies": True, "pass": limit > 0 and latency <= limit, "robustness": rob, "latency_s": _num(latency),
                "limit_s": limit, "limit_source": limit_src, "ftti_s": _num(ftti)}
     sr["SR1"] = sr1
 
@@ -329,30 +366,37 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
     if switch_time is None or fault.steer_cmd_rad is None:
         sr["SR2"] = {"applies": False, "reason": "no switch" if switch_time is None else "steer_cmd not logged"}
     else:
-        m = (t >= switch_time - cfg.dt - 1e-9) & (t <= switch_time + cfg.sr2_window_s + 1e-9)
+        m = ((t >= switch_time - cfg.dt - 1e-9) & (t <= switch_time + cfg.sr2_window_s + 1e-9)
+             & (t <= fc.window[1] + 1e-9))
         st = np.asarray(fault.steer_cmd_rad, float)
         rates = np.abs(np.diff(st)) / np.diff(t)
         rate_mask = m[1:] & m[:-1]
         max_rate = float(np.degrees(rates[rate_mask].max())) if rate_mask.any() else 0.0
         sr["SR2"] = {"applies": True, "pass": max_rate <= cfg.sr2_limit_dps,
                      "robustness": (cfg.sr2_limit_dps - max_rate) / cfg.sr2_limit_dps,
-                     "max_rate_dps": max_rate, "limit_dps": cfg.sr2_limit_dps}
+                     "max_rate_dps": max_rate, "limit_dps": cfg.sr2_limit_dps,
+                     "coverage_complete": switch_time + cfg.sr2_window_s <= fc.window[1] + 1e-9}
+
+    # SR3 is explicitly unassessed until a vehicle/ODD-specific stability envelope is supplied.
+    sr["SR3"] = {"applies": False, "pass": None, "role": "report_only",
+                 "reason": "validated beta-yaw stability/recoverability envelope unavailable"}
 
     # SR5 recovery (advisory unless enforced)
     if switch_time is None:
         sr["SR5"] = {"applies": False, "reason": "no switch"}
     else:
         off = np.abs(np.asarray(fault.lane_offset_m, float))
-        hold_n = max(1, int(round(cfg.sr5_hold_s / cfg.dt)))
         t_rec = None
-        for i in np.flatnonzero(t >= switch_time):
-            if i + hold_n <= len(t) and np.all(off[i:i + hold_n] <= cfg.sr5_band_m):
+        for i in np.flatnonzero((t >= switch_time) & (t <= fc.window[1])):
+            j = int(np.searchsorted(t, t[i] + cfg.sr5_hold_s - 1e-9))
+            if j < len(t) and t[j] <= fc.window[1] + 1e-9 and np.all(off[i:j+1] <= cfg.sr5_band_m):
                 t_rec = float(t[i] - switch_time)
                 break
         rob = -1.0 if t_rec is None else (cfg.sr5_within_s - t_rec) / cfg.sr5_within_s
         sr["SR5"] = {"applies": True, "enforced": cfg.sr5_enforce,
                      "pass": t_rec is not None and t_rec <= cfg.sr5_within_s,
-                     "robustness": rob, "recover_time_s": t_rec}
+                     "robustness": rob, "recover_time_s": t_rec,
+                     "band_m": cfg.sr5_band_m, "within_s": cfg.sr5_within_s, "hold_s": cfg.sr5_hold_s}
 
     # SR6 actuator limits
     max_steer = fault.max_steer_rad or cfg.max_steer_rad
@@ -362,21 +406,25 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
         st = np.asarray(fault.steer_cmd_rad, float)[w]
         tw = t[w]
         peak = float(np.max(np.abs(st)))
-        rate = float(np.degrees(np.max(np.abs(np.diff(st)) / np.diff(tw)))) if len(st) > 1 else 0.0
+        whole_rate = np.abs(np.diff(np.asarray(fault.steer_cmd_rad, float))) / np.diff(t)
+        rate = float(np.degrees(np.max(whole_rate[w[1:]]))) if np.any(w[1:]) else 0.0
         rob = min(1 - peak / max_steer, 1 - rate / cfg.sr6_max_rate_dps)
         sr["SR6"] = {"applies": True, "pass": rob >= -1e-9, "robustness": rob,
-                     "max_steer_deg": math.degrees(peak), "max_rate_dps": rate}
+                     "max_steer_deg": math.degrees(peak), "max_rate_dps": rate,
+                     "limit_rate_dps": cfg.sr6_max_rate_dps, "limit_steer_deg": math.degrees(max_steer),
+                     "enforced": cfg.sr6_enforce}
 
     # auxiliary P-02
     ay = lateral_acceleration(fault, cfg)
-    thr = 0.5 * cfg.mu * G
+    thr = cfg.a_y_max_mps2 if cfg.a_y_max_mps2 is not None else 0.5 * cfg.mu * G
     aux = {"P02_lat_acc": {"threshold_mps2": thr, "max_abs_mps2": float(np.max(np.abs(ay[w]))),
                            "robustness": thr - float(np.max(np.abs(ay[w])))}}
 
     # ---- outcome (priority order from the spec)
     failed = [k for k, v in sr.items() if v.get("applies") and not v.get("pass")
-              and not (k == "SR5" and not cfg.sr5_enforce)]
-    unsafe = not sr["SR4"]["pass"]
+              and not (k == "SR5" and not cfg.sr5_enforce)
+              and not (k == "SR6" and not cfg.sr6_enforce)]
+    unsafe = not sr["SR4"]["pass"] or bool(cfg.sr6_enforce and sr["SR6"].get("applies") and not sr["SR6"]["pass"])
     note = None
     if not triggered:
         outcome = "no_trigger"
@@ -384,7 +432,7 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
         outcome = "F1_no_or_late_switch"
     elif sr["SR2"].get("applies") and not sr["SR2"]["pass"]:
         outcome = "F2_switch_transient"
-    elif not sr["SR4"]["pass"] or (cfg.sr5_enforce and sr["SR5"].get("applies") and not sr["SR5"]["pass"]):
+    elif not sr["SR4"]["pass"] or (cfg.sr6_enforce and sr["SR6"].get("applies") and not sr["SR6"]["pass"]) or (cfg.sr5_enforce and sr["SR5"].get("applies") and not sr["SR5"]["pass"]):
         outcome = "F3_not_recovered"
     else:
         outcome = "pass"
@@ -401,7 +449,7 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
     gpt["SR4"] = cfg.gp_collision_value if sr["SR4"]["collision"] else _clip(p01_f / m_nom, lo, hi)
     gpt["SR5"] = _clip(sr["SR5"]["robustness"], lo, hi) if sr["SR5"].get("applies") else None
     gpt["SR6"] = _clip(sr["SR6"]["robustness"], lo, hi) if sr["SR6"].get("applies") else None
-    enforced = [gpt[k] for k in ("SR1", "SR2", "SR4") + (("SR5",) if cfg.sr5_enforce else ())
+    enforced = [gpt[k] for k in ("SR1", "SR2", "SR4") + (("SR6",) if cfg.sr6_enforce else ()) + (("SR5",) if cfg.sr5_enforce else ())
                 if gpt[k] is not None]
     gpt["overall"] = min(enforced)
     gp = gpt["overall"]
@@ -429,6 +477,19 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
         max_steering_rate_dps=sr.get("SR6", {}).get("max_rate_dps"),
         evaluation_window=list(fc.window),
     )
+    from performance import switch_diagnostics
+    rec["diagnostics"] = switch_diagnostics(fault, cfg, fc, actual_onset if actual_onset is not None else onset,
+                                            switch_time, ay)
+    rec["spec_provenance"] = cfg.spec_provenance
+    missing = [k for k in ("SR2", "SR6") if (k == "SR6" or switch_time is not None)
+               and not sr[k].get("applies") and (k != "SR6" or cfg.sr6_enforce)]
+    if switch_time is not None and sr['SR2'].get('coverage_complete') is False:
+        missing.append('SR2_transition_coverage')
+    rec["assessment_complete"] = not missing
+    rec["unassessed_requirements"] = missing
+    if sr1.get("applies") is False and ftti is not None and math.isinf(ftti):
+        sr1["ftti_right_censored"] = True
+        sr1["reason"] = "no hazard observed within no-reaction evaluation horizon; not globally harmless"
     return rec
 
 
@@ -590,6 +651,15 @@ def evaluate_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfi
                     True)
     bm = run_metrics(baseline, bc, cfg, onset, None, False, False)
     m["margin_delta_m"] = d["margin_delta_m"]
+    from performance import switch_diagnostics
+    baseline_phases = switch_diagnostics(baseline, cfg, bc, onset, d['switch_time'], lateral_acceleration(baseline, cfg))['phases']
+    d['diagnostics']['baseline_phases_at_fault_anchor'] = baseline_phases
+    delta_fields = ('lateral_rmse_m','lateral_mae_m','max_abs_lateral_error_m',
+                    'max_abs_lateral_accel_mps2','max_abs_lateral_jerk_mps3')
+    d['diagnostics']['paired_deltas'] = {
+        phase: {key: values[key]-baseline_phases[phase][key] for key in delta_fields
+                if values.get(key) is not None and baseline_phases.get(phase,{}).get(key) is not None}
+        for phase, values in d['diagnostics']['phases'].items()}
     # state at the switch, for the recoverability oracle (02 recoverability_oracle_spec; artifacts still null)
     if d["switch_time"] is not None:
         t = np.asarray(fault.t, float)
@@ -658,7 +728,9 @@ def load_av_stack_run(run_dir: str | Path) -> Trace:
     steps = _read_jsonl(d / "steps.jsonl")
     beh = {round(r["t"], 4): r for r in _read_jsonl(d / "behavior.jsonl")}
     probe = {round(r["t"], 4): r for r in _read_jsonl(d / "monitor_probe.jsonl")}
-    summary = json.loads((d / "summary.json").read_text()) if (d / "summary.json").exists() else {}
+    summary = json.loads((d / "summary.json").read_text(encoding="utf-8")) if (d / "summary.json").exists() else {}
+    config = json.loads((d / "agent_config.json").read_text(encoding="utf-8")) if (d / "agent_config.json").exists() else {}
+    controls = {round(r["t"], 4): r for r in _read_jsonl(d / "agent_controls.jsonl")}
     t = np.array([r["t"] for r in steps], float)
     keys = [round(x, 4) for x in t]
 
@@ -686,7 +758,14 @@ def load_av_stack_run(run_dir: str | Path) -> Trace:
                          "impulse": e.get("impulse")})
     summ = summary.get("summary", summary) if isinstance(summary, dict) else {}
     meta = summary.get("meta", {}) if isinstance(summary, dict) else {}
+    max_steer = ((meta.get("vehicle_params") or {}).get("max_steer_rad")
+                 or (config.get("geometry") or {}).get("max_steer_rad"))
+    # Only actual, normalized CARLA commands may be converted to road-wheel radians.
+    # Never treat a normalized value as radians or substitute missing commands with zero.
     steer = col(beh, "steer_rad") or [r.get("steer_rad") for r in steps]
+    normalized = col(controls, "steer")
+    if any(v is None for v in steer) and normalized is not None and max_steer is not None:
+        steer = [None if v is None else float(v) * max_steer for v in normalized]
     fa = col(beh, "fault_injected")
     fe = col(probe, "fault_effective")
     rev = col(beh, "route_revision")
@@ -706,7 +785,7 @@ def load_av_stack_run(run_dir: str | Path) -> Trace:
         solve_ms=None if all(v is None for v in solve) else np.array([np.nan if v is None else v for v in solve], float),
         mpc_violation=None if viol_key is None else np.array([bool(r.get(viol_key)) for r in steps]),
         collisions_t=collisions, collisions_info=info, collisions_untimed=untimed, half_width_m=half_w, half_length_m=half_l,
-        max_steer_rad=(meta.get("vehicle_params") or {}).get("max_steer_rad"),
+        max_steer_rad=max_steer,
         safe_stop=bool((summ.get("supervisor") or {}).get("safe_stop", False)), meta=meta)
 
 
@@ -714,7 +793,7 @@ def load_av_stack_run(run_dir: str | Path) -> Trace:
 def main(argv=None):
     import argparse
     here = Path(__file__).resolve().parent
-    ap = argparse.ArgumentParser(description="09 Monitor v2: grade a fault/baseline pair on SR1..SR6")
+    ap = argparse.ArgumentParser(description="09 Monitor v3: grade a fault/baseline pair on SR1..SR6")
     ap.add_argument("--fault-run", required=True)
     ap.add_argument("--baseline-run", required=True)
     ap.add_argument("--no-reaction-run", default=None, help="same fault without supervisor (FTTI for SR1)")

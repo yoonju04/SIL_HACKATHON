@@ -56,7 +56,7 @@ def _metric(r: dict, name: str):
 
 
 def _valid(r: dict) -> bool:
-    return r.get("sim_status") == "valid" and r.get("outcome_category") != "invalid"
+    return r.get("sim_status") == "valid" and r.get("outcome_category") != "invalid" and r.get("assessment_complete") is not False
 
 
 # ============================================================ stage 2
@@ -77,7 +77,7 @@ def hypotheses_from_yaml(path: str | Path, patterns_path: str | Path | None = No
         rule = {"metric": pred["metric"], "direction": pred.get("direction") or mr.get("support_direction"),
                 "secondary": h.get("secondary_prediction", []) or h.get("optional_secondary_prediction", []),
                 "hypothesis_status": h.get("status"), "claim": h.get("claim"), "pattern": h.get("from_pattern"),
-                "phase": h.get("phase")}
+                "phase": h.get("phase"), "condition": h.get("condition"), "control": h.get("control")}
         if pred.get("direction") == "non_inferior":
             rule["delta_min"] = float(pred.get("margin", 0.05))
         elif mr.get("minimum_effect") is not None:
@@ -155,8 +155,10 @@ def hypothesis_tracking(records: list[dict], hypotheses: dict | None = None,
             arm = (r.get("hypothesis_arms") or {}).get(hid)
             if arm not in arms:
                 continue
+            value = _metric(r, metric)
             if (not _valid(r) or r.get("outcome_category") in rule["exclude_outcomes"]
-                    or r.get("runner_outcome") in rule["exclude_outcomes"] or _metric(r, metric) is None):
+                    or r.get("runner_outcome") in rule["exclude_outcomes"] or value is None
+                    or not isinstance(value, (int, float, np.number)) or not math.isfinite(float(value))):
                 excluded += 1
                 continue
             arms[arm].append(r)
@@ -192,11 +194,21 @@ def hypothesis_tracking(records: list[dict], hypotheses: dict | None = None,
             if history:
                 status = "inconclusive"
         last = history[-1] if history else {}
+        observed = {}
+        for arm, runs in arms.items():
+            values = [float(_metric(r, metric)) for r in runs]
+            observed[arm] = {"n": len(values), "mean": float(np.mean(values)) if values else None,
+                             "min": min(values) if values else None, "max": max(values) if values else None,
+                             "run_ids": [r.get("run_id") for r in runs]}
+        a, b = observed["condition"]["mean"], observed["control"]["mean"]
+        observed["mean_difference"] = a - b if a is not None and b is not None else None
         out["hypotheses"][hid] = {
             "metric": metric, "direction": direction, "delta_min": delta,
             "hypothesis_status": spec.get("hypothesis_status"), "claim": spec.get("claim"), "pattern": spec.get("pattern"), "phase": spec.get("phase"),
             "runs_condition": len(arms["condition"]), "runs_control": len(arms["control"]),
             "excluded_runs": excluded, "d_estimate": last.get("d_estimate"), "ci": last.get("ci"),
+            "descriptive": observed, "ci_level": rule["level"],
+            "condition_definition": spec.get("condition"), "control_definition": spec.get("control"),
             "status": status, "status_history": history,
             "next_checkpoint": next((c for c in rule["checkpoints"] if c > n), None) if status == "testing" else None,
         }

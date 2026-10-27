@@ -1,4 +1,4 @@
-# error_table.yaml — Monitor 출력 형식 (v2: SR1~SR6 기준, 결과 F1~F3)
+# error_table.yaml — Monitor 출력 형식 (v3: SR1~SR6 기준, 결과 F1~F3)
 # 채점: monitor.py evaluate_pair() → run_record (짝 하나당 1줄)
 # 피드백: feedback.py → 2·3·6단계 파일
 #   run_records.jsonl        모든 짝의 채점 결과 (아래 세 파일의 원본)
@@ -7,7 +7,7 @@
 #   gp_training.jsonl        → 06 GP: x = 시나리오 값, y = gp_target (숫자 하나)
 
 meta:
-  schema_version: '2.0'
+  schema_version: '3.0'
   profile_id: sp-code-aware-mpc-lqr
   status: draft_definitions
   linked_files: [safety_spec.yaml, monitor.py, feedback.py, av_stack_probe.py]
@@ -32,7 +32,7 @@ inputs:
     monitor_may_read: [ground_truth, injector_truth, sut_switch_events]
     supervisor_never_reads: [injector_truth, monitor_outputs]
 
-run_record:   # = scripts/runner_skeleton.py RUN_RECORD_FIELDS (new_pipeline). 이 28개 외 필드 없음
+run_record:   # legacy junwoo/sim-eval monitor.evaluate_pair(): 28 fields; current runner bridge below
   fields: [run_id, scenario_id, seed_scenario_id, round, selector, profile_id, source_commit,
            feature_schema_version, hypothesis_ids, parameters, planned_fault_onset, actual_fault_onset,
            trigger_time, switch_time, switch_count, outcome_category, P01, P02, P03, margin_delta_m,
@@ -49,11 +49,11 @@ run_record:   # = scripts/runner_skeleton.py RUN_RECORD_FIELDS (new_pipeline). �
   metrics.monitor:   # 우리 SR1~SR6 판정 (monitor.grade_pair)
     failure_type: "invalid | no_trigger | F1_no_or_late_switch | F2_switch_transient | F3_not_recovered | pass"
     note: "undetected_harmless"
-    unsafe: "SR4 또는 충돌 위반"
+    unsafe: "SR4 또는 enforced SR6 위반"
     failed_requirements: "[SR1, SR2, SR4, ...]"
     sr: "SR1~SR6 각각 {applies, pass, robustness, + 근거값}"
     sr_scores: "{SR1, SR2, SR4, SR5, SR6, overall} 같은 눈금 [-2, 1], 적용 안 되면 null"
-    sr_overall: "min(SR1, SR2, SR4)"
+    sr_overall: "min(적용 가능한 SR1, SR2, SR4, enforced SR6, 선택 enforced SR5)"
     sr_measures: "점수 뒤 원래 값 (지연 s, 조향속도, 차선 여유, 충돌 시각·상대 ...)"
     other: [aux, detection_latency_s, pre_switch_max_lateral_error_m, evaluation_window, switch_state, run_dirs]
   read_with: "monitor.view(record): 러너 필드 + metrics.monitor를 펼친 보기 (feedback.py, dashboard.py가 사용)"
@@ -88,3 +88,14 @@ stage6_gp_training:   # feedback.gp_training_rows — 06 surrogate.yaml feedback
   y: "run_record.gp_targets (지표별 z). 값 없는 지표는 빠짐"
   also: [metrics, baseline_metrics, sr_scores, outcome_category, failure_type, stress_test, gp_mean_before, gp_std_before]
   excluded: "simulation_invalid, gp_targets가 빈 런"
+
+runner_adapter:
+  tested_commit: d743fac6ec11b5f8c1ba53033dc2523483db59d1
+  source: pipeline/engine/judgment.py#RUN_RECORD_FIELDS
+  field_count: 37
+  preserves: [outcome_category, recovery_outcome, recovery_labels, final_safe_recovery,
+              lane_recovery_robustness, lat_acc_excess_mps2, switch_state, handover_saturation,
+              trigger_source, trigger_attribution, metrics, baseline_metrics, gp_targets]
+  adds_only: metrics.monitor
+  entrypoint: runner_adapter.py
+  integration: explicit_postprocess_entrypoint_not_automatic_pipeline_run_replacement
