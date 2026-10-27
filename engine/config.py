@@ -3,8 +3,10 @@
 Path rules (so the same code works before and after new_pipeline + junwoo/sim-eval are merged):
   * av_stack:        <repo>/pipeline/08_carla_paired_run/av_stack  (in-repo, after the merge)
                      else $AV_STACK_ROOT, else $SIM_EVAL_ROOT/pipeline/08_carla_paired_run/av_stack
-  * scenario space:  <repo>/pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml (sim-eval file)
-                     else the same path under $SIM_EVAL_ROOT
+  * to_cli:          04_feasibility_expansion/scenario_space.py (older) or 08_carla_paired_run/fault_args.py (sim-eval 13c2dbf)
+  * scenario space:  <repo>/pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml (older sim-eval name)
+                     else <repo>/pipeline/04_feasibility_expansion/scenario_space.yaml if it is the av_stack fault
+                     catalog (faults + fault_timing + environment.max_speed_kmh; sim-eval 13c2dbf renamed it), else the same under $SIM_EVAL_ROOT
                      else (mock only) engine/fixtures/scenario_space_mock.yaml  (SYNTHETIC)
 """
 from __future__ import annotations
@@ -20,7 +22,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_DIR = REPO_ROOT / "pipeline"
 AV_STACK_REL = Path("pipeline/08_carla_paired_run/av_stack")
 SPACE_REL = Path("pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml")
+SPACE_RENAMED_REL = Path("pipeline/04_feasibility_expansion/scenario_space.yaml")
 SPACE_TOOL_REL = Path("pipeline/04_feasibility_expansion/scenario_space.py")
+FAULT_ARGS_REL = Path("pipeline/08_carla_paired_run/fault_args.py")
 FIXTURE_SPACE = Path(__file__).resolve().parent / "fixtures" / "scenario_space_mock.yaml"
 
 STAGE_FILES = {
@@ -77,18 +81,35 @@ def resolve_scenario_space(allow_fixture: bool) -> tuple[Path, bool]:
     for p in _candidates(SPACE_REL):
         if p.is_file():
             return p.resolve(), False
+    for p in _candidates(SPACE_RENAMED_REL):
+        if p.is_file() and _is_av_stack_space(p):
+            return p.resolve(), False
     if allow_fixture:
         return FIXTURE_SPACE, True
     raise FileNotFoundError(
-        f"{SPACE_REL} not found. Merge junwoo/sim-eval into this branch or set SIM_EVAL_ROOT.")
+        f"{SPACE_REL} (or an av_stack {SPACE_RENAMED_REL.name}) not found. Merge junwoo/sim-eval into this branch or set SIM_EVAL_ROOT.")
+
+
+def _is_av_stack_space(path: Path) -> bool:
+    try:
+        d = load_yaml(path) or {}
+    except Exception:
+        return False
+    env = d.get("environment") if isinstance(d, dict) else None
+    # av_stack catalog: faults list + max_speed_kmh environment (the old team template uses speed_mps).
+    return isinstance(env, dict) and "max_speed_kmh" in env and isinstance(d.get("faults"), list) and "fault_timing" in d
 
 
 def import_scenario_space_tool():
-    """sim-eval pipeline/04_feasibility_expansion/scenario_space.py (to_cli etc.) or None."""
-    for p in _candidates(SPACE_TOOL_REL):
-        if p.is_file():
-            spec = importlib.util.spec_from_file_location("sim_eval_scenario_space", p)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)  # type: ignore[union-attr]
-            return mod
+    """sim-eval module that provides to_cli(space, scenario, onset_s), or None (engine/scenarios.py fallback).
+
+    Tries 04_feasibility_expansion/scenario_space.py, then 08_carla_paired_run/fault_args.py."""
+    for rel, name in ((SPACE_TOOL_REL, "sim_eval_scenario_space"), (FAULT_ARGS_REL, "sim_eval_fault_args")):
+        for p in _candidates(rel):
+            if p.is_file():
+                spec = importlib.util.spec_from_file_location(name, p)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)  # type: ignore[union-attr]
+                if hasattr(mod, "to_cli"):
+                    return mod
     return None
