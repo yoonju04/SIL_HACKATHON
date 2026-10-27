@@ -48,7 +48,8 @@ flowchart TD
 | | [`engine/hypothesis_tools/`](../engine/hypothesis_tools/) | 가설 생성기 · 시나리오 후보 샘플러 · 예시 입력 |
 | 03 Nemotron A | [`03_nemotron_a/nemotron_a.yaml`](03_nemotron_a/nemotron_a.yaml) | 시나리오 후보 생성 (실패 few-shot 입력) |
 | 04 타당성 검사 + 후보 확장 | [`04_feasibility_expansion/feasibility_expansion.yaml`](04_feasibility_expansion/feasibility_expansion.yaml) | G-01~04 게이트, 섭동·중복 제거 |
-| ↳ Scenario space | [`04_feasibility_expansion/scenario_space.yaml`](04_feasibility_expansion/scenario_space.yaml) | ODD 변수, 고장 F-01~03, 주입 시점 |
+| ↳ Scenario space | [`04_feasibility_expansion/scenario_space.yaml`](04_feasibility_expansion/scenario_space.yaml) | ODD 변수, 고장 F-01~03, 주입 시점 (가설 도구용 팀 템플릿) |
+| ↳ av_stack 고장 목록 | [`04_feasibility_expansion/scenario_space_av_stack.yaml`](04_feasibility_expansion/scenario_space_av_stack.yaml) | 고장 F-01~07 × 시점 × 환경 (루프가 실제로 쓰는 목록, 팀원 sim-eval) |
 | 05a 결정론적 feature | [`05a_deterministic_features/deterministic_features.yaml`](05a_deterministic_features/deterministic_features.yaml) | DF-01~05, GP 입력 구성 |
 | 05b Nemotron B | [`05b_nemotron_b/nemotron_b.yaml`](05b_nemotron_b/nemotron_b.yaml) | 코드 질문 Q-B1~3 (결과 비참조) |
 | 06 GP surrogate | [`06_gp_surrogate/surrogate.yaml`](06_gp_surrogate/surrogate.yaml) | 가설 주 지표마다 GP 1개, 방향·스케일 정규화 z 회귀 |
@@ -56,7 +57,8 @@ flowchart TD
 | 08 CARLA 짝 실행 | [`08_carla_paired_run/paired_runs.yaml`](08_carla_paired_run/paired_runs.yaml) | CARLA 설정, baseline vs fault 매칭 |
 | 09 Monitor | [`09_monitor/error_table.yaml`](09_monitor/error_table.yaml) | run record · failure table 스키마 |
 | ↳ Safety spec | [`09_monitor/safety_spec.yaml`](09_monitor/safety_spec.yaml) | P-01~04 (P-02 횡가속도·P-04 저크는 라벨), 결과 5분류 ↔ recovery_outcome 매핑 |
-| ↳ monitor | [`engine/monitor.py`](../engine/monitor.py) | av_stack 런 폴더 → run_record (CLI: `python -m engine.monitor RUN_DIR --baseline BASE_DIR`) |
+| ↳ monitor | [`engine/monitor.py`](../engine/monitor.py) | `evaluate(run_dir, spec, baseline_dir=, no_reaction_dir=)` → run_record (CLI: `python -m engine.monitor RUN_DIR --baseline BASE_DIR [--no-reaction DIR]`) |
+| ↳ SR 검사 · 화면 | [`engine/sr_checks.py`](../engine/sr_checks.py) · [`engine/dashboard.py`](../engine/dashboard.py) | 팀원 Monitor v2의 SR1(FTTI)·SR2·SR4(차체)·SR6 → run_record `sr_*` 필드, 진행 화면 HTML |
 | 10 Video explainer | [`10_video_explainer/video_explainer.yaml`](10_video_explainer/video_explainer.yaml) | 해설할 런 선택, 클립 4 fps, 검증 ±0.5 s, 메커니즘 태그, 피드백 |
 | LLM 모델 | [`llm_models.yaml`](llm_models.yaml) | A Lightning · A_refine · B Ultra x3 · C Cosmos(Dedicated) / Super-VL |
 | 실행 엔진 | [`engine/`](../engine/) · [`run.py`](../run.py) (저장소 루트) | judgment, monitor, scenarios, surrogate(sklearn GP + straddle), llm, nemotron, carla_runner, video, explainer, feedback, fixtures(SYNTHETIC) |

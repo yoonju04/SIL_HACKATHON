@@ -73,6 +73,10 @@ runner:
   record_front: true                           # front.mp4 + front_frames.jsonl → 10 video explainer
   chase_view: false                            # true면 view.mp4도 기록 (창 필요). 기본 --no-view
   stop_after_fault_s: 15.0                     # PROVISIONAL: 판정 창 5 s + 여유. --stop-after-fault
+  no_reaction_run:                             # 2026-10-27 integration: SR1 FTTI 측정용 (engine/sr_checks.py)
+    controller: mpc_unprotected                # 같은 고장, 감독기 없음 (run_benchmark.py --controller)
+    mock: true                                 # mock 에서는 합성 런이라 비용 0
+    real: false                                # CARLA 런이 후보마다 1개 더 → 기본 off (run.py --no-reaction-runs on)
   speed_step_kmh: 5                            # PROVISIONAL: baseline 캐시 재사용을 위해 속도를 5 km/h 격자로
   seed: 17                                     # run_benchmark.py 기본값
   host: localhost                              # 환경변수 CARLA_HOST

@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""08 paired run: turn a planned fault into av_stack/run_benchmark.py arguments.
+"""08 paired run: turn a planned fault into av_stack/run_benchmark.py arguments (teammate's to_cli, sim-eval 13c2dbf;
+moved from pipeline/08_carla_paired_run/fault_args.py — functional code lives in engine/).
 
-The fault catalog (what can be injected, and in which ranges) lives in stage 04:
-pipeline/04_feasibility_expansion/scenario_space.yaml. Running CARLA belongs here in 08,
-so the conversion to run_benchmark.py flags lives here too.
+The av_stack fault catalog (what can be injected, and in which ranges) lives in stage 04:
+pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml (the teammate's scenario_space.yaml; our
+scenario_space.yaml keeps the team template). engine.carla_runner calls to_cli; engine.scenarios.fault_cli_local
+is the same mapping kept as fallback.
 
-  python fault_args.py --self-test
+  python -m engine.fault_args --self-test
 
-Input `scenario` is one chosen plan in scenario_space.py's sample format:
+Input `scenario` is one chosen plan in engine.fault_catalog.sample's format:
   {"fault_id": "F-04", "params": {...}, "timing": {...}, "environment": {...}}
 onset_s is the absolute fault start the caller found on its route for
 timing.onset_event + offset_s (event detection is not done here).
@@ -21,7 +23,7 @@ from typing import Any, Dict, List
 
 import yaml
 
-SPACE_PATH = Path(__file__).resolve().parents[1] / '04_feasibility_expansion' / 'scenario_space.yaml'
+SPACE_PATH = Path(__file__).resolve().parents[1] / 'pipeline' / '04_feasibility_expansion' / 'scenario_space_av_stack.yaml'
 WHOLE_RUN_S = 500.0  # fault window for faults without a duration: stays on until the route ends
 
 
@@ -65,9 +67,13 @@ def to_cli(space: Dict[str, Any], scenario: Dict[str, Any], onset_s: float) -> L
 
 
 def _self_test() -> None:
-    sys.path.insert(0, str(SPACE_PATH.parent))
     import random
-    import scenario_space  # stage 04 helper, used here only to draw test plans
+
+    try:
+        from engine import fault_catalog as scenario_space  # stage 04 helper, used here only to draw test plans
+    except ImportError:  # run as a plain script
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import fault_catalog as scenario_space
 
     space = load_space()
     rng = random.Random(0)

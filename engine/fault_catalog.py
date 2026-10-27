@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Load, check and sample scenario_space.yaml (the fault catalog Nemotron B chooses from).
+"""Load, check and sample the av_stack fault catalog (the teammate's scenario_space.py, sim-eval 13c2dbf; moved
+from pipeline/04_feasibility_expansion/ — functional code lives in engine/).
 
-  python scenario_space.py --check
-  python scenario_space.py --sample 5 --seed 0 [--fault F-03] [--implemented-only]
-  python scenario_space.py --self-test
+Catalog: pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml (faults F-01..F-07 x timing x environment).
+  python -m engine.fault_catalog --check
+  python -m engine.fault_catalog --sample 5 --seed 0 [--fault F-03] [--implemented-only]
+  python -m engine.fault_catalog --self-test
 
-This file only describes and checks the catalog. Turning a scenario into CARLA run
-arguments is stage 08's job: pipeline/08_carla_paired_run/fault_args.py (to_cli).
+This file only describes and checks the catalog (run.py --check calls check()). Turning a scenario into CARLA
+run arguments is engine/fault_args.py (to_cli). The loop's own sampling is engine/scenarios.py.
 --sample draws uniformly at random; in the pipeline Nemotron A sets the environment and
 Nemotron B the fault plan, so sampling is for a random baseline and tests only.
 
@@ -23,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-DEFAULT_PATH = Path(__file__).with_name('scenario_space.yaml')
+DEFAULT_PATH = Path(__file__).resolve().parents[1] / 'pipeline' / '04_feasibility_expansion' / 'scenario_space_av_stack.yaml'
 GROUPS = ('control', 'risk')
 
 

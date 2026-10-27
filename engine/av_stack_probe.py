@@ -1,4 +1,6 @@
 """Ground-truth probe for the 09 Monitor, to be called once per tick by an av_stack runner.
+(teammate's pipeline/09_monitor/av_stack_probe.py, sim-eval a5242b2; moved to engine/. The copy that actually
+runs inside CARLA is pipeline/08_carla_paired_run/av_stack/integration/monitor_logs.py MonitorProbe.)
 
 Writes monitor_probe.jsonl next to steps.jsonl. It only READS simulator state
 (no commands), and it does not use any controller output, so P-01..P-03 do

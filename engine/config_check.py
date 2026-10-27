@@ -99,6 +99,19 @@ def collect_missing(config: dict[str, Any]) -> list[str]:
     return missing
 
 
+def catalog_report(pipeline_dir: Path = PIPELINE_DIR) -> str:
+    """One line on the av_stack fault catalog (scenario_space_av_stack.yaml, engine/fault_catalog.py check)."""
+    from . import fault_catalog
+    path = Path(pipeline_dir) / "04_feasibility_expansion" / "scenario_space_av_stack.yaml"
+    if not path.is_file():
+        return f"av_stack 고장 목록 없음: {path} (real 모드는 SIM_EVAL_ROOT 필요)"
+    space = fault_catalog.load(path)
+    problems = fault_catalog.check(space)
+    ready = sum(1 for f in space.get("faults", []) if f.get("implemented"))
+    head = f"av_stack 고장 목록: {len(space.get('faults', []))}개 (주입기 구현 {ready}개) {path.name}"
+    return head + ("" if not problems else " — 문제: " + "; ".join(problems))
+
+
 def cmd_check(pipeline_dir: Path = PIPELINE_DIR) -> int:
     pipeline_dir = Path(pipeline_dir)
     config = load_pipeline(pipeline_dir)
@@ -112,6 +125,7 @@ def cmd_check(pipeline_dir: Path = PIPELINE_DIR) -> int:
     metric_of = {h["id"]: h["prediction"]["metric"] for h in hyps
                  if h["status"] in ("proposed", "testing")}
     print("활성 GP 지표:", ", ".join(sorted(set(metric_of.values()))) or "없음 (전부 blocked)")
+    print(catalog_report(pipeline_dir))
     if not missing:
         print("실행에 필요한 null 항목이 없다.")
         return 0

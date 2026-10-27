@@ -1,7 +1,8 @@
 """08 CARLA paired run: subprocess wrapper around sim-eval av_stack run_benchmark.py (+ mock runner).
 
 Per candidate: a no-fault baseline (cached by the 08 match key) and a fault run, both with
---planner pdm --controller supervised --record-front. The baseline also gives the onset_event times
+--planner pdm --controller supervised --record-front; optionally (08 paired_runs.yaml no_reaction_run) a
+no-reaction run with the same fault and --controller mpc_unprotected, used by engine.sr_checks SR1 to measure FTTI. The baseline also gives the onset_event times
 (engine.scenarios.detect_route_events). sim-eval code is called, never modified.
 
 run_benchmark.py arguments used (read from sim-eval 9b51151 run_benchmark.py:21-58):
@@ -25,6 +26,8 @@ from typing import Any
 from . import judgment as J
 from .config import import_scenario_space_tool
 from .scenarios import fault_cli_local, fault_dict_for_sim
+
+NO_REACTION_CONTROLLER = "mpc_unprotected"  # run_benchmark.py --controller choice (sim-eval PR #1): MPC, no supervisor
 
 
 def baseline_key(c: dict, route: dict, seed: int, planner: str = "pdm") -> dict:
@@ -69,7 +72,25 @@ class BaseRunner:
             (d / ".complete").write_text(json.dumps(baseline_key(c, self.routes[c["route_id"]], self.seed)))
         return d, False
 
+    def no_reaction_dir(self, c: dict, onset_s: float) -> Path:
+        k = dict(baseline_key(c, self.routes[c["route_id"]], self.seed), controller=NO_REACTION_CONTROLLER,
+                 fault=c["fault"], onset_s=round(float(onset_s), 2))
+        return self.out_root / "no_reaction" / key_hash(k)
+
+    def ensure_no_reaction(self, c: dict, onset_s: float) -> tuple[Path, bool]:
+        """SR1 FTTI run: same route/env/fault/onset, no supervisor (`--controller mpc_unprotected`). Cached."""
+        d = self.no_reaction_dir(c, onset_s)
+        if (d / "steps.jsonl").is_file() and (d / ".complete").is_file():
+            return d, True
+        res = self.run_no_reaction(c, d, onset_s)
+        if res.returncode == 0:
+            (d / ".complete").write_text(json.dumps({"controller": NO_REACTION_CONTROLLER, "onset_s": onset_s}))
+        return d, False
+
     def run_fault(self, c: dict, run_dir: Path, onset_s: float) -> RunResult:
+        raise NotImplementedError
+
+    def run_no_reaction(self, c: dict, run_dir: Path, onset_s: float) -> RunResult:
         raise NotImplementedError
 
     def _run(self, c: dict, out: Path, fault_args) -> RunResult:
@@ -79,17 +100,20 @@ class BaseRunner:
 class MockRunner(BaseRunner):
     """SYNTHETIC: writes run folders with engine/fixtures/synthetic_sim.py (no CARLA)."""
 
-    def _run(self, c, out, fault_args=None, onset_s=None):
+    def _run(self, c, out, fault_args=None, onset_s=None, controller="supervised"):
         from .fixtures.synthetic_sim import write_run_folder
         t0 = time.time()
         fault = None if onset_s is None else fault_dict_for_sim(self.space, c, onset_s)
         write_run_folder(out, route=c["route_id"], max_speed_kmh=c["environment"]["max_speed_kmh"], fault=fault,
                          seed=self.seed, stop_after_fault_s=self.stop_after_fault_s if fault else None,
-                         record_front=fault is not None)
-        return RunResult(out, 0, ["<synthetic_sim>", c["route_id"]], time.time() - t0)
+                         record_front=fault is not None and controller == "supervised", controller=controller)
+        return RunResult(out, 0, ["<synthetic_sim>", c["route_id"], controller], time.time() - t0)
 
     def run_fault(self, c, run_dir, onset_s):
         return self._run(c, run_dir, onset_s=onset_s)
+
+    def run_no_reaction(self, c, run_dir, onset_s):
+        return self._run(c, run_dir, onset_s=onset_s, controller=NO_REACTION_CONTROLLER)
 
 
 class CarlaRunner(BaseRunner):
@@ -106,12 +130,12 @@ class CarlaRunner(BaseRunner):
         self.chase_view = chase_view
         self.tool = import_scenario_space_tool()
 
-    def command(self, c: dict, out: Path, fault_args: list[str] | None) -> list[str]:
+    def command(self, c: dict, out: Path, fault_args: list[str] | None, controller: str = "supervised") -> list[str]:
         r = self.routes[c["route_id"]]
         cmd = [self.python, str(self.av_stack / "run_benchmark.py"), "--routes", r["routes_arg"]]
         if r.get("route_id_arg"):
             cmd += ["--route-id", str(r["route_id_arg"])]
-        cmd += ["--planner", "pdm", "--controller", "supervised", "--record-front",
+        cmd += ["--planner", "pdm", "--controller", controller] + (["--record-front"] if controller == "supervised" else []) + [
                 "--max-speed", "%.1f" % c["environment"]["max_speed_kmh"], "--seed", str(self.seed),
                 "--host", self.host, "--port", str(self.port), "--traffic-manager-port", str(self.tm_port),
                 "--timeout", str(self.timeout_s), "--out", str(out)]
@@ -132,12 +156,12 @@ class CarlaRunner(BaseRunner):
             return self.tool.to_cli(self.space, scen, onset_s)
         return fault_cli_local(self.space, c, onset_s)
 
-    def _run(self, c, out, fault_args=None):
+    def _run(self, c, out, fault_args=None, controller="supervised"):
         out = Path(out)
         if (out / "results.json").exists():
             raise FileExistsError(f"{out} already has results.json (run_benchmark.py needs a fresh --out)")
         out.parent.mkdir(parents=True, exist_ok=True)
-        cmd = self.command(c, out, fault_args)
+        cmd = self.command(c, out, fault_args, controller)
         log = out.parent / (out.name + ".log")
         t0 = time.time()
         env = dict(os.environ)
@@ -152,6 +176,9 @@ class CarlaRunner(BaseRunner):
 
     def run_fault(self, c, run_dir, onset_s):
         return self._run(c, run_dir, self.fault_args(c, onset_s))
+
+    def run_no_reaction(self, c, run_dir, onset_s):
+        return self._run(c, run_dir, self.fault_args(c, onset_s), controller=NO_REACTION_CONTROLLER)
 
 
 def default_python(av_stack: Path) -> str:

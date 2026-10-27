@@ -196,12 +196,14 @@ SIL_HACKATHON/
 │   ├── 06_gp_surrogate/           # 지표별 GP (정규화 z)
 │   ├── 07_orchestrator/           # LCB 선택 · 예산
 │   ├── 08_carla_paired_run/       # baseline vs fault 짝 실행
-│   ├── 09_monitor/                # safety spec P-01~03 + error table (판정 코드는 engine/monitor.py)
+│   ├── 09_monitor/                # safety spec P-01~04 + SR1/2/4/6 수치 + error table (판정 코드는 engine/monitor.py · sr_checks.py)
 │   ├── 10_video_explainer/        # 영상 해설 + 검증 (Cosmos Reason / Nemotron VL)
 │   ├── llm_models.yaml            # 모델 id · 호출 파라미터 (역할 A, A_refine, B, C)
 │   └── evaluation/                # ablation X-1~6
 ├── engine/                        # 실행 코드 전부 (pipeline/ 에는 단계 설정만 둔다)
-│   ├── judgment.py · monitor.py   # 판정 순수 함수 · 09 모니터 (CLI: python -m engine.monitor RUN_DIR)
+│   ├── judgment.py · monitor.py   # 판정 순수 함수 · 09 모니터 evaluate() (CLI: python -m engine.monitor RUN_DIR --baseline DIR)
+│   ├── sr_checks.py · dashboard.py# 팀원 Monitor v2의 SR1/SR2/SR4/SR6 검사 · 진행 화면 (outputs/<run>/screen/campaign.html)
+│   ├── fault_catalog.py · fault_args.py · av_stack_probe.py  # av_stack 고장 목록 검증 · run_benchmark 인자 · CARLA 차선 probe
 │   ├── config.py · config_check.py# YAML·av_stack 경로 해석 · null 항목 점검 (python run.py --check)
 │   ├── surrogate.py · scenarios.py · nemotron.py · llm.py · carla_runner.py · video.py · explainer.py · feedback.py
 │   ├── fixtures/                  # mock 전용 합성 시뮬레이터 · scenario space (SYNTHETIC)

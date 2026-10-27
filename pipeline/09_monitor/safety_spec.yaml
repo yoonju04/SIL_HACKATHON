@@ -50,3 +50,29 @@ safety_specification:
     switched_unsafe: "전환했고 final_safe_recovery == false (recovered_after_departure, unsettled, unrecovered, 또는 safe_recovery + 가속도/저크 라벨)"
   infraction_reference: "CARLA Leaderboard 2.1 (02 references E-03): 충돌 → collisions.json / evaluation_events.json, 경로 이탈 → evaluation_events.json"
   simulation_invalid_is_not_safe: true
+
+# 2026-10-27 integration: 팀원 Monitor v2(junwoo/sim-eval a5242b2)의 고유 검사 SR1/SR2/SR4/SR6 수치 (engine/sr_checks.py).
+# 전부 PROVISIONAL (팀원 값 그대로 옮김). 결과는 run_record 의 sr_* 참고 필드로만 남고, 우리 판정(recovery_outcome,
+# final_safe_recovery, outcome_category, GP 타깃)은 바꾸지 않는다.
+# 겹치는 부분은 위 우리 정의를 따른다:
+#   SR5 회복 (팀원: 0.3 m 띠, 3 s 안, 1 s 유지)  → recovery_judgment (02) + after_switch_window_s 5.0
+#   P-02 횡가속도 (팀원: 0.5*mu*g = 4.41 m/s^2)  → P-02 lateral_acc_threshold_mps2 3.0 (recovery_labels)
+#   평가 창 (팀원: onset + 10 s, 최소 5 s)        → evaluation_window (onset .. simulation_end), 최소 = after_switch_window_s
+sr_checks:
+  SR1:   # 고장이 실제로 MPC 출력을 바꾼 시각 → LQR 전환까지 지연 <= ftti_fraction * FTTI
+    ftti_fraction: 0.5
+    fixed_fallback_s: 0.5            # no-reaction 런이 없을 때 쓰는 고정 한계
+    no_reaction_controller: mpc_unprotected   # FTTI 측정 런 (08 paired_runs.yaml no_reaction_run)
+  SR2:   # 전환 순간 조향 명령 변화율
+    limit_dps: 60.0
+    window_after_switch_s: 0.5
+  SR4:   # 차체 사각형(방향각 포함) 기준 차선 여유 + 충돌. G-04: baseline 이 SR4 위반이면 쌍 거절
+    footprint: rectangle_with_heading
+  SR6:   # 조향각 <= 차량 max_steer, 조향 변화율 <= max_rate_dps (평가 창 전체)
+    max_rate_dps: 90.0
+  validity:
+    tick_tolerance: 0.25             # |dt_i - dt| <= 0.25 dt
+    onset_tolerance_s: 0.051         # 계획 vs 실제 고장 시작
+  gp_score:                          # sr_scores (참고값, GP 학습에는 안 씀): 1 = 여유, 0 = 한계, <0 = 위반
+    clip: [-2.0, 1.0]
+    collision_value: -2.0

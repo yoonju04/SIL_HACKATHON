@@ -8,8 +8,7 @@ from types import SimpleNamespace as NS
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from av_stack_probe import MonitorProbe  # noqa: E402
+from engine.av_stack_probe import MonitorProbe  # noqa: E402
 
 
 class Loc:

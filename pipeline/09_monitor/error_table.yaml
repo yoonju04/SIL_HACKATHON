@@ -20,7 +20,12 @@ results_schema:
                recovery_outcome, recovery_labels, final_safe_recovery, lane_recovery_robustness,
                lat_acc_excess_mps2, P01, P02, P03, margin_delta_m,
                switch_state_label, metrics, baseline_metrics, gp_targets,
-               gp_mean, gp_std, sim_status, invalid_reason]
+               gp_mean, gp_std, sim_status, invalid_reason,
+               sr_outcome, sr_failed_requirements, sr_labels, sr_scores, detection_latency_s, ftti_s, sr_checks]
+  # sr_*: 팀원 Monitor v2(junwoo/sim-eval a5242b2) SR1/SR2/SR4/SR6 검사 결과 (engine/sr_checks.py). 참고 필드.
+  #   sr_outcome: invalid | no_trigger | F1_no_or_late_switch | F2_switch_transient | F3_not_recovered | pass
+  #   F3 / SR5 는 우리 recovery v2(recovery_outcome, final_safe_recovery)로 정한다. GP 타깃·outcome_category 에는 안 씀
+  #   sr_labels: late_or_no_switch, switch_transient, footprint_departure, actuator_limit_exceeded (bool | null)
   # metrics / baseline_metrics: 02 metric_rules의 모든 지표 + 보조 지표 (정의: 02 outcome_definitions)
   #   계산 불가(예: 전환 없음 → recovery_robustness)는 null. 0으로 대체 금지
   # gp_targets: 06 orientation 적용 후 지표별 z. gp_mean/gp_std: 선택 당시 지표별 예측 {metric: value}

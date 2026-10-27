@@ -58,8 +58,10 @@ def _gains(v: float, wn: float, zeta: float) -> tuple[float, float]:
 
 
 def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, seed: int = 17,
-             stop_after_fault_s: float | None = None, max_time_s: float = 120.0) -> dict[str, Any]:
-    """Return per-tick arrays + events. fault = {mode, start, duration, magnitude, on_s, off_s} or None."""
+             stop_after_fault_s: float | None = None, max_time_s: float = 120.0,
+             supervised: bool = True) -> dict[str, Any]:
+    """Return per-tick arrays + events. fault = {mode, start, duration, magnitude, on_s, off_s} or None.
+    supervised=False is the no-reaction run (`--controller mpc_unprotected`): the MPC keeps steering (SR1 FTTI)."""
     rng = random.Random(hash((route, round(max_speed_kmh, 3), seed)) & 0xFFFFFFFF)
     v_cap = max_speed_kmh / 3.6
     s = 0.0; v = 0.0; e_y = 0.0; e_psi = 0.0; delta = 0.0
@@ -105,19 +107,24 @@ def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, see
                     u = math.copysign(MAX_STEER, mag)
                 elif mode == "output_delay":
                     u = history[max(0, len(history) - 1 - int(round(mag)))]
-            if not ok:
-                reason = "solver_failure"
-            elif abs(reported[0]) > 1.0 or abs(reported[1]) > 0.6:
-                bad_since = t if bad_since is None else bad_since
-                if t - bad_since >= 0.25 - 1e-9:
-                    reason = "tracking_divergence"
+            if not supervised:
+                if ok:  # no supervisor: the (faulty) MPC command is applied; a failed solve holds the last command
+                    lim = math.radians(60.0) * DT
+                    delta = max(delta - lim, min(delta + lim, max(-MAX_STEER, min(MAX_STEER, u))))
             else:
-                bad_since = None
-            if reason is not None:
-                active, switched_at, switch_count = "lqr", round(t, 4), 1
-            else:
-                lim = math.radians(60.0) * DT
-                delta = max(delta - lim, min(delta + lim, max(-MAX_STEER, min(MAX_STEER, u))))
+                if not ok:
+                    reason = "solver_failure"
+                elif abs(reported[0]) > 1.0 or abs(reported[1]) > 0.6:
+                    bad_since = t if bad_since is None else bad_since
+                    if t - bad_since >= 0.25 - 1e-9:
+                        reason = "tracking_divergence"
+                else:
+                    bad_since = None
+                if reason is not None:
+                    active, switched_at, switch_count = "lqr", round(t, 4), 1
+                else:
+                    lim = math.radians(60.0) * DT
+                    delta = max(delta - lim, min(delta + lim, max(-MAX_STEER, min(MAX_STEER, u))))
         if active == "lqr":
             a, b = _gains(v, 1.6, 0.75)
             u = delta_ref - (a * e_y + b * e_psi)
@@ -181,14 +188,14 @@ def _ffmpeg() -> str | None:
 
 def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict[str, Any] | None,
                      seed: int = 17, stop_after_fault_s: float | None = None, record_front: bool = True,
-                     ) -> Path:
+                     controller: str = "supervised") -> Path:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    sim = simulate(route, max_speed_kmh, fault, seed, stop_after_fault_s)
+    sim = simulate(route, max_speed_kmh, fault, seed, stop_after_fault_s, supervised=controller == "supervised")
     rows = sim["rows"]
     f = fault or {"mode": "none", "start": 20.0, "duration": 5.0, "magnitude": 0.05}
     marker = {"synthetic_fixture": True, "generator": "engine/fixtures/synthetic_sim.py"}
-    config = dict(model=None, planner="pdm", record_front=record_front, controller="supervised",
+    config = dict(model=None, planner="pdm", record_front=record_front, controller=controller,
                   mpc_fault=f["mode"], fault_start=f["start"], fault_duration=f["duration"],
                   fault_magnitude=f["magnitude"], fault_on_s=f.get("on_s", 0.2), fault_off_s=f.get("off_s", 0.2),
                   stop_after_fault=stop_after_fault_s, max_speed_kmh=max_speed_kmh, dt=DT, out=str(out),
@@ -196,7 +203,7 @@ def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict
     (out / "agent_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
     town = {"bench2drive:26956": "Town05", "bench2drive:28035": "Town01"}.get(route, route)
     (out / "manifest.json").write_text(json.dumps(dict(route_id=route, town=town, planner="pdm",
-                                                       controller="supervised", seed=seed, **marker), indent=2))
+                                                       controller=controller, seed=seed, **marker), indent=2))
     with (out / "agent_controls.jsonl").open("w") as ac, (out / "steps.jsonl").open("w") as st, \
             (out / "behavior.jsonl").open("w") as be, (out / "monitor_probe.jsonl").open("w") as mp:
         for r in rows:
@@ -220,7 +227,7 @@ def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict
     (out / "collisions.json").write_text(json.dumps(sim["collisions"]))
     (out / "summary.json").write_text(json.dumps(dict(
         supervisor=dict(safe_stop=False),
-        meta=dict(planner="PDM-Lite", controller="supervised", fault_mode=f["mode"],
+        meta=dict(planner="PDM-Lite", controller=controller, fault_mode=f["mode"],
                   fault_start=f["start"], fault_magnitude=f["magnitude"], **marker)), indent=2))
     (out / "evaluation_events.json").write_text("[]")
     (out / "results.json").write_text(json.dumps(dict(synthetic_fixture=True, note="no Bench2Drive scoring in mock")))

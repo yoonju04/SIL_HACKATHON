@@ -3,8 +3,10 @@
 Path rules (so the same code works before and after new_pipeline + junwoo/sim-eval are merged):
   * av_stack:        <repo>/pipeline/08_carla_paired_run/av_stack  (in-repo, after the merge)
                      else $AV_STACK_ROOT, else $SIM_EVAL_ROOT/pipeline/08_carla_paired_run/av_stack
-  * to_cli:          04_feasibility_expansion/scenario_space.py (older) or 08_carla_paired_run/fault_args.py (sim-eval 13c2dbf)
-  * scenario space:  <repo>/pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml (older sim-eval name)
+  * to_cli:          engine/fault_args.py (teammate's fault_args.py, moved into engine/ by the integration merge);
+                     else $SIM_EVAL_ROOT 04_feasibility_expansion/scenario_space.py or 08_carla_paired_run/fault_args.py
+  * scenario space:  <repo>/pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml (the av_stack catalog;
+                     integration keeps our scenario_space.yaml and stores the teammate's catalog under this name)
                      else <repo>/pipeline/04_feasibility_expansion/scenario_space.yaml if it is the av_stack fault
                      catalog (faults + fault_timing + environment.max_speed_kmh; sim-eval 13c2dbf renamed it), else the same under $SIM_EVAL_ROOT
                      else (mock only) engine/fixtures/scenario_space_mock.yaml  (SYNTHETIC)
@@ -103,7 +105,12 @@ def _is_av_stack_space(path: Path) -> bool:
 def import_scenario_space_tool():
     """sim-eval module that provides to_cli(space, scenario, onset_s), or None (engine/scenarios.py fallback).
 
-    Tries 04_feasibility_expansion/scenario_space.py, then 08_carla_paired_run/fault_args.py."""
+    Tries engine/fault_args.py, then sim-eval's 04_feasibility_expansion/scenario_space.py / 08 fault_args.py."""
+    try:
+        from . import fault_args
+        return fault_args
+    except ImportError:
+        pass
     for rel, name in ((SPACE_TOOL_REL, "sim_eval_scenario_space"), (FAULT_ARGS_REL, "sim_eval_fault_args")):
         for p in _candidates(rel):
             if p.is_file():

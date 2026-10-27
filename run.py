@@ -38,8 +38,9 @@ from engine.explainer import explain, stub_explanation, verify
 from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
 from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
-from engine.monitor import compute_run_record, load_av_stack_run, monitor_timeline, thresholds_from_config
+from engine.monitor import compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline, thresholds_from_config
 from engine.surrogate import MetricGPs, acquisition_score, select_batch_scored
+from engine.dashboard import refresh as refresh_dashboard
 from engine.video import extract_clip, ffmpeg_exe
 from engine.prior_tools.prior_tools import make_nemotron_payload
 
@@ -85,7 +86,7 @@ def append_jsonl(path: Path, obj: Any) -> None:
 class Loop:
     def __init__(self, *, mode: str, out: Path, ablation: str, video_on: bool, seed: int, cfg: dict | None = None,
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
-                 quiet: bool = False):
+                 quiet: bool = False, no_reaction: bool | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -111,6 +112,8 @@ class Loop:
         self.metric_rules = self.cfg["vulnerability_patterns"]["metric_rules"]
         self.gp_metrics = sorted({self.obj_cfg[o]["metric"] for o in self.objectives}) + [SWITCH_METRIC]
         self.th = thresholds_from_config(self.cfg)
+        nr = (self.cfg["paired_runs"]["runner"].get("no_reaction_run") or {})
+        self.no_reaction_on = bool(nr.get("mock" if mode == "mock" else "real", False)) if no_reaction is None else no_reaction
         self.vcfg = self.cfg["video_explainer"]
         self.taxonomy = self.vcfg["mechanism_taxonomy"]
         self.questions = self.cfg["nemotron_b"]["B_question_answering"]["question_bank"]
@@ -392,10 +395,14 @@ class Loop:
             c["parameters"] = {"route_id": c["route_id"], "environment": c["environment"], "fault": c["fault"],
                                "onset_event": c["onset_event"], "onset_offset_s": c["onset_offset_s"], "onset_s": round(onset, 3)}
             res = self.runner.run_fault(c, self.out / "runs" / run_id, onset)
+            nr_dir = None
+            if self.no_reaction_on:
+                d, _ = self.runner.ensure_no_reaction(c, onset)
+                nr_dir = d if (d / ".complete").is_file() else None
+            rec = monitor_evaluate(res.run_dir, self.cfg["safety_spec"], baseline_dir=base_dir, no_reaction_dir=nr_dir,
+                                   stage_cfg=self.cfg, metric_rules=mr, candidate=c, run_id=run_id,
+                                   round_index=round_index, selector=c.get("selected_by"))
             run = load_av_stack_run(res.run_dir)
-            base = load_av_stack_run(base_dir)
-            rec = compute_run_record(run, base, candidate=c, metric_rules=mr, th=self.th, run_id=run_id,
-                                     round_index=round_index, selector=c.get("selected_by"))
             if res.returncode != 0 and rec["sim_status"] == "ok" and not run.ticks:
                 rec["sim_status"], rec["invalid_reason"] = "invalid", f"run_benchmark exit {res.returncode}"
             rec["feature_schema_version"] = self.feature_schema()
@@ -405,7 +412,8 @@ class Loop:
             append_jsonl(self.out / "run_records.jsonl", rec)
             self.say(f"  [08/09] {run_id} {c['route_id']} {c['environment']['max_speed_kmh']:.0f}km/h {c['fault']['mode']} "
                      f"@{c['onset_event']}{c['onset_offset_s']:+.2f}s -> {rec['recovery_outcome']} "
-                     f"(lrr={_f(rec['lane_recovery_robustness'])}, trigger={rec['trigger_source']}, sel={c.get('selected_by')})")
+                     f"(lrr={_f(rec['lane_recovery_robustness'])}, trigger={rec['trigger_source']}, "
+                     f"sr={rec.get('sr_outcome')}, sel={c.get('selected_by')})")
         return new
 
     def feature_schema(self) -> str:
@@ -527,6 +535,8 @@ class Loop:
             self.say(f"[round {rnd}] pool {len(pool)} -> batch {len(batch)} ({self.ablation}, video {'on' if self.video_on else 'off'})")
             new = self.stage_08_09(batch, rnd)
             self.stage_10(new, rnd)
+            refresh_dashboard(self.out / "run_records.jsonl", self.out / "screen",
+                              explanations=self.out / "explanations.jsonl", spec=self.cfg["safety_spec"])
         return self.finish()
 
     # ------------------------------------------------------------------ evaluation + report
@@ -569,6 +579,7 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         "unique_failure_conditions": len(uniq),
         "outcome_counts": _count(r.get("recovery_outcome") for r in records),
         "trigger_counts": _count(r.get("trigger_source") for r in records),
+        "sr_outcome_counts": _count(r.get("sr_outcome") for r in records),
         "explanations": len(expl), "explanations_accepted": len(acc),
         "explanation_acceptance_rate": (len(acc) / len(expl)) if expl else None,
         "hallucination_rate": (1 - len(acc) / len(expl)) if expl else None,
@@ -662,7 +673,8 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
              f"- 첫 실패까지 런 수: {m['simulations_to_first_failure']}, 고유 실패 조건: {m['unique_failure_conditions']}",
              f"- GP 경계 부호 정확도: {m.get('gp_boundary_sign_accuracy')}",
              f"- 영상 해설: {m['explanations']}건, 검증 통과 {m['explanations_accepted']}건 (환각률 {m['hallucination_rate']})",
-             f"- recovery_outcome 분포: {m['outcome_counts']}", f"- trigger_source 분포: {m['trigger_counts']}", "",
+             f"- recovery_outcome 분포: {m['outcome_counts']}", f"- trigger_source 분포: {m['trigger_counts']}",
+             f"- SR 검사 (engine/sr_checks.py, 참고) sr_outcome 분포: {m.get('sr_outcome_counts')}; 화면: `screen/campaign.html`", "",
              "## 주의", "- 판정 임계값(0.3 m, 0.1 rad, 1 s, 5 s, 3 m/s², 5 m/s³)은 PROVISIONAL 이다. 인증 기준이 아니다.",
              "- 측정된 복구 성공 영역은 수학적 안전 보증이 아니다.",
              "- 영상 해설은 판정을 바꾸지 않는다. 검증을 통과한 해설만 피드백에 쓴다.",
@@ -754,6 +766,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--batch-size", type=int)
     ap.add_argument("--rounds", type=int, help="rounds after the cold start (default from orchestrator budget)")
     ap.add_argument("--ablation-suite", action="store_true", help="mock only: run evaluation/ablations.yaml mock_suite")
+    ap.add_argument("--no-reaction-runs", choices=("on", "off"),
+                    help="SR1 FTTI runs (same fault, --controller mpc_unprotected); default 08 paired_runs.yaml no_reaction_run")
     ap.add_argument("--conditions", nargs="*")
     ap.add_argument("--repeats", type=int)
     args = ap.parse_args(argv)
@@ -777,11 +791,12 @@ def main(argv: list[str] | None = None) -> int:
         if not TokenFactoryClient.from_config(cfg["llm"]).has_key:
             ap.error("NEBIUS_API_KEY is not set")
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
-                cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds)
+                cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
+                no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on")
     m = loop.run()
     log(json.dumps({k: m[k] for k in ("n_runs", "n_switched", "n_final_safe_recovery", "n_failures", "both_sides_observed",
                                       "boundary_band_runs", "explanations", "explanations_accepted")}, ensure_ascii=False))
-    log(f"outputs: {out}  (report.md, run_records.jsonl" + (", explanations.jsonl, monitor_rule_candidates.yaml" if loop.video_on else "") + ")")
+    log(f"outputs: {out}  (report.md, run_records.jsonl, screen/campaign.html" + (", explanations.jsonl, monitor_rule_candidates.yaml" if loop.video_on else "") + ")")
     return 0
 
 

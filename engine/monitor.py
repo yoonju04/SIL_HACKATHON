@@ -14,8 +14,12 @@ Input files (written by sim-eval integration/pdm_agent.py + integration/monitor_
 The judgment rules are the pure functions in engine/judgment.py. Thresholds are PROVISIONAL.
 The monitor is the ONLY component that sets safety labels; 10_video_explainer never writes here.
 
-CLI (repository root; was pipeline/09_monitor/monitor.py):
-  python -m engine.monitor RUN_DIR [--baseline BASELINE_DIR] [--out record.json]
+Entry point for the loop and the CLI: evaluate(run_dir, spec, baseline_dir=..., no_reaction_dir=...) -> run_record.
+It runs our recovery v2 (compute_run_record) and then the teammate's SR1/SR2/SR4/SR6 checks (engine/sr_checks.py,
+from junwoo/sim-eval a5242b2) and adds them as sr_* fields.
+
+CLI (repository root; replaces both pipeline/09_monitor/monitor.py versions):
+  python -m engine.monitor RUN_DIR --baseline BASELINE_DIR [--no-reaction NO_REACTION_DIR] [--spec safety_spec.yaml] [--out rr.jsonl]
 """
 from __future__ import annotations
 
@@ -123,13 +127,22 @@ def _finite(x: Any) -> bool:
 
 
 def thresholds_from_config(stage_cfg: dict | None) -> dict[str, float]:
-    """PROVISIONAL thresholds; video_explainer/monitor configs can override via outcome_definitions."""
+    """PROVISIONAL thresholds. Recovery geometry from 02 outcome_definitions.recovery_judgment; lateral acc / jerk
+    thresholds and the after-switch window from 09 safety_spec.yaml (P-02, P-04, after_switch_window_s)."""
     th = dict(J.PROVISIONAL_RECOVERY)
     od = ((stage_cfg or {}).get("vulnerability_patterns") or {}).get("outcome_definitions") or {}
     rj = (od.get("recovery_judgment") or {}).get("thresholds") or {}
     for k in ("e_settle_m", "psi_settle_rad", "settle_hold_s", "window_s"):
         if isinstance(rj.get(k), dict) and _finite(rj[k].get("value")):
             th[k] = float(rj[k]["value"])
+    ss = ((stage_cfg or {}).get("safety_spec") or {}).get("safety_specification") or {}
+    props = {p.get("id"): p for p in ss.get("properties") or [] if isinstance(p, dict)}
+    if _finite((props.get("P-02") or {}).get("lateral_acc_threshold_mps2")):
+        th["lat_acc_threshold_mps2"] = float(props["P-02"]["lateral_acc_threshold_mps2"])
+    if _finite((props.get("P-04") or {}).get("lateral_jerk_threshold_mps3")):
+        th["lat_jerk_threshold_mps3"] = float(props["P-04"]["lateral_jerk_threshold_mps3"])
+    if _finite(ss.get("after_switch_window_s")):
+        th["window_s"] = float(ss["after_switch_window_s"])
     return th
 
 
@@ -413,32 +426,98 @@ def monitor_timeline(run: RunData, record: dict, th: dict[str, float] | None = N
     }
 
 
+SR_FIELDS = ("sr_outcome", "sr_failed_requirements", "sr_labels", "sr_scores", "detection_latency_s", "ftti_s",
+             "sr_checks")
+
+
+def attach_sr_checks(record: dict[str, Any], run: RunData, baseline: RunData | None,
+                     no_reaction: RunData | None, spec: dict | None) -> dict[str, Any]:
+    """Teammate's SR1/SR2/SR4/SR6 grading (engine.sr_checks) on the same run, added as extra run_record fields.
+
+    Our recovery v2 result (recovery_outcome / final_safe_recovery) is passed in and decides SR5 and F3.
+    SR results never change our labels, outcome_category or GP targets."""
+    from . import sr_checks as SR
+
+    onset = record.get("planned_fault_onset")
+    out = {k: None for k in SR_FIELDS}
+    if record.get("sim_status") == "invalid" or onset is None:
+        out.update(sr_outcome="invalid" if record.get("sim_status") == "invalid" else None,
+                   sr_checks={"valid": False, "invalid_reasons": [record.get("invalid_reason") or "no fault onset"]})
+        record.update(out)
+        return record
+    cfg = SR.config_from_spec(spec, dt=run.dt)
+    g = SR.grade(SR.trace_from_run(run), SR.trace_from_run(baseline) if baseline is not None and baseline.ticks else None,
+                 float(onset), cfg, SR.trace_from_run(no_reaction) if no_reaction is not None and no_reaction.ticks else None,
+                 recovery={"recovery_outcome": record.get("recovery_outcome"),
+                           "final_safe_recovery": record.get("final_safe_recovery")})
+    g["no_reaction_run"] = str(no_reaction.run_dir) if no_reaction is not None else None
+    out.update(sr_outcome=g["sr_outcome"], sr_failed_requirements=g["failed_requirements"], sr_labels=g["sr_labels"],
+               sr_scores=g["sr_scores"], detection_latency_s=g["detection_latency_s"], ftti_s=g["ftti_s"], sr_checks=g)
+    record.update(out)
+    return record
+
+
+def load_safety_spec(spec: str | Path | dict | None = None) -> dict:
+    if isinstance(spec, dict):
+        return spec
+    from .config import PIPELINE_DIR, load_yaml
+    return load_yaml(Path(spec) if spec else PIPELINE_DIR / "09_monitor" / "safety_spec.yaml") or {}
+
+
+def evaluate(run_dir: str | Path, spec: str | Path | dict | None = None, *, baseline_dir: str | Path | None = None,
+             no_reaction_dir: str | Path | None = None, stage_cfg: dict | None = None, metric_rules: dict | None = None,
+             candidate: dict | None = None, run_id: str | None = None, round_index: int | None = None,
+             selector: str | None = None, timeline: bool = False) -> dict[str, Any]:
+    """THE 09 monitor entry point: one av_stack run folder (+ baseline [+ no-reaction]) -> one run_record.
+
+    spec        09 safety_spec.yaml (path or dict; default the repo's). Thresholds come from it (+ 02 recovery geometry).
+    stage_cfg   engine.config.load_stage_configs() (loaded if omitted) for metric_rules / recovery thresholds.
+    Our recovery v2 (engine.judgment) decides recovery_outcome / labels / final_safe_recovery / GP targets;
+    engine.sr_checks adds sr_outcome (F1/F2/F3/pass), sr_* fields and sr_labels."""
+    if stage_cfg is None:
+        from .config import load_stage_configs
+        stage_cfg = load_stage_configs()
+    spec_d = load_safety_spec(spec if spec is not None else stage_cfg.get("safety_spec"))
+    th = thresholds_from_config({**stage_cfg, "safety_spec": spec_d})
+    if metric_rules is None:
+        metric_rules = (stage_cfg.get("vulnerability_patterns") or {}).get("metric_rules")
+    run = load_av_stack_run(run_dir)
+    base = load_av_stack_run(baseline_dir) if baseline_dir else None
+    nore = load_av_stack_run(no_reaction_dir) if no_reaction_dir else None
+    rec = compute_run_record(run, base, candidate=candidate, metric_rules=metric_rules, th=th, run_id=run_id,
+                             round_index=round_index, selector=selector)
+    attach_sr_checks(rec, run, base, nore, spec_d)
+    if timeline:
+        rec["_timeline"] = monitor_timeline(run, rec, th)
+    return rec
+
+
 def evaluate_folder(run_dir: str | Path, baseline_dir: str | Path | None = None, **kw) -> dict[str, Any]:
+    """Recovery-v2-only record (no SR fields). Prefer evaluate()."""
     run = load_av_stack_run(run_dir)
     base = load_av_stack_run(baseline_dir) if baseline_dir else None
     return compute_run_record(run, base, **kw)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """09 Monitor CLI: one av_stack run folder (+ optional no-fault baseline) -> run_record JSON."""
+    """09 Monitor CLI: one av_stack run folder (+ no-fault baseline [+ no-reaction run]) -> run_record JSON."""
     import argparse
-
-    from engine.config import load_stage_configs
 
     ap = argparse.ArgumentParser(prog="python -m engine.monitor", description=main.__doc__)
     ap.add_argument("run_dir", type=Path)
-    ap.add_argument("--baseline", type=Path)
-    ap.add_argument("--out", type=Path)
+    ap.add_argument("--baseline", type=Path, help="same scenario, no fault (needed for labels and SR checks)")
+    ap.add_argument("--no-reaction", type=Path, help="same fault, --controller mpc_unprotected (SR1 FTTI)")
+    ap.add_argument("--spec", type=Path, help="09 safety_spec.yaml (default: pipeline/09_monitor/safety_spec.yaml)")
+    ap.add_argument("--out", type=Path, help="write the record here (.jsonl: append one line)")
     args = ap.parse_args(argv)
-    cfg = load_stage_configs()
-    th = thresholds_from_config(cfg)
-    run = load_av_stack_run(args.run_dir)
-    base = load_av_stack_run(args.baseline) if args.baseline else None
-    rec = compute_run_record(run, base, metric_rules=cfg["vulnerability_patterns"]["metric_rules"], th=th)
-    rec["_timeline"] = monitor_timeline(run, rec, th)
+    rec = evaluate(args.run_dir, args.spec, baseline_dir=args.baseline, no_reaction_dir=args.no_reaction, timeline=True)
     text = json.dumps(rec, indent=2, ensure_ascii=False, default=str)
     if args.out:
-        args.out.write_text(text, encoding="utf-8")
+        if args.out.suffix == ".jsonl":
+            with args.out.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+        else:
+            args.out.write_text(text, encoding="utf-8")
     print(text)
     return 0
 

@@ -3,11 +3,12 @@
 | 파일 | 내용 |
 |---|---|
 | [`feasibility_expansion.yaml`](feasibility_expansion.yaml) | G-01~04 게이트, 섭동·중복 제거 (팀 템플릿) |
-| [`scenario_space.yaml`](scenario_space.yaml) | 고장 후보 목록 (av_stack용): 아래 고장 7종 + 확장 5종, 주입 시점, 환경 범위. Nemotron B가 여기서 고른다 |
-| [`scenario_space.py`](scenario_space.py) | 위 YAML 읽기, 검증, 무작위 샘플링 (비교용) |
+| [`scenario_space.yaml`](scenario_space.yaml) | 팀 템플릿 탐색 공간 (ODD × F-01~03). 가설 도구(engine/hypothesis_tools)가 읽는다 |
+| [`scenario_space_av_stack.yaml`](scenario_space_av_stack.yaml) | 고장 후보 목록 (av_stack용): 아래 고장 7종 + 확장 5종, 주입 시점, 환경 범위. 루프(run.py)와 Nemotron B가 여기서 고른다 |
+| [`../../engine/fault_catalog.py`](../../engine/fault_catalog.py) | 위 av_stack YAML 읽기, 검증, 무작위 샘플링 (비교용). `python run.py --check`도 검증 결과를 보여준다 |
 
-CARLA 실행 인자 변환(`to_cli`)은 08 단계로 옮겼습니다: [`../08_carla_paired_run/fault_args.py`](../08_carla_paired_run/fault_args.py).
-이 파일이 이전 팀 템플릿(F-01~03 지연 계열)을 대체합니다. F-01~07의 뜻은 이 파일 기준입니다.
+CARLA 실행 인자 변환(`to_cli`)은 [`../../engine/fault_args.py`](../../engine/fault_args.py)에 있습니다.
+2026-10-27 integration 병합: 두 YAML의 이름이 같아 충돌했고, `scenario_space.yaml`은 우리 버전을 유지하고 팀원(junwoo/sim-eval 13c2dbf)의 av_stack 목록은 `scenario_space_av_stack.yaml`로 보관했습니다. 아래 F-01~07의 뜻은 `scenario_space_av_stack.yaml` 기준입니다.
 
 ## 우리 감독기는 어떻게 판단하나
 
@@ -95,12 +96,13 @@ F-03을 옛 시각·번호 그대로 늦게 보내면 시작 순간 번호가 �
 
 ## 사용법
 
-`.venv-tfpp`(PyYAML 포함)로 실행합니다. 이 폴더에서:
+저장소 루트에서 (PyYAML 필요):
 
 ```
-..\08_carla_paired_run\av_stack\.venv-tfpp\Scripts\python.exe scenario_space.py --check
-..\08_carla_paired_run\av_stack\.venv-tfpp\Scripts\python.exe scenario_space.py --sample 5 --seed 0
-..\08_carla_paired_run\av_stack\.venv-tfpp\Scripts\python.exe scenario_space.py --self-test
+python -m engine.fault_catalog --check
+python -m engine.fault_catalog --sample 5 --seed 0
+python -m engine.fault_catalog --self-test
+python -m engine.fault_args --self-test
 ```
 
 `--sample`은 시나리오를 JSON 한 줄씩 출력합니다:
@@ -111,7 +113,7 @@ F-03을 옛 시각·번호 그대로 늦게 보내면 시작 순간 번호가 �
 
 `--sample`은 무작위로 뽑으므로 비교용(무작위 기준선)과 테스트용입니다. 실제 파이프라인에서는 환경을 Nemotron A가, 고장 계획을 Nemotron B가 정합니다.
 
-08 단계의 `fault_args.to_cli(space, scenario, onset_s)`가 고른 계획을 `run_benchmark.py` 인자로 바꿉니다.
+`engine/fault_args.to_cli(space, scenario, onset_s)`가 고른 계획을 `run_benchmark.py` 인자로 바꿉니다.
 `onset_s`(주입 시각)는 호출하는 쪽이 경로에서 `onset_event` + `offset_s`를 찾아 넘깁니다.
 
 ```

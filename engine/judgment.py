@@ -57,6 +57,8 @@ RUN_RECORD_FIELDS = (
     "lat_acc_excess_mps2", "P01", "P02", "P03",
     "margin_delta_m", "switch_state_label", "metrics", "baseline_metrics", "gp_targets",
     "gp_mean", "gp_std", "sim_status", "invalid_reason",
+    # 2026-10-27 integration (engine/sr_checks.py, teammate Monitor v2): extra fields, never used for our labels
+    "sr_outcome", "sr_failed_requirements", "sr_labels", "sr_scores", "detection_latency_s", "ftti_s", "sr_checks",
 )
 
 # ---------------------------------------------------------------------------
