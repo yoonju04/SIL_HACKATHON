@@ -8,7 +8,7 @@ meta:
   status: template_unverified
 
 nemotron:
-  model: null                                  # 실제 모델명·엔드포인트 (.env NEMOTRON_MODEL_ID)
+  model: nvidia/Nemotron-3-Ultra-550b-a55b     # 호출 파라미터의 원본은 pipeline/llm_models.yaml roles.B (3회 다수결)
   temperature: 0.0
   require_json_schema_validation: true
 
@@ -19,18 +19,34 @@ B_question_answering:
   question_bank:
     - id: Q-B1
       question: "이 고장 동안 감지 지연 구간에 어떤 조향 명령이 나가는가?"
+      question_en: "During the detection-delay interval of this fault, which steering command reaches the vehicle?"
       answer: [hold_last, zero, stale_mpc, lqr_early, unknown]
-      refs: [H-02]
+      refs: [S2]                                 # 2026-10-27: H-02 → S2
+      expected_from_code: null                   # 고장 모드마다 다름 (fault_injection.py) → B 답과 비교하지 않음
     - id: Q-B2
       question: "복귀 로직이 이 고장 패턴에서 반복 전환을 허용하는가?"
+      question_en: "Does the switch-back logic allow repeated MPC<->LQR switching for this fault pattern?"
       answer: [yes, no, unknown]
-      refs: [H-03]
+      refs: [S3]                                 # H-03 → R(재설계)/S3
+      expected_from_code: 'no'                   # supervised_lateral.py 래치(한 번 전환하면 복귀 없음). B 답이 다르면 환각 신호
     - id: Q-B3
       question: "전환 순간 LQR 상태 초기화가 조향 불연속을 만들 수 있는가?"
+      question_en: "Can the LQR state initialisation at the switch instant create a steering discontinuity?"
       answer: [yes, no, unknown]
-      refs: [H-02, H-03, H-05]
+      refs: [S1]                                 # H-02/H-03/H-05 → S1
+      expected_from_code: null
   call_once_per: seed_scenario               # 섭동 후보는 시드의 답변 재사용
   unknown_is_not_false: true
   logprobs_are_not_failure_probabilities: true
 
 feedback_in: none                            # 결과 피드백을 받지 않는다
+
+# ---- 2026-10-27: pipeline/run.py ----
+code_context:                                   # B가 읽는 파일 (av_stack 기준 상대경로, 줄번호 붙여 전체 전달)
+  files:
+    - integration/supervised_lateral.py
+    - integration/fault_injection.py
+    - integration/pdm_agent.py
+    - lqr_controller/lqr.py
+  citation_check: file_and_line_in_range        # 인용 줄이 파일 범위 밖이면 citations_valid false
+repeats: 3                                      # llm_models.yaml roles.B.repeats

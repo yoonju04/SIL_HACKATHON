@@ -17,6 +17,10 @@ ablations:
       name: gp_plus_deterministic_features      # 질문 feature 제외
     - id: X-5
       name: full_code_aware                     # Nemotron A + DF + Nemotron B + GP
+    - id: X-6
+      name: full_code_aware_plus_video_explainer   # X-5 + 10 video explainer 피드백 (mech feature, few-shot, counterfactual)
+  factors:
+    video_explainer: [on, off]                  # pipeline/run.py --video-explainer on|off (X-1..X-5와 직교)
   same_budget: true
   repeats_with_different_seeds: 3
 
@@ -27,6 +31,19 @@ evaluation:
     - unique_failure_conditions               # (fault_type, onset_event, 영역) 기준 중복 제거
     - hypotheses_supported_refuted
     - gp_prediction_error_over_rounds         # 지표별 GP 각각
+    # 2026-10-27 경계 추정 지표 (pipeline/run.py evaluate)
+    - both_sides_observed                     # final_safe_recovery true/false 둘 다 관측
+    - boundary_band_runs                      # |lane_recovery_robustness| < 0.2 m 런 수
+    - gp_boundary_sign_accuracy               # mock: 합성 시뮬레이터 정답 40점, real: leave-one-out
+    - explanation_acceptance_rate             # 10 검증 통과 비율 (1 - 환각률)
+
+mock_suite:                                   # python -m pipeline.run --mock --ablation-suite (SYNTHETIC, 경향 확인용)
+  conditions: [X-1, X-2, X-3, X-5, X-6]
+  cold_start: 12
+  batch_size: 8
+  rounds: 3
+  report_metrics: [n_runs, n_failures, failures_per_simulation, simulations_to_first_failure,
+                   unique_failure_conditions, both_sides_observed, boundary_band_runs, explanation_acceptance_rate]
 
 research_scope:
   implemented: [static_code_extraction, nemotron_hypothesis_and_scenario_generation,

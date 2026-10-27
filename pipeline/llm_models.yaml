@@ -1,0 +1,64 @@
+# llm_models.yaml — 모든 LLM/VLM 모델 id와 호출 파라미터를 한 곳에서 관리 (2026-10-27 조사 기준)
+# 근거: /workspace/nemotron_cosmos_research.md 요약 → docs 아래 README 'Nemotron / Cosmos' 절
+#   Token Factory OpenAI 호환 API, 키는 환경변수 NEBIUS_API_KEY (값을 파일에 쓰지 않는다)
+#   2026-11-09 Serverless 제거 예정: nvidia/nemotron-3-super-120b-a12b, nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B → 쓰지 않는다
+#   reasoning 토큰도 max_tokens를 쓴다 → finish_reason == 'length' 는 실패로 처리 (pipeline/engine/llm.py)
+
+meta:
+  schema_version: '1.0'
+  status: configured_unverified          # 실제 응답 품질은 첫 실호출로 확인 (live smoke test)
+  checked_on: '2026-10-27'
+
+provider:
+  name: nebius_token_factory
+  base_url: https://api.tokenfactory.nebius.com/v1
+  api_key_env: NEBIUS_API_KEY
+  timeout_s: 180
+  max_retries: 2                        # 429 / 5xx 만 재시도
+
+roles:
+  A:                                    # 03 시나리오 후보 대량 생성
+    model: nvidia/Nemotron-3_5-Lightning
+    model_env_override: NEMOTRON_A_MODEL_ID
+    thinking: false                     # chat_template_kwargs.enable_thinking=false (JSON 잘림 방지)
+    temperature: 1.0                    # 모델카드 권장 1.0 / top_p 0.95
+    top_p: 0.95
+    max_tokens: 6000
+    response_format: json_schema        # scenario_space 범위·근거 id enum을 스키마로 강제 + 프롬프트에도 같은 스키마
+    language: en                        # Lightning 지원 언어 목록에 한국어 없음
+  A_refine:                             # 03' 경계 근처 후보만 thinking ON으로 다듬기 (선택)
+    model: nvidia/Nemotron-3_5-Lightning
+    thinking: true
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 16000
+    response_format: json_schema
+  B:                                    # 05b 코드 질문 (결과 비참조)
+    model: nvidia/Nemotron-3-Ultra-550b-a55b
+    model_env_override: NEMOTRON_B_MODEL_ID
+    thinking: true
+    chat_template_kwargs_extra: {medium_effort: true}
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 16000
+    response_format: json_schema
+    repeats: 3                          # 같은 질문 2~3회 → 다수결 + 일치율
+  C_cosmos:                             # 10 영상 해설 1순위: Cosmos3-Super-Reasoner Dedicated Endpoint
+    model: null                         # Dedicated Endpoint를 만들면 그 모델 id를 넣거나 COSMOS_MODEL_ID 환경변수
+    model_env_override: COSMOS_MODEL_ID
+    base_url_env_override: COSMOS_BASE_URL   # 다른 엔드포인트(예: NIM)를 쓰면
+    api_key_env_override: COSMOS_API_KEY     # 없으면 NEBIUS_API_KEY
+    reference_model: nvidia/Cosmos3-Super-Reasoner   # Serverless에서는 2026-08-31 제거 → 404 확인됨
+    temperature: 0.6
+    top_p: 0.95
+    max_tokens: 6000
+    media: [video, contact_sheet]       # 시도 순서
+    prompt_format: think_answer         # <think>..</think><answer>..</answer>, 영상을 텍스트보다 먼저
+  C_fallback:                           # 10 영상 해설 대체: Token Factory 안의 VLM (이미지 입력 확인됨, 영상 미확인)
+    model: nvidia/Nemotron-3.5-Super-VL
+    thinking: false
+    temperature: 0.6                    # 비전 권장 0.6 / 0.95
+    top_p: 0.95
+    max_tokens: 6000
+    media: [video, contact_sheet, frames]
+    prompt_format: think_answer

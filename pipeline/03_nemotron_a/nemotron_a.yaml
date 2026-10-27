@@ -9,7 +9,7 @@ meta:
   status: template_unverified
 
 nemotron:
-  model: null                                  # 실제 모델명·엔드포인트 (.env NEMOTRON_MODEL_ID)
+  model: nvidia/Nemotron-3_5-Lightning         # 호출 파라미터의 원본은 pipeline/llm_models.yaml roles.A
   temperature: 0.7
   require_json_schema_validation: true
 
@@ -23,9 +23,19 @@ A_scenario_generation:
   per_round: 15
   must_cite_ids: true
   cite_only_hypotheses_with_status: [proposed, testing]   # 07이 hypothesis_ids로 지표 GP를 고른다
+  objective_ids: [S1]                           # 2026-10-27: H-xx 대신 S-set objective id를 인용
 
 # 09 Monitor → A 피드백 (실패 few-shot)
 feedback_in:
   from: 09_monitor/error_table
   select: verified_failures_top_k               # 09 error_table failure_table 규칙: unrecovered 우선, 라벨(recovery_labels) 포함
   k: 5
+
+# ---- 2026-10-27: pipeline/run.py ----
+include_unreviewed_observations: true           # 사용자 결정 필요: verified:false 관측을 'unreviewed leads'로 A에 준다 (false면 제외)
+refine:
+  enabled: true                                 # 라운드마다 GP 경계 근처 3개를 A_refine(thinking ON)으로 다듬기
+  max_candidates: 3
+video_feedback:                                 # 10 video explainer 검증 통과 해설만
+  few_shot_mechanism: true                      # prior_failures_top_k[].verified_video_mechanism
+  mechanism_summary: true                       # verified_video_mechanisms

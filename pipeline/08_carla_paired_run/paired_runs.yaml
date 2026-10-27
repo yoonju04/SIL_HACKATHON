@@ -7,11 +7,32 @@ meta:
   status: template_unverified
 
 carla:
-  version: null
-  map_name: null
-  routes: []                                 # [{route_id, waypoints, contains_events: [...]}]
+  version: '0.9.15'                          # sim-eval av_stack README / requirements (carla==0.9.15)
+  map_name: per_route                        # Bench2Drive 경로 XML이 town을 정함
+  # routes_arg/route_id_arg 는 run_benchmark.py --routes / --route-id 로 그대로 넘어간다 (run_benchmark.py:21-24)
+  # 경로 선택 근거: /workspace/sim scenarios_1027 (A 26956 Town05, B 28035 Town01, C town10_long --green-lights)
+  routes:
+    - route_id: bench2drive:26956
+      routes_arg: bench2drive
+      route_id_arg: 26956
+      town: Town05
+      note: 'scenarios_1027 A'
+      enabled: true
+    - route_id: bench2drive:28035
+      routes_arg: bench2drive
+      route_id_arg: 28035
+      town: Town01
+      note: 'scenarios_1027 B'
+      enabled: true
+    - route_id: town10_long
+      routes_arg: town10_long
+      route_id_arg: null
+      town: Town10HD
+      extra_args: [--green-lights]
+      note: 'scenarios_1027 C'
+      enabled: true
   ego_vehicle_blueprint: null
-  fixed_delta_seconds: null                  # 동기 모드 스텝, 제어 주기와 맞출 것
+  fixed_delta_seconds: 0.05                  # 1/frame_rate 20 Hz (sim-eval tfpp_benchmark/agent_config dt 0.05) = 제어 주기 50 ms
   synchronous_mode: true
 
 paired_runs:
@@ -40,5 +61,28 @@ paired_runs:
     fault_config: 'fault_mode, fault_magnitude, fault_injected (integration/pdm_agent.py:284-296)'
 
 execution:
-  backend: nebius_ai_cloud                     # 병렬 워커
-  parallel_workers: null
+  backend: local_carla                         # CARLA 서버 1대 (Windows start_carla_stable.ps1). Nebius 병렬은 future work
+  parallel_workers: 1                          # PROVISIONAL: 동시 실행 안 함 (포트/TM 충돌)
+
+# ---- 2026-10-27: pipeline/engine/carla_runner.py 가 읽는 값 ----
+runner:
+  entrypoint: pipeline/08_carla_paired_run/av_stack/run_benchmark.py   # sim-eval 병합 후 위치 (없으면 AV_STACK_ROOT/SIM_EVAL_ROOT)
+  python_exe: null                             # null이면 av_stack/.venv-tfpp/Scripts/python.exe → bin/python → 환경변수 AV_STACK_PYTHON
+  planner: pdm                                 # scenario_space_av_stack.yaml 관측 조건 (사용자 확인 필요)
+  controller: supervised
+  record_front: true                           # front.mp4 + front_frames.jsonl → 10 video explainer
+  chase_view: false                            # true면 view.mp4도 기록 (창 필요). 기본 --no-view
+  stop_after_fault_s: 15.0                     # PROVISIONAL: 판정 창 5 s + 여유. --stop-after-fault
+  speed_step_kmh: 5                            # PROVISIONAL: baseline 캐시 재사용을 위해 속도를 5 km/h 격자로
+  seed: 17                                     # run_benchmark.py 기본값
+  host: localhost                              # 환경변수 CARLA_HOST
+  port: 2000                                   # 환경변수 CARLA_PORT
+  traffic_manager_port: 8050
+  rpc_timeout_s: 120
+  wall_timeout_s: 1800                         # 런 1개 subprocess 제한
+event_detection:                               # baseline 곡률(yaw_rate/vx)로 onset_event 시각을 찾는다. PROVISIONAL
+  kappa_on: 0.0167                             # 1/60 m^-1
+  kappa_off: 0.00333                           # 1/300 m^-1
+  min_curve_s: 1.0
+  min_straight_s: 3.0
+  t_min: 5.0                                   # 출발 직후 제외

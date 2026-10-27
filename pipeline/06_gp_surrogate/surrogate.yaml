@@ -11,6 +11,8 @@ meta:
 
 surrogate:
   model: gaussian_process_regression
+  backend: sklearn                              # pipeline/engine/surrogate.py (GaussianProcessRegressor, normalize_y)
+  min_train_points: 4                           # 지표별 학습점이 이보다 적으면 GP 없음 → 무작위 몫
   kernel: "Matern 5/2 with ARD + WhiteKernel"
   per_metric: true                              # 지표 하나당 GP 하나, 같은 feature 입력
   targets_from: 02_hypotheses/vulnerability_patterns.yaml#metric_rules.*.gp

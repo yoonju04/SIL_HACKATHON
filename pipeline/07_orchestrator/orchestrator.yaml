@@ -5,6 +5,7 @@ meta:
   schema_version: '1.0'
   profile_id: sp-code-aware-mpc-lqr
   status: template_unverified
+  updated: '2026-10-27 실행 엔진(pipeline/run.py) 연결: objective_acquisition, fault_pool, candidate_pool 추가'
 
 cold_start:
   gp_enabled: false
@@ -29,9 +30,24 @@ acquisition:
 
 budget:
   sim_seconds_per_run_measured: null            # 1~3일 차에 측정
-  max_simulations: null
+  max_simulations: 72                           # PROVISIONAL: cold start 24 + 4 라운드 x 12. 런 시간 측정 후 조정
   wall_time_budget_s: null
   stop_if:
     - budget_exhausted
     - "no new unique failure condition for 3 rounds"
     - "max std_z over active metrics < threshold"
+
+# ---- 2026-10-27: pipeline/run.py 가 읽는 값 ----
+active_objectives: [S1]                         # S2/S3는 objective 파일이 아직 template
+fault_pool: [F-01, F-02, F-03, F-04, F-05, F-06, F-07]   # scenario_space faults 중 implemented: true
+objective_acquisition:
+  S1:
+    metric: recovery_success                    # 02 vulnerability_patterns metric_rules.recovery_success
+    gp_target: lane_recovery_robustness         # absolute_post_switch, scale 0.1 m, 0 = 차선 경계
+    acquisition: straddle                       # beta*std_z - |mean_z| 최대화 (Bryan et al. 2005, 경계 추정용)
+    beta: 1.96                                  # PROVISIONAL
+  default:
+    acquisition: lower_confidence_bound         # 위 acquisition 섹션 (최악 사례 탐색 목적)
+candidate_pool:
+  space_filling_per_round: 40                   # 라운드마다 GP가 고를 무작위 후보 수 (예시)
+  # Nemotron A per_round: 03 nemotron_a.yaml, 섭동 per_seed: 04 feasibility_expansion.yaml
