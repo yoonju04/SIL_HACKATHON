@@ -1,0 +1,416 @@
+"""09 Monitor: sim-eval av_stack run folder -> run_record (09_monitor/error_table.yaml).
+
+Input files (written by sim-eval integration/pdm_agent.py + integration/monitor_logs.py, joined on t):
+  steps.jsonl          t, vx, vy, yaw_rate, e_y_lane, e_psi              (monitor_logs.py:121-122)
+  behavior.jsonl       t, active_controller, supervisor_reason, fault_injected (monitor_logs.py:123-124)
+  monitor_probe.jsonl  t, lane_offset_m, lane_heading_err_rad, lane_width_m, ay_mps2, bbox_* (monitor_logs.py:80-91)
+  collisions.json      [{t, other}]                                        (monitor_logs.py:115-116, 136)
+  summary.json         {supervisor: {safe_stop}, meta: {fault_mode, fault_start, ...}} (monitor_logs.py:137-138)
+  agent_controls.jsonl t, steer (CARLA normalised), tracking_error, heading_error, switched_at_s,
+                       switch_count, primary_elapsed_ms, ...               (pdm_agent.py:404-418)
+  agent_config.json    run options + geometry.max_steer_rad                (run_benchmark.py:102-107, tfpp_benchmark.py:111-113)
+  front_frames.jsonl / front.mp4 / view.mp4 (only with --record-front)     (benchmark_recording.py, chase_view.py)
+
+The judgment rules are the pure functions in pipeline/engine/judgment.py. Thresholds are PROVISIONAL.
+The monitor is the ONLY component that sets safety labels; 10_video_explainer never writes here.
+"""
+from __future__ import annotations
+
+import json
+import math
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from . import judgment as J
+
+REQUIRED_FILES = ("steps.jsonl", "behavior.jsonl", "monitor_probe.jsonl")
+
+
+def _jsonl(path: Path) -> list[dict]:
+    if not path.is_file():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass  # a run killed mid-write can leave a partial last line
+    return out
+
+
+def _json(path: Path, default: Any) -> Any:
+    if not path.is_file():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return default
+
+
+def _key(t: Any) -> float:
+    return round(float(t), 4)
+
+
+@dataclass
+class RunData:
+    run_dir: Path
+    ticks: list[dict]                       # joined rows sorted by t
+    collisions: list[dict]
+    summary: dict
+    config: dict
+    manifest: dict
+    front_frames: list[dict]
+    missing_files: list[str] = field(default_factory=list)
+
+    @property
+    def dt(self) -> float:
+        return float(self.config.get("dt") or 0.05)
+
+    @property
+    def synthetic(self) -> bool:
+        return bool(self.config.get("synthetic_fixture") or (self.summary.get("meta") or {}).get("synthetic_fixture"))
+
+    def video(self, prefer: str = "front") -> Path | None:
+        order = ("front.mp4", "view.mp4") if prefer == "front" else ("view.mp4", "front.mp4")
+        for name in order:
+            if (self.run_dir / name).is_file():
+                return self.run_dir / name
+        return None
+
+
+def load_av_stack_run(run_dir: str | Path) -> RunData:
+    """Load one av_stack run folder; rows of the monitor files are joined on t (rounded to 1e-4 s)."""
+    run_dir = Path(run_dir)
+    missing = [n for n in REQUIRED_FILES if not (run_dir / n).is_file()]
+    tables = {
+        "steps": _jsonl(run_dir / "steps.jsonl"),
+        "behavior": _jsonl(run_dir / "behavior.jsonl"),
+        "probe": _jsonl(run_dir / "monitor_probe.jsonl"),
+        "controls": _jsonl(run_dir / "agent_controls.jsonl"),
+    }
+    joined: dict[float, dict] = {}
+    for name in ("steps", "behavior", "probe"):
+        for row in tables[name]:
+            joined.setdefault(_key(row["t"]), {"t": _key(row["t"])}).update(
+                {k: v for k, v in row.items() if k != "t"})
+    for row in tables["controls"]:   # agent clock is unrounded there; only fill ticks the monitor files have
+        k = _key(row["t"])
+        if k in joined:
+            joined[k].update({("ctrl_" + key): v for key, v in row.items() if key != "t"})
+    ticks = [joined[k] for k in sorted(joined)]
+    return RunData(run_dir=run_dir, ticks=ticks, collisions=_json(run_dir / "collisions.json", []),
+                   summary=_json(run_dir / "summary.json", {}), config=_json(run_dir / "agent_config.json", {}),
+                   manifest=_json(run_dir / "manifest.json", {}), front_frames=_jsonl(run_dir / "front_frames.jsonl"),
+                   missing_files=missing)
+
+
+def _fault_config(run: RunData) -> dict[str, Any]:
+    cfg, meta = run.config, run.summary.get("meta") or {}
+    mode = cfg.get("mpc_fault", meta.get("fault_mode", "none")) or "none"
+    return dict(mode=mode, start=cfg.get("fault_start", meta.get("fault_start")),
+                duration=cfg.get("fault_duration"), magnitude=cfg.get("fault_magnitude", meta.get("fault_magnitude")),
+                on_s=cfg.get("fault_on_s"), off_s=cfg.get("fault_off_s"))
+
+
+def _finite(x: Any) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
+def thresholds_from_config(stage_cfg: dict | None) -> dict[str, float]:
+    """PROVISIONAL thresholds; video_explainer/monitor configs can override via outcome_definitions."""
+    th = dict(J.PROVISIONAL_RECOVERY)
+    od = ((stage_cfg or {}).get("vulnerability_patterns") or {}).get("outcome_definitions") or {}
+    rj = (od.get("recovery_judgment") or {}).get("thresholds") or {}
+    for k in ("e_settle_m", "psi_settle_rad", "settle_hold_s", "window_s"):
+        if isinstance(rj.get(k), dict) and _finite(rj[k].get("value")):
+            th[k] = float(rj[k]["value"])
+    return th
+
+
+def _rate_limit_dps(run: RunData) -> tuple[float, str]:
+    # pdm_agent.py:86 TAKEOVER_RATE_DPS = 90 for the PDM path; SupervisedLateral default 60 (supervised_lateral.py:82)
+    if (run.config.get("planner") or run.manifest.get("planner")) == "pdm":
+        return 90.0, "config:pdm_agent.py:86 (not in run meta, logging L-2)"
+    return 60.0, "config:supervised_lateral.py:82 (not in run meta, logging L-2)"
+
+
+def _rmse(xs: list) -> float | None:
+    xs = [float(x) for x in xs if _finite(x)]
+    return math.sqrt(sum(x * x for x in xs) / len(xs)) if xs else None
+
+
+def _series(rows: list[dict], key: str) -> list[float]:
+    return [float(r[key]) if _finite(r.get(key)) else float("nan") for r in rows]
+
+
+def compute_events(run: RunData, th: dict[str, float] | None = None) -> dict[str, Any]:
+    """Event timeline used by run_record and by the 10 video explainer verification."""
+    th = th or J.PROVISIONAL_RECOVERY
+    ticks = run.ticks
+    fault = _fault_config(run)
+    ev: dict[str, Any] = {"fault": fault}
+    actual = next((r["t"] for r in ticks if r.get("fault_injected")), None)
+    ev["planned_fault_onset"] = fault["start"] if fault["mode"] != "none" else None
+    ev["actual_fault_onset"] = actual
+    # trigger / switch: behavior.jsonl active_controller leaves 'mpc' on the switch tick (same-tick switch,
+    # supervised_lateral.py:113-117); agent_controls switched_at_s is the supervisor's own stamp.
+    sw_row = next((r for r in ticks if r.get("active_controller") not in (None, "mpc")), None)
+    trig_row = next((r for r in ticks if r.get("supervisor_reason")), None)
+    switched_at = None
+    for r in ticks:
+        if _finite(r.get("ctrl_switched_at_s")):
+            switched_at = float(r["ctrl_switched_at_s"])
+            break
+    ev["switch_time"] = _key(switched_at) if switched_at is not None else (sw_row["t"] if sw_row else None)
+    ev["trigger_time"] = trig_row["t"] if trig_row else None
+    ev["trigger_source"] = trig_row.get("supervisor_reason") if trig_row else None
+    counts = [int(r["ctrl_switch_count"]) for r in ticks if _finite(r.get("ctrl_switch_count"))]
+    ev["switch_count"] = max(counts) if counts else (1 if sw_row else 0)
+    stop_row = next((r for r in ticks if r.get("active_controller") == "safe_stop"), None)
+    ev["safe_stop_time"] = stop_row["t"] if stop_row else None
+    # lane departures over the whole run
+    margins = [J.lane_margin_m(r["lane_width_m"], r["lane_offset_m"], r["bbox_half_width_m"])
+               if all(_finite(r.get(k)) for k in ("lane_width_m", "lane_offset_m", "bbox_half_width_m")) else float("nan")
+               for r in ticks]
+    intervals, start = [], None
+    for r, m in zip(ticks, margins):
+        if m < 0 and start is None:
+            start = r["t"]
+        elif not (m < 0) and start is not None:
+            intervals.append([start, r["t"]]); start = None
+    if start is not None:
+        intervals.append([start, ticks[-1]["t"]])
+    ev["departure_intervals"] = intervals
+    t_ref = ev["switch_time"] if ev["switch_time"] is not None else (ev["planned_fault_onset"] or 0.0)
+    after = [iv for iv in intervals if iv[1] >= t_ref - 1e-9]
+    # if the car is already outside the lane at t_ref the "departure after switch" is t_ref itself
+    ev["first_departure_after_switch"] = max(after[0][0], t_ref) if after else None
+    ev["first_departure_time"] = intervals[0][0] if intervals else None
+    ev["collision_times"] = [c.get("t") for c in run.collisions]
+    if ticks:
+        i_max = max(range(len(ticks)), key=lambda i: abs(ticks[i].get("lane_offset_m") or 0.0))
+        ev["max_abs_lane_offset_m"] = abs(ticks[i_max].get("lane_offset_m") or 0.0)
+        ev["max_abs_lane_offset_t"] = ticks[i_max]["t"]
+    return ev
+
+
+def _window(rows: list[dict], t0: float, t1: float) -> list[dict]:
+    return [r for r in rows if t0 - 1e-9 <= r["t"] <= t1 + 1e-9]
+
+
+def compute_run_record(run: RunData, baseline: RunData | None = None, *, candidate: dict | None = None,
+                       metric_rules: dict | None = None, th: dict[str, float] | None = None,
+                       run_id: str | None = None, round_index: int | None = None,
+                       selector: str | None = None) -> dict[str, Any]:
+    """One run_record dict with every field of RUN_RECORD_FIELDS (+ 'events' kept separately by callers)."""
+    th = th or J.PROVISIONAL_RECOVERY
+    cand = candidate or {}
+    dt = run.dt
+    ticks = run.ticks
+    ev = compute_events(run, th)
+    invalid_reason = None
+    if run.missing_files:
+        invalid_reason = "missing_files:" + ",".join(run.missing_files)
+    elif not ticks:
+        invalid_reason = "empty_logs"
+    switched = ev["switch_time"] is not None
+    triggered = ev["trigger_time"] is not None
+    t_sw = ev["switch_time"]
+    window_s = th["window_s"]
+    vx_all = _series(ticks, "vx")
+    s_all = J.travelled_distance([0.0 if math.isnan(v) else v for v in vx_all], dt)
+    for r, s in zip(ticks, s_all):
+        r["_s"] = s
+    a_all = J.moving_average([0.0 if math.isnan(a) else a for a in _series(ticks, "ay_mps2")], th["filter_s"], dt)
+    j_all = J.lateral_jerk([0.0 if math.isnan(a) else a for a in _series(ticks, "ay_mps2")], dt, th["filter_s"])
+    for r, a, j in zip(ticks, a_all, j_all):
+        r["_ay_f"], r["_jerk"] = a, j
+    end_t = ticks[-1]["t"] if ticks else 0.0
+    eval_start = ev["planned_fault_onset"] if ev["planned_fault_onset"] is not None else (ticks[0]["t"] if ticks else 0.0)
+    if switched:
+        win = _window(ticks, t_sw, t_sw + window_s)
+        window_complete = bool(win) and end_t >= t_sw + window_s - dt / 2
+    else:
+        win = _window(ticks, eval_start, end_t)
+        window_complete = bool(win)
+    # A collision inside the available post-switch data is decisive (unrecovered) even if the run ended
+    # before t_sw + window (CARLA/synthetic runs can stop after a crash). Without a collision, an
+    # incomplete window stays simulation_invalid (never counted as safe).
+    collision_after_switch = switched and any(_finite(c.get("t")) and c["t"] >= t_sw - 1e-9 for c in run.collisions)
+    if switched and not window_complete and collision_after_switch and win:
+        window_complete = True
+    if invalid_reason is None and switched and not window_complete:
+        invalid_reason = "route_ended_before_window_end"
+    lane_ok = all(_finite(r.get("lane_width_m")) for r in win)
+    if invalid_reason is None and not lane_ok:
+        invalid_reason = "lane_width_nan"
+
+    def margins_of(rows):
+        return [J.lane_margin_m(r["lane_width_m"], r["lane_offset_m"], r["bbox_half_width_m"]) for r in rows]
+
+    margins = margins_of(win) if lane_ok else []
+    e_y = [float(r["lane_offset_m"]) for r in win] if lane_ok else []
+    e_psi = [float(r["lane_heading_err_rad"]) for r in win] if lane_ok else []
+    col_in = [c for c in run.collisions if _finite(c.get("t")) and win and win[0]["t"] - 1e-9 <= c["t"] <= win[-1]["t"] + 1e-9]
+    outcome = J.classify_recovery(switched=switched, window_complete=window_complete and invalid_reason is None,
+                                  margins=margins, e_y=e_y, e_psi=e_psi, collision=bool(col_in), dt=dt, th=th)
+    if invalid_reason is not None:
+        outcome = "simulation_invalid"
+    # labels: baseline-relative (primary) and total (secondary)
+    acc_total = max((abs(r["_ay_f"]) for r in win), default=None)
+    jerk_total = max((abs(r["_jerk"]) for r in win), default=None)
+    acc_excess = jerk_excess = None
+    base_win = []
+    if baseline is not None and baseline.ticks:
+        b_vx = [0.0 if math.isnan(v) else v for v in _series(baseline.ticks, "vx")]
+        b_s = J.travelled_distance(b_vx, baseline.dt)
+        b_ay = [0.0 if math.isnan(a) else a for a in _series(baseline.ticks, "ay_mps2")]
+        b_a = J.moving_average(b_ay, th["filter_s"], baseline.dt)
+        b_j = J.lateral_jerk(b_ay, baseline.dt, th["filter_s"])
+        if win:
+            acc_excess = J.excess_over_baseline([r["_s"] for r in win], [r["_ay_f"] for r in win], b_s, b_a)
+            jerk_excess = J.excess_over_baseline([r["_s"] for r in win], [r["_jerk"] for r in win], b_s, b_j)
+        base_win = _window(baseline.ticks, eval_start, baseline.ticks[-1]["t"])
+    margin_at_switch = None
+    if switched:
+        r_sw = next((r for r in ticks if r["t"] >= t_sw - 1e-9), None)
+        if r_sw is not None and _finite(r_sw.get("lane_width_m")):
+            margin_at_switch = J.lane_margin_m(r_sw["lane_width_m"], r_sw["lane_offset_m"], r_sw["bbox_half_width_m"])
+    safe_stop = bool((run.summary.get("supervisor") or {}).get("safe_stop")) or ev["safe_stop_time"] is not None
+    labels = J.recovery_labels(acc_excess=acc_excess, acc_total_max=acc_total, jerk_excess=jerk_excess,
+                               jerk_total_max=jerk_total, margin_at_switch=margin_at_switch, safe_stop=safe_stop, th=th)
+    final = J.final_safe_recovery(outcome, labels)
+    category = J.classify_outcome(simulation_invalid=outcome == "simulation_invalid", triggered=triggered,
+                                  switched=switched, final_safe=final)
+    lrr = None
+    if switched and outcome != "simulation_invalid" and margins:
+        lrr = J.lane_recovery_robustness(margins, [float(r["lane_width_m"]) for r in win],
+                                         float(win[0]["bbox_half_width_m"]), bool(col_in), th["collision_penalty"])
+    # P-01..03 over the evaluation window (planned onset .. end)
+    ewin = _window(ticks, eval_start, end_t)
+    em = margins_of([r for r in ewin if _finite(r.get("lane_width_m"))])
+    p01 = J.robustness_p01(em) if em else None
+    p02 = J.robustness_p02([r["_ay_f"] for r in ewin], th["lat_acc_threshold_mps2"]) if ewin else None
+    p03 = not any(_finite(c.get("t")) and c["t"] >= eval_start - 1e-9 for c in run.collisions)
+    mdelta = None
+    if baseline is not None and base_win and p01 is not None:
+        bm = margins_of([r for r in base_win if _finite(r.get("lane_width_m"))])
+        if bm:
+            mdelta = J.margin_delta_m(p01, J.robustness_p01(bm))
+    # switch_state (S1 derived axes) + handover saturation
+    max_steer = (run.config.get("geometry") or {}).get("max_steer_rad")
+    rate_dps, rate_src = _rate_limit_dps(run)
+    switch_state = handover = None
+    command_jump = max_rate = None
+    if switched:
+        r_sw = next((r for r in ticks if r["t"] >= t_sw - 1e-9), {})
+        ey_sw, epsi_sw = r_sw.get("ctrl_tracking_error"), r_sw.get("ctrl_heading_error")
+        vx, vy = r_sw.get("vx"), r_sw.get("vy")
+        eydot = (vx * math.sin(epsi_sw) + vy * math.cos(epsi_sw)) if all(_finite(x) for x in (vx, vy, epsi_sw)) else None
+        nse = max(abs(ey_sw) / 1.0, abs(epsi_sw) / 0.6) if _finite(ey_sw) and _finite(epsi_sw) else None
+        switch_state = dict(e_y_at_switch=ey_sw, e_psi_at_switch=epsi_sw, e_y_dot_at_switch=eydot,
+                            e_psi_dot_at_switch=None, normalized_switch_error=nse, speed_at_switch_mps=vx,
+                            kappa_at_switch=None, lane_offset_at_switch=r_sw.get("lane_offset_m"),
+                            note="e_psi_dot/kappa need logging L-3")
+        hw = _window(ticks, t_sw, t_sw + 1.0)
+        steer = [r.get("ctrl_steer") for r in hw if _finite(r.get("ctrl_steer"))]
+        if steer and _finite(max_steer):
+            eps = 1e-3
+            ang = [abs(x) >= 1 - eps for x in steer]
+            rates = [abs(steer[i] - steer[i - 1]) * max_steer / dt for i in range(1, len(steer))]
+            rate_sat = [math.degrees(x) >= rate_dps - 0.5 for x in rates]
+            both = [a or (rs if i > 0 else False) for i, (a, rs) in enumerate(zip(ang, [False] + rate_sat))]
+            handover = dict(window_s=1.0, max_steer_rad=max_steer, rate_limit_dps=rate_dps, rate_limit_source=rate_src,
+                            angle_saturation_ratio=sum(ang) / len(ang),
+                            rate_saturation_ratio=(sum(rate_sat) / len(rate_sat)) if rate_sat else None,
+                            time_in_saturation_s=sum(both) * dt, first_lqr_command_unclipped_rad=None,
+                            predicted_first_lqr_command_ratio=None, required_steer_rate_ratio=None,
+                            note="unclipped LQR command needs logging L-1")
+            prev = next((r for r in reversed(ticks) if r["t"] < t_sw - 1e-9 and _finite(r.get("ctrl_steer"))), None)
+            if prev is not None:
+                command_jump = abs(steer[0] - prev["ctrl_steer"]) * max_steer
+            max_rate = math.degrees(max(rates)) if rates else None
+    pre_sw = _window(ticks, ev["actual_fault_onset"] if ev["actual_fault_onset"] is not None else eval_start,
+                     t_sw if switched else end_t)
+    elapsed = [r.get("ctrl_primary_elapsed_ms") for r in ewin if r.get("active_controller") == "mpc"
+               and _finite(r.get("ctrl_primary_elapsed_ms"))]
+    deadline_ms = 1000.0 * dt  # supervised_lateral.py:74 deadline_ms = dt*1000
+    metrics = {
+        "recovery_success": None if final is None else float(final),
+        "lane_recovery_robustness": lrr,
+        "lat_acc_excess_mps2": acc_excess if switched else None,
+        "lat_jerk_excess_mps3": jerk_excess if switched else None,
+        "pre_switch_max_lateral_error_m": max((abs(r["lane_offset_m"]) for r in pre_sw if _finite(r.get("lane_offset_m"))), default=None),
+        "switch_count": ev["switch_count"],
+        "lateral_error_rmse_m": _rmse([r.get("lane_offset_m") for r in ewin]),
+        "deadline_miss_rate": (sum(e > deadline_ms for e in elapsed) / len(elapsed)) if elapsed else None,
+        "mpc_constraint_violation_rate": None,
+        "post_switch_saturation_ratio": (handover["time_in_saturation_s"] / 1.0) if handover else None,
+        "command_jump_rad": command_jump,
+        "max_steering_rate_dps": max_rate,
+        "margin_delta_m": mdelta,
+        "recovery_robustness": None,  # SUPERSEDED (02 outcome_definitions)
+    }
+    baseline_metrics = None
+    if baseline is not None and base_win:
+        baseline_metrics = {
+            "pre_switch_max_lateral_error_m": max((abs(r["lane_offset_m"]) for r in base_win), default=None),
+            "switch_count": compute_events(baseline, th)["switch_count"],
+            "lateral_error_rmse_m": math.sqrt(sum(r["lane_offset_m"] ** 2 for r in base_win) / len(base_win)),
+        }
+    has_fault = ev["fault"]["mode"] != "none"
+    gp_t = J.gp_targets(metric_rules, metrics, baseline_metrics, has_fault) if metric_rules else {}
+    if not switched:  # absolute_post_switch targets are undefined without a switch (06 surrogate.yaml)
+        for name, rule in (metric_rules or {}).items():
+            if rule.get("gp", {}).get("form") == "absolute_post_switch":
+                gp_t.pop(name, None)
+    if outcome == "simulation_invalid":
+        gp_t = {}
+    attribution = "no_switch" if not switched else (
+        "no_fault_configured" if not has_fault else (
+            "inside_fault_window" if ev["fault"]["start"] is not None and
+            ev["fault"]["start"] - 1e-9 <= t_sw < ev["fault"]["start"] + float(ev["fault"]["duration"] or 0) + 1e-9
+            else "outside_fault_window"))
+    record = J.build_run_record(
+        run_id=run_id or run.run_dir.name, scenario_id=cand.get("scenario_id"),
+        seed_scenario_id=cand.get("seed_scenario_id"), round=round_index, selector=selector or cand.get("source"),
+        profile_id=cand.get("profile_id", "sp-av-stack-pdm-supervised"), source_commit=cand.get("source_commit"),
+        feature_schema_version=cand.get("feature_schema_version"), hypothesis_ids=cand.get("hypothesis_ids"),
+        parameters=cand.get("parameters") or {k: cand.get(k) for k in ("route_id", "environment", "fault", "onset_event", "onset_offset_s") if k in cand},
+        planned_fault_onset=ev["planned_fault_onset"], actual_fault_onset=ev["actual_fault_onset"],
+        trigger_time=ev["trigger_time"], trigger_source=ev["trigger_source"], trigger_attribution=attribution,
+        switch_time=t_sw, switch_count=ev["switch_count"], switch_state=switch_state, handover_saturation=handover,
+        outcome_category=category, recovery_outcome=outcome, recovery_labels=labels, final_safe_recovery=final,
+        lane_recovery_robustness=lrr, lat_acc_excess_mps2=metrics["lat_acc_excess_mps2"],
+        P01=p01, P02=p02, P03=p03, margin_delta_m=mdelta, switch_state_label=None, metrics=metrics,
+        baseline_metrics=baseline_metrics, gp_targets=gp_t, gp_mean=cand.get("gp_mean"), gp_std=cand.get("gp_std"),
+        sim_status="invalid" if outcome == "simulation_invalid" else "ok", invalid_reason=invalid_reason)
+    return record
+
+
+def monitor_timeline(run: RunData, record: dict, th: dict[str, float] | None = None) -> dict[str, Any]:
+    """Compact, explainer-facing event list (inputs to 10_video_explainer, never labels it may change)."""
+    ev = compute_events(run, th)
+    hs = record.get("handover_saturation") or {}
+    return {
+        "fault_mode": ev["fault"]["mode"], "fault_magnitude": ev["fault"]["magnitude"],
+        "planned_fault_onset_s": ev["planned_fault_onset"], "actual_fault_onset_s": ev["actual_fault_onset"],
+        "trigger_time_s": ev["trigger_time"], "trigger_source": ev["trigger_source"],
+        "switch_time_s": ev["switch_time"], "lane_departure_intervals_s": ev["departure_intervals"],
+        "first_departure_after_switch_s": ev["first_departure_after_switch"],
+        "collision_times_s": ev["collision_times"], "safe_stop_time_s": ev["safe_stop_time"],
+        "max_abs_lane_offset_m": ev.get("max_abs_lane_offset_m"), "max_abs_lane_offset_t_s": ev.get("max_abs_lane_offset_t"),
+        "angle_saturation_ratio_1s": hs.get("angle_saturation_ratio"),
+        "rate_saturation_ratio_1s": hs.get("rate_saturation_ratio"),
+        "recovery_outcome_decided_by_monitor": record.get("recovery_outcome"),
+        "recovery_labels_decided_by_monitor": record.get("recovery_labels"),
+    }
+
+
+def evaluate_folder(run_dir: str | Path, baseline_dir: str | Path | None = None, **kw) -> dict[str, Any]:
+    run = load_av_stack_run(run_dir)
+    base = load_av_stack_run(baseline_dir) if baseline_dir else None
+    return compute_run_record(run, base, **kw)
