@@ -1,6 +1,7 @@
 # Code-aware 고장 주입 파이프라인
 
-> 모든 파일은 **템플릿**(`status: template_unverified` / `example_only`)이며 실측값이 아닙니다.
+> 설정 파일은 **템플릿**(`status: template_unverified`)이며 수치는 실측값이 아닙니다.
+> 2026-10-27: 실행 엔진 `engine/` 과 진입점 `run.py` 추가 (`python -m pipeline.run --mock`). 사용법은 저장소 README 12절.
 
 ```mermaid
 flowchart TD
@@ -17,14 +18,19 @@ flowchart TD
     CR["08 CARLA 짝 실행<br/>baseline(캐시) vs fault, Nebius 병렬"] --> MO
     SPEC["Safety spec<br/>P-01~03"] --> MO
     MO["09 Monitor → Error table<br/>결과 5분류 + 복구 판정<br/>(recovery_outcome · 라벨)"]
+    MO --> VE["10 Video explainer<br/>Cosmos / Super-VL 해설 + ±0.5 s 검증"]
 
     MO -- "GP 재학습" --> GP
+    VE -. "검증 통과 메커니즘 (few-shot)" .-> NA
+    VE -. "mechanism feature" .-> GP
+    VE -. "counterfactual 후보" .-> FE
+    VE -. "새 monitor 규칙 후보 (사람 검토)" .-> MO
     MO -. "실패 few-shot" .-> NA
     MO -. "가설 상태 갱신" .-> HY
 
     classDef nemotron fill:#3d3590,stroke:#7b70e0,color:#fff
     classDef det fill:#0b4f3f,stroke:#2fbf8f,color:#fff
-    class NA,NB nemotron
+    class NA,NB,VE nemotron
     class FE,DF,GP,OR det
 ```
 
@@ -50,7 +56,11 @@ flowchart TD
 | 08 CARLA 짝 실행 | [`08_carla_paired_run/paired_runs.yaml`](08_carla_paired_run/paired_runs.yaml) | CARLA 설정, baseline vs fault 매칭 |
 | 09 Monitor | [`09_monitor/error_table.yaml`](09_monitor/error_table.yaml) | run record · failure table 스키마 |
 | ↳ Safety spec | [`09_monitor/safety_spec.yaml`](09_monitor/safety_spec.yaml) | P-01~04 (P-02 횡가속도·P-04 저크는 라벨), 결과 5분류 ↔ recovery_outcome 매핑 |
-| 비교 실험 | [`evaluation/ablations.yaml`](evaluation/ablations.yaml) | X-1~5 ablation, 평가 지표 |
+| ↳ monitor.py | [`09_monitor/monitor.py`](09_monitor/monitor.py) | av_stack 런 폴더 → run_record (CLI: `python pipeline/09_monitor/monitor.py RUN_DIR --baseline BASE_DIR`) |
+| 10 Video explainer | [`10_video_explainer/video_explainer.yaml`](10_video_explainer/video_explainer.yaml) | 해설할 런 선택, 클립 4 fps, 검증 ±0.5 s, 메커니즘 태그, 피드백 |
+| LLM 모델 | [`llm_models.yaml`](llm_models.yaml) | A Lightning · A_refine · B Ultra x3 · C Cosmos(Dedicated) / Super-VL |
+| 실행 엔진 | [`engine/`](engine/) · [`run.py`](run.py) | judgment, monitor, scenarios, surrogate(sklearn GP + straddle), llm, nemotron, carla_runner, video, explainer, feedback, fixtures(SYNTHETIC) |
+| 비교 실험 | [`evaluation/ablations.yaml`](evaluation/ablations.yaml) | X-1~6 ablation (+ video_explainer on/off), 경계 추정 지표, mock_suite |
 
 ## 피드백 루프
 
@@ -59,6 +69,10 @@ flowchart TD
 | ── GP 재학습 | 09 → 06 | `surrogate.yaml` `feedback_in` |
 | ‐ ‐ 실패 few-shot | 09 → 03 | `nemotron_a.yaml` `feedback_in` |
 | ┈ 가설 상태 갱신 | 09 → 02 | `hypotheses.yaml` `tracking` |
+| ‐ ‐ 검증된 영상 메커니즘 | 10 → 03 | `video_explainer.yaml` `feedback.few_shot_to_A` |
+| ‐ ‐ mechanism feature | 10 → 06 | `video_explainer.yaml` `feedback.gp_categorical_features` |
+| ‐ ‐ counterfactual 재실행 | 10 → 04/07 | `video_explainer.yaml` `feedback.counterfactual_queue` (라운드당 최대 2개 강제 포함) |
+| ‐ ‐ 규칙 후보 | 10 → 09 (사람) | `monitor_rule_candidates.yaml`, 자동 적용 안 함 |
 
 ## 가설 생성 · 지표별 GP 타깃
 
@@ -67,7 +81,8 @@ flowchart TD
 python -m pipeline.hypothesis_tools.generate_hypotheses          # 01 + 02 카탈로그 + 04 → 02_hypotheses/hypotheses.yaml
 python -m pipeline.hypothesis_tools.build_scenario_candidates -o candidates.yaml   # proposed 가설만, CARLA 미검증
 python3 scripts/runner_skeleton.py --check                       # null 항목 + 가설 상태 + 활성 GP 지표
-python -m unittest discover -s tests -v
+python -m pytest -q                                              # unittest 테스트 포함
+python -m pipeline.run --mock                                    # 00 → 10 루프 (SYNTHETIC)
 ```
 
 - 옛 condition/control 가설 H-01~11은 모두 S-세트 탐색 목표로 대체됐다 (`vulnerability_patterns.yaml`의 `superseded_patterns`, `patterns: []`). 탐색 목표는 복구 성공·실패를 모두 관측해 경계를 추정하며, 측정된 성공 영역은 수학적 안전 보증이 아니다. 회귀 검증(구버전 vs 신버전)은 별도 개념이다.

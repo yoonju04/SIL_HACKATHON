@@ -196,13 +196,18 @@ SIL_HACKATHON/
 │   ├── 06_gp_surrogate/           # 지표별 GP (정규화 z)
 │   ├── 07_orchestrator/           # LCB 선택 · 예산
 │   ├── 08_carla_paired_run/       # baseline vs fault 짝 실행
-│   ├── 09_monitor/                # safety spec P-01~03 + error table
-│   ├── evaluation/                # ablation X-1~5
+│   ├── 09_monitor/                # safety spec P-01~03 + error table + monitor.py (av_stack 로그 판정)
+│   ├── 10_video_explainer/        # 영상 해설 + 검증 (Cosmos Reason / Nemotron VL)
+│   ├── engine/                    # 실행 엔진 (monitor, GP, LLM 클라이언트, CARLA 러너, 영상, 피드백, 합성 fixture)
+│   ├── llm_models.yaml            # 모델 id · 호출 파라미터 (역할 A, A_refine, B, C)
+│   ├── run.py                     # 한 번에 실행: python -m pipeline.run --mock | --real
+│   ├── evaluation/                # ablation X-1~6
 │   ├── hypothesis_tools/          # 가설 생성기 · 후보 샘플러
 │   └── prior_tools/               # Nemotron prior payload · 횡가속도 스크리닝
 ├── scripts/
 │   └── runner_skeleton.py         # 파이프라인 러너 (--check, --self-test)
-├── tests/                         # python -m unittest discover -s tests
+├── tests/                         # python -m pytest -q (unittest 테스트 포함)
+├── requirements-pipeline.txt      # 루프용 패키지 (CARLA는 sim-eval .venv-tfpp)
 ├── configs/
 │   └── scenario.example.yaml      # 시나리오 스펙 예시 (실행 설정 아님)
 ├── examples/
@@ -226,3 +231,94 @@ SIL_HACKATHON/
 ## 11. 한계
 
 고장은 MPC의 계산 · 실행 고장만 다루며, 센서 · 액추에이터 등 하드웨어 고장은 범위 밖입니다. 이 프로젝트는 시뮬레이션 기반 연구 도구이며 실제 차량용 소프트웨어나 ISO 26262 인증 도구가 아닙니다. 하나의 시뮬레이터 · 차량 모델 결과를 실제 차량 안전 보장으로 일반화할 수 없습니다. MPC와 LQR이 같은 센서나 ECU를 공유하면 알고리즘 백업만으로는 하드웨어 고장을 막지 못합니다. **실패를 찾지 못했다고 해서 안전이 증명되는 것은 아닙니다.**
+
+## 12. 한 번에 실행하기 (`python -m pipeline.run`, 2026-10-27)
+
+`new_pipeline` + `junwoo/sim-eval` 을 main 에 병합하면 `pipeline/08_carla_paired_run/av_stack/` 와
+`pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml` 이 생기고, 루프가 그것을 자동으로 찾는다.
+병합 전에는 `SIM_EVAL_ROOT`(sim-eval 체크아웃) 또는 `AV_STACK_ROOT` 로 위치를 알려준다.
+
+### 설치
+
+```powershell
+# Windows (저장소 루트). 루프용 venv. CARLA 실행은 sim-eval 의 .venv-tfpp 가 맡는다.
+py -3.11 -m venv .venv-sil
+.venv-sil\Scripts\pip install -r requirements-pipeline.txt
+```
+
+### mock 모드 (CARLA·네트워크 없음, 합성 데이터)
+
+```powershell
+.venv-sil\Scripts\python -m pipeline.run --mock                      # 00 → 10 전체, outputs\mock_<시각>\
+.venv-sil\Scripts\python -m pipeline.run --mock --ablation-suite      # X-1,2,3,5,6 비교 (SYNTHETIC)
+.venv-sil\Scripts\python -m pytest -q
+```
+
+mock 은 `pipeline/engine/fixtures/synthetic_sim.py`(운동학 근사 시뮬레이터, 320x180 합성 영상)와 stub LLM 을 쓴다.
+모든 파일에 `synthetic_fixture: true` 가 붙고 보고서에 SYNTHETIC 이 표시된다. **수치는 실측이 아니다.**
+
+### real 모드 (CARLA 0.9.15 + Nebius Token Factory)
+
+```powershell
+# 1) CARLA 서버 (sim-eval av_stack 폴더)
+cd pipeline\08_carla_paired_run\av_stack ; .\start_carla_stable.ps1 ; cd ..\..\..
+# 2) 키: .env 에 NEBIUS_API_KEY=... (커밋 금지) 또는
+$env:NEBIUS_API_KEY = "..."
+# 3) 점검 → 실행
+.venv-sil\Scripts\python -m pipeline.run --real --check
+.venv-sil\Scripts\python -m pipeline.run --real                       # 기본: X-5 + 영상 해설 on (= X-6)
+.venv-sil\Scripts\python -m pipeline.run --real --ablation X-3 --video-explainer off --rounds 2
+```
+
+| 환경 변수 | 뜻 |
+|---|---|
+| `NEBIUS_API_KEY` | Token Factory 키 (필수, 출력·로그에 남기지 않음) |
+| `NEMOTRON_A_MODEL_ID`, `NEMOTRON_B_MODEL_ID` | 모델 id 덮어쓰기 (기본값 `pipeline/llm_models.yaml`) |
+| `COSMOS_MODEL_ID`, `COSMOS_BASE_URL`, `COSMOS_API_KEY` | Cosmos Reason Dedicated Endpoint. 없으면 `nvidia/Nemotron-3.5-Super-VL` 로 대체 |
+| `AV_STACK_ROOT` / `SIM_EVAL_ROOT` | 병합 전 av_stack 위치 |
+| `AV_STACK_PYTHON` | carla 를 import 할 수 있는 python (기본 `av_stack\.venv-tfpp\Scripts\python.exe`) |
+| `CARLA_HOST`, `CARLA_PORT` | 기본 localhost:2000 |
+| `FFMPEG` | ffmpeg 경로 (없으면 PATH → imageio-ffmpeg) |
+
+Windows 메모: 경로에 공백이 있어도 된다(subprocess 리스트 인자). ffmpeg glob 을 쓰지 않는다. CARLA 는 1대만 쓴다
+(`parallel_workers: 1`). 각 런의 `--out` 은 새 폴더여야 하므로 `outputs\...\runs\R..` 를 매번 새로 만든다.
+
+### 루프
+
+```mermaid
+flowchart LR
+    P["00-02 prior · profile · S1 목표"] --> A["03 Nemotron A<br/>Lightning, thinking off<br/>(실패 사례 + 검증된 영상 메커니즘)"]
+    A --> G["04 G-01~03 게이트 + 섭동"]
+    SF["space filling"] --> G
+    CF["counterfactual 큐"] --> G
+    G --> B["05b Nemotron B<br/>Ultra x3, 코드만 봄"]
+    G --> D["05a DF"]
+    B --> GP["06 GP (sklearn)<br/>Matern5/2 ARD"]
+    D --> GP
+    M2["mechanism prevalence<br/>(검증 통과 해설만)"] --> GP
+    GP --> O["07 straddle<br/>β·σ − |μ| + 전환 GP 페널티"]
+    O --> C["08 CARLA 짝 실행<br/>baseline 캐시 + fault"]
+    C --> MO["09 monitor.py<br/>결정론 판정 (유일한 판정관)"]
+    MO --> V["10 영상 해설<br/>Cosmos / Super-VL<br/>영상만 보고 이탈·충돌 시각 주장"]
+    MO -- "숨긴 monitor 값" --> VF["검증 ±0.5 s<br/>환각률"]
+    V --> VF
+    VF -- "통과" --> A
+    VF -- "통과" --> M2
+    VF -- "통과" --> CF
+    VF -- "새 태그" --> R["monitor_rule_candidates.yaml<br/>(사람 검토, 자동 적용 안 함)"]
+    MO -- "재학습" --> GP
+```
+
+역할 분리: A 만 실패 사례를 본다 · B 는 코드만 본다 · 해설기는 영상과 맥락(고장·전환 시각)만 보고
+이탈·충돌·오프셋은 못 본다 · 판정은 09 monitor 만 한다. 해설이 판정을 바꾸지 않는다.
+
+### 출력 (`outputs/<mode>_<시각>/`)
+
+`run_records.jsonl`, `failure_table.jsonl`, `explanations.jsonl`, `monitor_rule_candidates.yaml`,
+`evaluation_metrics.json`(경계 양쪽 관측, |robustness|<0.2 런 수, GP 경계 부호 정확도, 첫 실패까지 런 수,
+고유 실패 조건, 해설 통과율), `llm_calls.jsonl`(토큰 사용량, 키 없음), `report.md`, `round_xx/`, `runs/`, `clips/`.
+
+### PROVISIONAL 값 (사용자 확인 전)
+
+복구 판정 0.3 m / 0.1 rad / 1 s / 5 s / 3 m/s² / 5 m/s³, onset 이벤트 검출 κ 1/60·1/300 m⁻¹, fault 런
+`--stop-after-fault 15`, 속도 격자 5 km/h, 예산 72 런(cold 24 + 12×4), straddle β 1.96, 해설 선택 |robustness|<0.15.
