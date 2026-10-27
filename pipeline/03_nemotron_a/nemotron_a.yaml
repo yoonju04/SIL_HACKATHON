@@ -27,5 +27,5 @@ A_scenario_generation:
 # 09 Monitor → A 피드백 (실패 few-shot)
 feedback_in:
   from: 09_monitor/error_table
-  select: verified_failures_top_k
+  select: verified_failures_top_k               # 09 error_table failure_table 규칙: unrecovered 우선, 라벨(recovery_labels) 포함
   k: 5

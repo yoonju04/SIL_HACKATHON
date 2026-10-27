@@ -47,8 +47,11 @@ switch_trigger:
 evaluation:
   - {name: detection_delay_s, definition: 'switched_at_s - fault_start_s', source: 'summary/control log switched_at_s (supervised_lateral.py:140-144)', note: '전환 없으면 null'}
   - {name: pre_switch_max_lateral_error_m, defined_in: 'outcome_definitions.pre_switch_max_lateral_error_m'}
-  - {name: recovery_robustness, role: gp_target, defined_in: 'outcome_definitions.recovery_robustness'}
-  - {name: recovery_success, role: recorded_label}
+  - {name: lane_recovery_robustness, role: gp_target, defined_in: 'outcome_definitions.lane_recovery_robustness'}
+  - {name: lat_acc_excess_mps2, role: gp_target_secondary, defined_in: 'outcome_definitions.lat_acc_excess_mps2'}
+  - {name: recovery_outcome, role: recorded_class, defined_in: 'outcome_definitions.recovery_outcome', note: '_common.yaml recovery_judgment'}
+  - {name: recovery_labels, role: recorded_labels, defined_in: 'outcome_definitions.recovery_labels', note: 'departed_at_switch 가 S2의 핵심: 늦은 감지로 전환 때 이미 차선 밖'}
+  - {name: recovery_success, role: alias_of_final_safe_recovery, defined_in: 'outcome_definitions.recovery_success'}
   - {name: outcome_category, note: 'no_trigger / triggered_no_switch 도 결과다. 관측: output_delay 4틱 경로 C, bias 0.05 rad 세 경로 모두 "전환 못 함" (scenario_space_av_stack.yaml:87, 102-104)'}
   - {name: trigger_source}
 

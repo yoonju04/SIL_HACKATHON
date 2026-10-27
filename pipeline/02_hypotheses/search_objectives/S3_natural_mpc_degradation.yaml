@@ -57,18 +57,20 @@ evaluation:
   - {name: natural_switch_rate, definition: '전환 런 수 / 전체 런 수 (조건별)', note: '옛 H-08 mpc_switch_trigger_rate (정의 없던 지표)를 이 정의로 대체 제안'}
   - {name: deadline_miss_rate, defined_in: outcome_definitions.deadline_miss_rate, note: 'primary_elapsed_ms는 전환 후 갱신 안 됨 (SUPERVISOR.md:24)'}
   - {name: lateral_error_rmse_m, defined_in: outcome_definitions.lateral_error_rmse_m}
-  - {name: recovery_robustness, role: gp_target_if_switched, note: '전환 없으면 undefined'}
-  - {name: recovery_success, role: recorded_label}
+  - {name: lane_recovery_robustness, role: gp_target_if_switched, defined_in: 'outcome_definitions.lane_recovery_robustness', note: '전환 없으면 undefined'}
+  - {name: lat_acc_excess_mps2, role: gp_target_secondary_if_switched, defined_in: 'outcome_definitions.lat_acc_excess_mps2'}
+  - {name: recovery_outcome, role: recorded_class, defined_in: 'outcome_definitions.recovery_outcome', note: '전환 없으면 no_switch'}
+  - {name: recovery_success, role: alias_of_final_safe_recovery, defined_in: 'outcome_definitions.recovery_success'}
 
 risks:
   - 'deadline_miss는 wall-clock이라 Nebius 병렬 워커·부하에 따라 결과가 달라짐. 워커 사양과 step_time_s(pdm_agent.py:284-296 control log)를 함께 기록'
   - '자연 전환이 드물면 예산 대부분이 no_trigger. 먼저 속도 상한·급커브 경로로 범위 확인'
-  - 'G-03 stress_test 태그(횡가속도 요구 > P-02)는 물리 한계 실패와 섞이므로 따로 분석'
+  - 'G-03 stress_test 태그(공칭 횡가속도 수요 v^2*kappa > P-02 3.0 provisional)는 물리 한계 실패와 섞이므로 따로 분석'
 
 search_strategy:
   steps:
     - {name: map_natural_switch_region, description: '경로 × 속도에서 전환이 일어나는 영역 찾기 (no_trigger 포함 기록)'}
-    - {name: recovery_in_switch_region, description: '전환이 일어난 영역 안에서 recovery_robustness 경계 추정'}
+    - {name: recovery_in_switch_region, description: '전환이 일어난 영역 안에서 lane_recovery_robustness 경계 추정'}
   observation_requirement: '_common.yaml 참고'
   arms: none
 

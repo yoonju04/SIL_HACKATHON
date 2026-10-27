@@ -16,7 +16,7 @@ flowchart TD
     OR["07 Orchestrator 선택<br/>LCB + 다양성 + 무작위 25%"] --> CR
     CR["08 CARLA 짝 실행<br/>baseline(캐시) vs fault, Nebius 병렬"] --> MO
     SPEC["Safety spec<br/>P-01~03"] --> MO
-    MO["09 Monitor → Error table<br/>robustness, 결과 5분류"]
+    MO["09 Monitor → Error table<br/>결과 5분류 + 복구 판정<br/>(recovery_outcome · 라벨)"]
 
     MO -- "GP 재학습" --> GP
     MO -. "실패 few-shot" .-> NA
@@ -49,7 +49,7 @@ flowchart TD
 | 07 Orchestrator | [`07_orchestrator/orchestrator.yaml`](07_orchestrator/orchestrator.yaml) | cold start, LCB 획득, 예산·중단 조건 |
 | 08 CARLA 짝 실행 | [`08_carla_paired_run/paired_runs.yaml`](08_carla_paired_run/paired_runs.yaml) | CARLA 설정, baseline vs fault 매칭 |
 | 09 Monitor | [`09_monitor/error_table.yaml`](09_monitor/error_table.yaml) | run record · failure table 스키마 |
-| ↳ Safety spec | [`09_monitor/safety_spec.yaml`](09_monitor/safety_spec.yaml) | P-01~03 robustness, 결과 5분류 |
+| ↳ Safety spec | [`09_monitor/safety_spec.yaml`](09_monitor/safety_spec.yaml) | P-01~04 (P-02 횡가속도·P-04 저크는 라벨), 결과 5분류 ↔ recovery_outcome 매핑 |
 | 비교 실험 | [`evaluation/ablations.yaml`](evaluation/ablations.yaml) | X-1~5 ablation, 평가 지표 |
 
 ## 피드백 루프
@@ -74,7 +74,25 @@ python -m unittest discover -s tests -v
 - `safety_profile.yaml`은 `junwoo/sim-eval`(9b51151) av_stack 코드 근거로 일부 채워졌다 (O-001~O-025, verified: false).
 - 생성기 자체는 옛 패턴으로 테스트한다. 형식 예시는 [`hypothesis_tools/examples/`](hypothesis_tools/examples/)(가상 값)에 있다.
 - 가설마다 주 지표가 다르다 (`metric_rules`): `recovery_success`, `pre_switch_max_lateral_error_m`, `switch_count`, `lateral_error_rmse_m`, `deadline_miss_rate`, `mpc_constraint_violation_rate`.
-- GP는 활성 지표마다 하나씩 둔다. 타깃 `y`는 고장 런이면 `metric(fault) − metric(baseline)`, 고장이 없는 후보(H-08/H-10/H-11)면 단일 런 값이다. `recovery_success`는 이진값이라 GP는 연속값 `recovery_robustness`(전환 후 `T_hold` 동안 정규화 제약 여유의 최솟값)를 학습한다.
+- GP는 활성 지표마다 하나씩 둔다. 타깃 `y`는 고장 런이면 `metric(fault) − metric(baseline)`, 고장이 없는 후보(H-08/H-10/H-11)면 단일 런 값이다. `recovery_success`(= `final_safe_recovery`)는 이진값이라 GP는 연속값 둘을 따로 학습한다: `lane_recovery_robustness`(전환 후 5 s 차선 여유 정규화 최솟값, 충돌 -1)와 `lat_acc_excess_mps2`(같은 경로 위치 baseline 대비 횡가속도 초과).
 - 지표끼리 비교하기 위해 `z = sign · y / scale`로 맞춘다 (`scale = minimum_effect`, z가 낮을수록 가설 방향). 07은 후보가 인용한 가설 지표의 `mean_z − β·std_z`로 고른다.
 - GP 탐색 런은 가설 판정에 쓰지 않는다. 판정은 `decision_protocol`의 전용 무작위 런과 부트스트랩 CI로만 한다.
 - 횡가속도 수요가 P-02 임계를 넘는 후보는 버리지 않고 `stress_test`로 태깅한다 (G-03, PK-001).
+
+## 전환 후 복구 판정 (2026-10-27, 수치는 PROVISIONAL)
+
+정의 원본: `02_hypotheses/vulnerability_patterns.yaml` `outcome_definitions.recovery_judgment` · 공통 규칙 `search_objectives/_common.yaml` `recovery_judgment`.
+
+| 결과 (`recovery_outcome`, 하나만) | 뜻 |
+|---|---|
+| `safe_recovery` | 전환 후 차선 이탈 없음 + 5 s 안에 \|e_y\|≤0.3 m, \|e_psi\|≤0.1 rad 를 1 s 이상 연속 유지 |
+| `recovered_after_departure` | 이탈했다가 복귀 후 같은 조건으로 안정화 |
+| `unsettled` | 이탈 없음, 5 s 안에 안정화 못 함 |
+| `unrecovered` | 충돌, 또는 이탈 후 복귀 못 함 (복귀했지만 안정화 못 한 경우 포함, 결정 대기) |
+| `simulation_invalid` / `no_switch` | 창이 불완전·데이터 없음 / 전환 없음 (결과 5분류의 no_trigger, triggered_no_switch) |
+
+- 라벨(여러 개 가능): `lat_acc_excess`(baseline 대비 3 m/s²), `lat_jerk_excess`(5 m/s³, 0.5 s 이동평균), `departed_at_switch`, `safe_stop`. 각각 primary(같은 경로 위치 baseline 대비)와 secondary(전체 값) 버전.
+- 최종 `final_safe_recovery = safe_recovery AND NOT lat_acc_excess.primary AND NOT lat_jerk_excess.primary` → 결과 5분류의 `switched_safe`.
+- 3 m/s², 5 m/s³ 은 사용자가 제공한 ISO 11270:2014 / UN R79 참고값이며 원문은 여기서 확인하지 않았다. 운전자가 개입하는 LKAS 대상 값이라 인증 기준이 아니다. CARLA a_y는 경로 곡률 수요를 포함하므로 primary는 baseline 차이로 본다.
+- 0.3 m / 0.1 rad 는 무고장 MPC 런(팀원 PC `av_stack/runs/fault_check_1027`)의 같은 구간 p95 + margin 으로 교체 예정.
+- baseline 위치 정렬은 지금 `s = cumsum(vx·dt)` 근사. 정확한 정렬에는 monitor_probe 에 경로 인덱스 로깅(L-5)이 필요하다.

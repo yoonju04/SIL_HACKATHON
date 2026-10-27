@@ -32,8 +32,21 @@ observation_requirement: >
   전환이 일어나지 않은 런(no_trigger / triggered_no_switch)도 결과로 기록한다.
   한쪽만 관측되면 '경계 미추정'으로 보고한다.
 
+recovery_judgment:            # 2026-10-27 사용자 승인. S1~S4, R 공통
+  defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions
+  applies_to: [S1, S2, S3, S4, R]
+  recovery_outcome: [safe_recovery, recovered_after_departure, unsettled, unrecovered, simulation_invalid, no_switch]
+  recovery_labels: [lat_acc_excess, lat_jerk_excess, departed_at_switch, safe_stop]
+  final_safe_recovery: 'safe_recovery AND NOT lat_acc_excess.primary AND NOT lat_jerk_excess.primary'
+  gp_targets: [lane_recovery_robustness, lat_acc_excess_mps2]
+  provisional_values: {e_settle_m: 0.3, psi_settle_rad: 0.1, settle_hold_s: 1.0, window_s: 5.0,
+                       lat_acc_mps2: 3.0, lat_jerk_mps3: 5.0, jerk_filter_s: 0.5, collision_penalty: -1.0}
+  provisional_status: 'PROVISIONAL, 검증 안 됨. e_settle/psi_settle 는 baseline p95 + margin 으로 교체 예정 (outcome_definitions.recovery_judgment.thresholds.calibration)'
+  external_references: '02 vulnerability_patterns.yaml references E-01 (ISO 11270:2014), E-02 (UN R79), E-03 (CARLA Leaderboard 2.1). 값은 사용자 제공, 원문 미확인. 인증 기준 아님'
+
 limitations:
   claims_not_made:
+    - 'recovery_judgment 의 임계값(0.3 m, 0.1 rad, 3 m/s^2, 5 m/s^3 등)은 임시값이다. 이 값으로 낸 safe_recovery 판정은 규격 적합이나 안전 인증이 아니다.'
     - 복구 성공 영역을 '측정'한 것은 그 영역의 안전성을 '수학적으로 보증'한 것이 아니다.
     - 샘플 사이·밖의 영역에서 복구가 성공한다고 보장하지 않는다 (GP 예측은 추정치).
     - 실패를 찾지 못했다고 안전이 증명되지 않는다.

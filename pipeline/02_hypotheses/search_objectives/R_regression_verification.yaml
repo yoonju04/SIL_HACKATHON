@@ -22,7 +22,7 @@ frozen_scenarios:
 
 metrics:
   switching: [trigger_source, detection_delay_s, switch_count]
-  recovery: [recovery_robustness, recovery_success, margin_delta_m]
+  recovery: [recovery_outcome, final_safe_recovery, lane_recovery_robustness, lat_acc_excess_mps2, margin_delta_m]   # 구버전 비교 시 같은 provisional 임계값을 양쪽에 동일하게 적용
   mpc_only: [lateral_error_rmse_m, deadline_miss_rate, mpc_constraint_violation_rate]   # H-08/H-10/H-11의 MPC 단독 지표는 여기로
   decision: '구버전 대비 악화 판정 기준(허용 폭, 반복 수)은 미정 (TODO)'
 

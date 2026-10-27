@@ -16,7 +16,9 @@ results_schema:
                source_commit, feature_schema_version, hypothesis_ids, parameters,
                planned_fault_onset, actual_fault_onset, trigger_time, trigger_source,
                trigger_attribution, switch_time,
-               switch_count, switch_state, handover_saturation, outcome_category, P01, P02, P03, margin_delta_m,
+               switch_count, switch_state, handover_saturation, outcome_category,
+               recovery_outcome, recovery_labels, final_safe_recovery, lane_recovery_robustness,
+               lat_acc_excess_mps2, P01, P02, P03, margin_delta_m,
                switch_state_label, metrics, baseline_metrics, gp_targets,
                gp_mean, gp_std, sim_status, invalid_reason]
   # metrics / baseline_metrics: 02 metric_rules의 모든 지표 + 보조 지표 (정의: 02 outcome_definitions)
@@ -26,7 +28,18 @@ results_schema:
   metric_names: [recovery_success, recovery_robustness, pre_switch_max_lateral_error_m,
                  switch_count, lateral_error_rmse_m, deadline_miss_rate,
                  mpc_constraint_violation_rate, post_switch_saturation_ratio,
-                 command_jump_rad, max_steering_rate_dps, margin_delta_m]
+                 command_jump_rad, max_steering_rate_dps, margin_delta_m,
+                 lane_recovery_robustness, lat_acc_excess_mps2, lat_jerk_excess_mps3]
+  # 2026-10-27 recovery_judgment (02 outcome_definitions, 수치는 PROVISIONAL):
+  #   recovery_outcome: recovery_outcome_values 중 하나 (상호 배타)
+  #   recovery_labels: {lat_acc_excess: {primary, secondary}, lat_jerk_excess: {primary, secondary},
+  #                     departed_at_switch, safe_stop}  — 다중 라벨, 계산 불가는 null
+  #   final_safe_recovery = safe_recovery AND NOT lat_acc_excess.primary AND NOT lat_jerk_excess.primary
+  #   GP 타깃 분리: lane_recovery_robustness (차선 여유, 횡가속도 제외) / lat_acc_excess_mps2 (baseline 대비)
+  #   recovery_robustness 는 superseded (기록만, 새 런에서는 null 허용)
+  #   lat_jerk_excess_mps3: max |j_fault - j_baseline(s)|, 0.5 s 이동평균 후 (라벨 계산용 연속값)
+  recovery_outcome_values: [safe_recovery, recovered_after_departure, unsettled, unrecovered,
+                            simulation_invalid, no_switch]
   # trigger_source: 감독기가 전환한 이유 = av_stack supervisor_reason (behavior.jsonl, sim-eval
   #   integration/monitor_logs.py:123-124). 값은 safety_profile.yaml switching.triggers 이름과 같다
   #   (integration/supervised_lateral.py:28-52, 109-112). 전환이 없으면 null.
@@ -57,6 +70,10 @@ results_schema:
     predicted_first_lqr_command_ratio: {source: 'first_lqr_command_unclipped_rad / max_steer_rad', available: false, todo: L-1}
     required_steer_rate_ratio: {source: '|u_unclipped(t_sw) - u_applied(t_sw-dt)|/dt / rate_limit', available: false, todo: L-1}
   failure_table: [scenario_id, violated_property, originating_evidence_ids,
-                  hypothesis_ids, trigger_source, trigger_attribution, environment, fault, onset_event,
+                  hypothesis_ids, trigger_source, trigger_attribution, recovery_outcome, recovery_labels,
+                  environment, fault, onset_event,
                   observed_switch_behavior, robustness, reproduction_count]
+  # failure_table에 넣는 런 (03 Nemotron A few-shot): outcome_category switched_unsafe, 또는 no_switch 이면서
+  #   P-01 < 0 / P-03 위반. recovery_outcome 이 unrecovered 인 런을 우선한다 (verified_failures_top_k)
   timeseries_store: results/timeseries/
+  baseline_timeseries_cache: "results/baselines/{baseline_cache_key}/ (s, a_y, jerk, lane_offset, heading) — matched-position 비교용" 

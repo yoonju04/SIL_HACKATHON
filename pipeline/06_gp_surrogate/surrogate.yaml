@@ -30,12 +30,16 @@ surrogate:
   orientation:
     formula: "z = sign * y / gp.scale"
     sign: "+1 if support_direction == negative else -1"   # 결과: z가 낮을수록 가설 방향(더 위험)
-    scale_units: "metric_rules[*].gp.scale (= minimum_effect, recovery_robustness는 example_only 0.1)"
+    scale_units: "metric_rules[*].gp.scale (= minimum_effect, lane_recovery_robustness 0.1 example_only, lat_acc_excess_mps2 0.5 provisional)"
     fit_on: z                                   # GP는 z를 학습한다. 원래 단위 평균은 z * scale / sign으로 복원
   target_transform:
     fraction_metrics: none                      # deadline_miss_rate 등. 0/1 근처에 몰리면 logit 검토
   outputs: [mean_z, std_z]                      # 지표별
   refit: per_batch
+  # 2026-10-27: 전환 후 복구 GP 타깃을 둘로 분리 (02 outcome_definitions)
+  #   lane_recovery_robustness (metric_rules.recovery_success.gp) — 차선 여유만, 충돌은 -1.0 (provisional)
+  #   lat_acc_excess_mps2 (metric_rules.lat_acc_excess_mps2.gp) — 같은 경로 위치 baseline 대비 |Δa_y| 최대값
+  #   둘 다 absolute_post_switch: 전환 없는 런은 타깃 없음. 판정용 이진 라벨(final_safe_recovery)은 GP에 넣지 않는다
   not_used_for_hypothesis_decision: true        # 판정은 02 decision_protocol의 전용 무작위 런만
 
 # 09 Monitor → GP 재학습

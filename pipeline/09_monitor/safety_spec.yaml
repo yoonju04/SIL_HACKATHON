@@ -15,7 +15,18 @@ safety_specification:
       description: "횡가속도 한계"
       robustness: "lateral_acc_threshold - max_over_window(abs(lateral_acc))"
       failure_if: "robustness < 0"
-      lateral_acc_threshold_mps2: null         # 근거와 함께 확정
+      lateral_acc_threshold_mps2: 3.0          # PROVISIONAL, 검증 안 됨. 사용자 제공 참고값 ISO 11270:2014 / UN R79 (02 references E-01, E-02)
+      role: label_not_failure                  # 2026-10-27: P-02 위반은 recovery_labels.lat_acc_excess 라벨. 차선·충돌 판정과 분리
+      primary: baseline_relative               # |a_y_fault - a_y_baseline(같은 경로 위치)| > 3.0
+      secondary: total                         # |a_y_fault| > 3.0 (경로 곡률 수요 포함 → 정상 커브에서도 넘을 수 있음)
+      note: "G-03 (04) 도 이 값을 쓴다: 공칭 수요 v^2*kappa > 3.0 이면 stress_test 태그 (버리지 않음). 참고 규격은 운전자 개입 LKAS 대상이라 인증 기준 아님"
+    - id: P-04
+      description: "횡 저크 한계 (라벨)"
+      robustness: "lateral_jerk_threshold - max_over_window(abs(movavg_0.5s(d a_y/dt)))"
+      lateral_jerk_threshold_mps3: 5.0         # PROVISIONAL. 사용자 제공 참고값 ISO 11270:2014 (E-01)
+      role: label_not_failure
+      primary: baseline_relative
+      secondary: total
     - id: P-03
       description: "충돌 없음"
       monitor: boolean
@@ -25,4 +36,17 @@ safety_specification:
     align_baseline_to_fault_run: true
   outcome_categories: [no_trigger, triggered_no_switch, switched_safe,
                        switched_unsafe, simulation_invalid]
+  # 2026-10-27: 전환 후 판정 세분화 (정의: 02 vulnerability_patterns.yaml outcome_definitions.recovery_judgment)
+  #   outcome_category 5분류는 유지 (역추적용). switched_* 는 recovery_outcome + 라벨로 결정한다.
+  after_switch_window_s: 5.0                   # PROVISIONAL (= T_hold_s)
+  recovery_outcomes: [safe_recovery, recovered_after_departure, unsettled, unrecovered,
+                      simulation_invalid, no_switch]
+  recovery_labels: [lat_acc_excess, lat_jerk_excess, departed_at_switch, safe_stop]
+  category_mapping:
+    simulation_invalid: simulation_invalid
+    no_trigger: "no_switch (감독기 사유 없음. 감지 못 한 고장 포함 → P-01/P-03은 evaluation_window로 따로 기록)"
+    triggered_no_switch: "no_switch (사유는 있으나 LQR로 안 넘어감. av_stack은 같은 틱 전환이라 현재 발생 안 함: supervised_lateral.py:113-117)"
+    switched_safe: "final_safe_recovery == true"
+    switched_unsafe: "전환했고 final_safe_recovery == false (recovered_after_departure, unsettled, unrecovered, 또는 safe_recovery + 가속도/저크 라벨)"
+  infraction_reference: "CARLA Leaderboard 2.1 (02 references E-03): 충돌 → collisions.json / evaluation_events.json, 경로 이탈 → evaluation_events.json"
   simulation_invalid_is_not_safe: true

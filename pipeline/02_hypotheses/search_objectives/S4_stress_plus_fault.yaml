@@ -28,7 +28,7 @@ switch_trigger:
     고장 창 밖에서 울린 전환(outside_fault_window)은 S3 결과로 분리한다.
     고장 창 안이라도 deadline_miss나 tracking_divergence는 자연 원인과 섞일 수 있음을 표시한다.
 
-evaluation: [detection_delay_s, pre_switch_max_lateral_error_m, recovery_robustness, recovery_success, trigger_source, trigger_attribution]
+evaluation: [detection_delay_s, pre_switch_max_lateral_error_m, lane_recovery_robustness, lat_acc_excess_mps2, recovery_outcome, recovery_labels, recovery_success, trigger_source, trigger_attribution]   # recovery_*: _common.yaml recovery_judgment
 
 risks:
   - '원인 혼동: 감독기는 주입 여부를 보지 않음 (supervised_lateral.py:20). 원인 구분은 사후 분석에서만 가능'

@@ -137,4 +137,48 @@ class ProfileAndSchemaTests(unittest.TestCase):
   for k in ('vehicle_mass_scale','maneuver','velocity_disturbance','steering_disturbance'):
    self.assertIn(k,self.pr['paired_runs']['match'])
   self.assertIn('trigger_source',self.err['results_schema']['run_record'])
+class RecoveryJudgmentTests(unittest.TestCase):
+ def setUp(self):
+  self.c=load('02_hypotheses/vulnerability_patterns.yaml')
+  self.od=self.c['outcome_definitions']
+  self.common=load(SO+'_common.yaml')['recovery_judgment']
+  import importlib.util,sys
+  spec=importlib.util.spec_from_file_location('runner_skeleton_r',REPO/'scripts/runner_skeleton.py')
+  self.m=importlib.util.module_from_spec(spec);sys.modules['runner_skeleton_r']=self.m;spec.loader.exec_module(self.m)
+ def test_outcome_classes_consistent(self):
+  classes=set(self.od['recovery_outcome']['classes'])
+  self.assertEqual(classes,set(self.common['recovery_outcome']))
+  self.assertEqual(classes,set(load('09_monitor/safety_spec.yaml')['safety_specification']['recovery_outcomes']))
+  self.assertEqual(classes,set(load('09_monitor/error_table.yaml')['results_schema']['recovery_outcome_values']))
+  spec=load('09_monitor/safety_spec.yaml')['safety_specification']
+  self.assertEqual(set(spec['category_mapping']),set(spec['outcome_categories']))
+ def test_provisional_values_marked_and_consistent(self):
+  th=self.od['recovery_judgment']['thresholds']
+  for k in ('e_settle_m','psi_settle_rad','settle_hold_s','window_s'):
+   self.assertEqual(th[k]['status'],'provisional')
+  pv=self.common['provisional_values'];R=self.m.PROVISIONAL_RECOVERY
+  self.assertEqual((pv['e_settle_m'],pv['psi_settle_rad'],pv['settle_hold_s'],pv['window_s']),
+                   (th['e_settle_m']['value'],th['psi_settle_rad']['value'],th['settle_hold_s']['value'],th['window_s']['value']))
+  self.assertEqual((R['e_settle_m'],R['psi_settle_rad'],R['settle_hold_s'],R['window_s'],R['lat_acc_threshold_mps2'],R['lat_jerk_threshold_mps3']),
+                   (pv['e_settle_m'],pv['psi_settle_rad'],pv['settle_hold_s'],pv['window_s'],pv['lat_acc_mps2'],pv['lat_jerk_mps3']))
+  self.assertEqual(self.od['recovery_labels']['lat_acc_excess']['threshold_mps2']['status'],'provisional')
+ def test_gp_targets_split(self):
+  mr=self.c['metric_rules']
+  self.assertEqual(mr['recovery_success']['gp']['target'],'lane_recovery_robustness')
+  self.assertEqual(mr['lat_acc_excess_mps2']['gp']['target'],'lat_acc_excess_mps2')
+  for k in self.common['gp_targets']:self.assertIn(k,self.od)
+  self.assertIn('SUPERSEDED',self.od['recovery_robustness'])
+ def test_external_refs_flagged(self):
+  refs=self.c['references']
+  for k in ('E-01','E-02'):
+   self.assertIn('not verified',refs[k]['verification']);self.assertIn('인증 기준',refs[k]['caution'])
+ def test_objectives_use_new_targets(self):
+  for f in ('S1_operating_condition_recovery_boundary.yaml','S2_fault_timing_detection_delay_boundary.yaml','S3_natural_mpc_degradation.yaml','S4_stress_plus_fault.yaml','R_regression_verification.yaml'):
+   text=(REPO/'pipeline/02_hypotheses/search_objectives'/f).read_text(encoding='utf-8')
+   self.assertNotIn(' recovery_robustness',text.replace('lane_recovery_robustness','')) ;self.assertIn('lane_recovery_robustness',text)
+ def test_runner_outcomes_are_declared(self):
+  classes=set(self.od['recovery_outcome']['classes']);kw=dict(e_y=[0.0]*40,e_psi=[0.0]*40,collision=False)
+  seen={self.m.classify_recovery(switched=s,window_complete=w,margins=m,**kw) for s,w,m in
+        [(True,True,[0.5]*40),(True,True,[-0.1]*40),(False,True,[0.5]*40),(True,False,[0.5]*40),(True,True,[-0.1]*5+[0.5]*35)]}
+  self.assertTrue(seen<=classes,seen)
 if __name__=='__main__':unittest.main()

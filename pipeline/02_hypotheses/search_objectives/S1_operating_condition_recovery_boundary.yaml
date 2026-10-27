@@ -160,15 +160,28 @@ logging_todo:   # sim-eval 코드는 수정하지 않음. 필요한 최소 추�
 
 # ---------------------------------------------------------------- 평가
 evaluation:
-  - name: recovery_robustness
+  # 2026-10-27 recovery_judgment 적용 (공통 규칙: _common.yaml recovery_judgment). 수치는 PROVISIONAL
+  - name: lane_recovery_robustness
     role: gp_target
-    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_robustness
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.lane_recovery_robustness
     boundary_level: 0
-    runtime_limits: 'lane_width_m/2, bbox_half_width_m, ay_mps2 (monitor_probe.jsonl, monitor_logs.py:84-89); max_steer_rad (agent_config.json); rate 90/60 deg/s; a_y_max = safety_spec P-02 (null, TODO)'
+    runtime_limits: 'lane_width_m, lane_offset_m, bbox_half_width_m (monitor_probe.jsonl, monitor_logs.py:82-89)'
+  - name: lat_acc_excess_mps2
+    role: gp_target_secondary
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.lat_acc_excess_mps2
+    needs: 'matched-position baseline (outcome_definitions.baseline_alignment)'
+  - name: recovery_outcome
+    role: recorded_class
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_outcome
+  - name: recovery_labels
+    role: recorded_labels
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_labels
+  - name: final_safe_recovery
+    role: decision_label
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.final_safe_recovery
   - name: recovery_success
-    role: recorded_label
+    role: alias_of_final_safe_recovery
     defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_success
-    open_items: ['T_settle_s null, 인증서 없음 → 인증서 없이 쓸 판정 기준 확정 필요 (TODO)']
   - name: margin_delta_m
     role: secondary_recorded
     defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.margin_delta_m
@@ -181,14 +194,15 @@ boundary:
   space: '(normalized_switch_error, e_y_dot/e_psi_dot 가능 시) × (angle_saturation_ratio, rate_saturation_ratio, 가능 시 predicted_first_lqr_command_ratio) | 문맥: max_speed_kmh, onset_event'
   gp:
     inputs: 'switch_state + actuator_limits 축 (결과에서 계산된 값) + 문맥 축'
-    target: recovery_robustness
-    note: '탐색 축이 결과에서 나오므로, 다음 런 선택은 control_inputs에 대해 하고 GP는 control_inputs → (switch_state, recovery_robustness)를 함께 예측해야 함 (설계 TODO)'
-  level: 'recovery_robustness = 0'
+    target: lane_recovery_robustness
+    secondary_target: lat_acc_excess_mps2
+    note: '탐색 축이 결과에서 나오므로, 다음 런 선택은 control_inputs에 대해 하고 GP는 control_inputs → (switch_state, lane_recovery_robustness)를 함께 예측해야 함 (설계 TODO)'
+  level: 'lane_recovery_robustness = 0 (차선 경계). 가속도 경계는 lat_acc_excess_mps2 = 3.0 (provisional)로 따로 그린다'
 
 search_strategy:
   steps:
     - {name: cover_switch_state_range, description: 'M-2(작은 오차) + M-1(임계값 근처·이상)으로 normalized_switch_error 0~>1을 고르게 채움. M-3 구현 시 빈 구간 보강'}
-    - {name: refine_handover_boundary, description: 'recovery_robustness 예측 ≈ 0, 불확실성 큰 control_inputs 우선. 획득 함수 미정 (TODO)'}
+    - {name: refine_handover_boundary, description: 'lane_recovery_robustness 예측 ≈ 0, 불확실성 큰 control_inputs 우선. 획득 함수 미정 (TODO)'}
   observation_requirement: >
     복구 성공 런과 실패 런을 모두 관측해야 경계를 추정한 것으로 본다. 오차가 작은 쪽(성공 예상)과
     포화가 큰 쪽(실패 예상)을 둘 다 채운다. no_trigger / triggered_no_switch 런도 기록한다.
@@ -207,4 +221,7 @@ remaining_decisions:
   - 'M-3(2단계 고장) 코드 변경 승인 여부'
   - 'L-1~L-3 로깅 추가 승인 여부'
   - 'linearization_validity 정의 (또는 생략)'
-  - 'recovery_success 판정 기준, P-02 a_y_max'
+  - 'recovery_judgment provisional 값 보정 (e_settle 0.3 m, psi_settle 0.1 rad, 유지 1 s, 창 5 s, 가속도 3 m/s^2, 저크 5 m/s^3)'
+  - 'returned_not_settled 를 unrecovered로 둘지 unsettled로 둘지'
+  - 'L-5 경로 인덱스 로깅 (matched-position baseline 정확도)'
+  - '확정: planner = PDM 권장 (2026-10-27 분석), 아직 사용자 확정 전'

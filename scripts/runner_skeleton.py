@@ -90,7 +90,9 @@ RUN_RECORD_FIELDS = (
     "profile_id", "source_commit", "feature_schema_version", "hypothesis_ids",
     "parameters", "planned_fault_onset", "actual_fault_onset", "trigger_time",
     "trigger_source", "trigger_attribution", "switch_time", "switch_count",
-    "switch_state", "handover_saturation", "outcome_category", "P01", "P02", "P03",
+    "switch_state", "handover_saturation", "outcome_category",
+    "recovery_outcome", "recovery_labels", "final_safe_recovery", "lane_recovery_robustness",
+    "lat_acc_excess_mps2", "P01", "P02", "P03",
     "margin_delta_m", "switch_state_label", "metrics", "baseline_metrics", "gp_targets",
     "gp_mean", "gp_std", "sim_status", "invalid_reason",
 )
@@ -144,7 +146,8 @@ def collect_missing(config: dict[str, Any]) -> list[str]:
           "safety_profile.switching.failure_detection_period_ms")
     check(_get(profile, "switching", "triggers"),
           "safety_profile.switching.triggers")
-    # recovery_robustness(GP 타깃)를 계산하려면 admissible 제약의 한계값이 필요하다.
+    # lane_recovery_robustness(GP 타깃)는 런타임 차선 폭·차체 반폭(monitor_probe)으로 계산한다.
+    # 아래 프로필 값은 런마다 달라 null이 정상이지만, 옛 검사와의 호환으로 남겨 둔다.
     for path in (("vehicle", "lane_half_width_m"), ("vehicle", "vehicle_half_width_m"),
                  ("controllers", "lqr", "constraints_and_behavior", "steering_saturation"),
                  ("controllers", "lqr", "constraints_and_behavior", "steering_rate_limit")):
@@ -380,18 +383,142 @@ def robustness_p02(lateral_acc_values: list[float], threshold_mps2: float) -> fl
     return threshold_mps2 - max(abs(a) for a in lateral_acc_values)  # 0보다 작으면 실패
 
 
+# 2026-10-27 recovery_judgment (02 outcome_definitions). 아래 기본 수치는 PROVISIONAL (검증 안 됨).
+PROVISIONAL_RECOVERY = {
+    "e_settle_m": 0.3, "psi_settle_rad": 0.1, "settle_hold_s": 1.0, "window_s": 5.0,
+    "lat_acc_threshold_mps2": 3.0, "lat_jerk_threshold_mps3": 5.0, "filter_s": 0.5,
+    "collision_penalty": -1.0,
+}
+
+
+def lane_margin_m(lane_width_m: float, lane_offset_m: float, bbox_half_width_m: float) -> float:
+    """lane_width/2 - |offset| - 차체 반폭. 방향각 무시 근사 (monitor_probe.jsonl 필드)."""
+    return lane_width_m / 2.0 - abs(lane_offset_m) - bbox_half_width_m
+
+
+def _held(flags: list[bool], need: int) -> bool:
+    run = 0
+    for ok in flags:
+        run = run + 1 if ok else 0
+        if run >= need:
+            return True
+    return False
+
+
+def classify_recovery(*, switched: bool, window_complete: bool, margins: list[float],
+                      e_y: list[float], e_psi: list[float], collision: bool,
+                      dt: float = 0.05, th: dict[str, float] | None = None) -> str:
+    """전환 후 창 [t_sw, t_sw+window] 시계열 → recovery_outcome (상호 배타, 위에서부터)."""
+    th = th or PROVISIONAL_RECOVERY
+    if not window_complete or not margins or len(margins) != len(e_y) or len(e_y) != len(e_psi):
+        return "simulation_invalid"
+    if not switched:
+        return "no_switch"
+    need = max(1, round(th["settle_hold_s"] / dt))
+    settled = [abs(a) <= th["e_settle_m"] and abs(b) <= th["psi_settle_rad"] and m >= 0
+               for a, b, m in zip(e_y, e_psi, margins)]
+    departed = [m < 0 for m in margins]
+    if collision:
+        return "unrecovered"
+    if not any(departed):
+        return "safe_recovery" if _held(settled, need) else "unsettled"
+    last = max(i for i, d in enumerate(departed) if d)
+    if last == len(margins) - 1:
+        return "unrecovered"  # 창 끝까지 복귀 못 함
+    return "recovered_after_departure" if _held(settled[last + 1:], need) else "unrecovered"  # returned_not_settled
+
+
+def moving_average(values: list[float], window_s: float, dt: float = 0.05) -> list[float]:
+    n = max(1, round(window_s / dt))
+    out, acc = [], 0.0
+    for i, v in enumerate(values):
+        acc += v
+        if i >= n:
+            acc -= values[i - n]
+        out.append(acc / min(i + 1, n))
+    return out
+
+
+def lateral_jerk(a_y: list[float], dt: float = 0.05, window_s: float = 0.5) -> list[float]:
+    """d(a_y)/dt 차분 후 이동평균 (E-01 사용자 제공: 0.5 s MA)."""
+    diff = [0.0] + [(a_y[i] - a_y[i - 1]) / dt for i in range(1, len(a_y))]
+    return moving_average(diff, window_s, dt)
+
+
+def travelled_distance(vx: list[float], dt: float = 0.05) -> list[float]:
+    """경로 진행 근사 s = cumsum(vx*dt). 경로 인덱스 로깅(L-5) 전 임시 정렬 좌표."""
+    s, out = 0.0, []
+    for v in vx:
+        out.append(s)
+        s += max(v, 0.0) * dt
+    return out
+
+
+def interp_at(s_query: float, s_ref: list[float], values: list[float]) -> float | None:
+    if not s_ref or s_query < s_ref[0] or s_query > s_ref[-1]:
+        return None
+    for i in range(1, len(s_ref)):
+        if s_ref[i] >= s_query:
+            s0, s1 = s_ref[i - 1], s_ref[i]
+            w = 0.0 if s1 == s0 else (s_query - s0) / (s1 - s0)
+            return values[i - 1] + w * (values[i] - values[i - 1])
+    return values[-1]
+
+
+def excess_over_baseline(s_fault: list[float], v_fault: list[float],
+                         s_base: list[float], v_base: list[float]) -> float | None:
+    """max |v_fault(t) - v_base(s(t))|. 같은 위치 baseline이 없는 점은 건너뛴다. 전부 없으면 None."""
+    diffs = [abs(v - b) for s, v in zip(s_fault, v_fault)
+             if (b := interp_at(s, s_base, v_base)) is not None]
+    return max(diffs) if diffs else None
+
+
+def lane_recovery_robustness(margins: list[float], lane_widths: list[float],
+                             bbox_half_width_m: float, collision: bool,
+                             penalty: float = PROVISIONAL_RECOVERY["collision_penalty"]) -> float:
+    """min margin/(lane_width/2 - 반폭). 1 = 중앙, 0 = 경계, <0 이탈. 충돌이면 penalty와 min."""
+    value = min(m / (w / 2.0 - bbox_half_width_m) for m, w in zip(margins, lane_widths))
+    return min(value, penalty) if collision else value
+
+
+def recovery_labels(*, acc_excess: float | None, acc_total_max: float | None,
+                    jerk_excess: float | None, jerk_total_max: float | None,
+                    margin_at_switch: float | None, safe_stop: bool,
+                    th: dict[str, float] | None = None) -> dict[str, Any]:
+    th = th or PROVISIONAL_RECOVERY
+    gt = lambda v, lim: None if v is None else v > lim
+    return {
+        "lat_acc_excess": {"primary": gt(acc_excess, th["lat_acc_threshold_mps2"]),
+                           "secondary": gt(acc_total_max, th["lat_acc_threshold_mps2"])},
+        "lat_jerk_excess": {"primary": gt(jerk_excess, th["lat_jerk_threshold_mps3"]),
+                            "secondary": gt(jerk_total_max, th["lat_jerk_threshold_mps3"])},
+        "departed_at_switch": None if margin_at_switch is None else margin_at_switch < 0,
+        "safe_stop": bool(safe_stop),
+    }
+
+
+def final_safe_recovery(outcome: str, labels: dict[str, Any]) -> bool | None:
+    """safe_recovery AND NOT 가속도/저크 primary. 라벨 계산 불가(None)면 None (안전으로 치지 않음)."""
+    if outcome == "simulation_invalid":
+        return None
+    if outcome != "safe_recovery":
+        return False
+    acc, jerk = labels["lat_acc_excess"]["primary"], labels["lat_jerk_excess"]["primary"]
+    if acc is None or jerk is None:
+        return None
+    return not acc and not jerk
+
+
 def classify_outcome(*, simulation_invalid: bool, triggered: bool,
-                     switched: bool, p01: float, p02: float,
-                     collision: bool) -> str:
+                     switched: bool, final_safe: bool | None) -> str:
+    """09 결과 5분류 (역추적용 유지). switched_* 는 final_safe_recovery로 정한다."""
     if simulation_invalid:
         return "simulation_invalid"  # 안전으로 치지 않음
     if not triggered:
         return "no_trigger"
     if not switched:
         return "triggered_no_switch"
-    if p01 >= 0 and p02 >= 0 and not collision:
-        return "switched_safe"
-    return "switched_unsafe"
+    return "switched_safe" if final_safe is True else "switched_unsafe"
 
 
 def margin_delta_m(p01_fault: float, p01_baseline: float) -> float:
@@ -520,20 +647,50 @@ def cmd_self_test() -> int:
     assert robustness_p01([0.5, -0.1, 0.3]) == -0.1
     assert robustness_p02([1.0, -2.0], 3.0) == 1.0
     assert classify_outcome(simulation_invalid=False, triggered=True, switched=True,
-                            p01=0.2, p02=0.5, collision=False) == "switched_safe"
+                            final_safe=True) == "switched_safe"
+    assert classify_outcome(simulation_invalid=False, triggered=True, switched=True,
+                            final_safe=None) == "switched_unsafe"
     assert classify_outcome(simulation_invalid=True, triggered=True, switched=True,
-                            p01=0.2, p02=0.5, collision=False) == "simulation_invalid"
+                            final_safe=True) == "simulation_invalid"
+    # recovery_outcome: 100틱 = 5 s 창, 1 s 유지 = 20틱
+    ok_m, ok_e = [0.5] * 100, [0.1] * 100
+    kw = dict(switched=True, window_complete=True, collision=False)
+    assert classify_recovery(margins=ok_m, e_y=ok_e, e_psi=[0.0] * 100, **kw) == "safe_recovery"
+    assert classify_recovery(margins=ok_m, e_y=[0.5] * 100, e_psi=[0.0] * 100, **kw) == "unsettled"
+    dep = [-0.1] * 30 + [0.5] * 70
+    assert classify_recovery(margins=dep, e_y=ok_e, e_psi=[0.0] * 100, **kw) == "recovered_after_departure"
+    assert classify_recovery(margins=[0.5] * 70 + [-0.1] * 30, e_y=ok_e, e_psi=[0.0] * 100,
+                             **kw) == "unrecovered"
+    assert classify_recovery(margins=ok_m, e_y=ok_e, e_psi=[0.0] * 100, switched=True,
+                             window_complete=True, collision=True) == "unrecovered"
+    assert classify_recovery(margins=ok_m, e_y=ok_e, e_psi=[0.0] * 100, switched=True,
+                             window_complete=False, collision=False) == "simulation_invalid"
+    assert classify_recovery(margins=ok_m, e_y=ok_e, e_psi=[0.0] * 100, switched=False,
+                             window_complete=True, collision=False) == "no_switch"
+    labels = recovery_labels(acc_excess=1.0, acc_total_max=4.0, jerk_excess=2.0,
+                             jerk_total_max=6.0, margin_at_switch=-0.2, safe_stop=False)
+    assert labels["lat_acc_excess"] == {"primary": False, "secondary": True}
+    assert labels["departed_at_switch"] is True
+    assert final_safe_recovery("safe_recovery", labels) is True
+    assert final_safe_recovery("unsettled", labels) is False
+    assert lane_margin_m(3.5, 0.5, 0.9) == 0.35
+    assert abs(lane_recovery_robustness([0.85, 0.0], [3.5, 3.5], 0.9, False) - 0.0) < 1e-9
+    assert lane_recovery_robustness([0.85], [3.5], 0.9, True) == -1.0
+    s = travelled_distance([10.0] * 5)
+    assert s == [0.0, 0.5, 1.0, 1.5, 2.0]
+    assert excess_over_baseline([0.25, 1.0], [2.0, 5.0], [0.0, 0.5, 1.0], [1.0, 1.0, 1.0]) == 4.0
+    assert abs(lateral_jerk([0.0, 0.5, 1.0], window_s=0.05)[2] - 10.0) < 1e-9
     assert margin_delta_m(-0.1, 0.4) == -0.5
     assert cold_start_split(24) == (12, 12)
     rules = {
         "recovery_success": {"support_direction": "negative",
-                             "gp": {"target": "recovery_robustness",
+                             "gp": {"target": "lane_recovery_robustness",
                                     "form": "absolute_post_switch", "scale": 0.1}},
         "switch_count": {"support_direction": "positive",
                          "gp": {"target": "switch_count",
                                 "form": "paired_delta_if_fault_else_absolute", "scale": 1.0}},
     }
-    z = gp_targets(rules, {"recovery_robustness": -0.05, "switch_count": 4},
+    z = gp_targets(rules, {"lane_recovery_robustness": -0.05, "switch_count": 4},
                    {"switch_count": 1}, has_fault=True)
     assert abs(z["recovery_success"] + 0.5) < 1e-9 and z["switch_count"] == -3.0, z
     assert gp_targets(rules, {"switch_count": 2}, None, has_fault=False) == {"switch_count": -2.0}
@@ -550,7 +707,8 @@ def cmd_self_test() -> int:
     assert candidate_lcb(cands[2], metric_of, 2.0) is None
     batch = select_batch(cands, metric_of, beta=2.0, batch_size=4)
     assert [c["id"] for c in batch[:2]] == ["a", "b"] and len(batch) == 3
-    print("self-test 통과: DF-01~05, LCB, G-03, P-01/P-02, 결과 분류, margin_delta_m, "
+    print("self-test 통과: DF-01~05, LCB, G-03, P-01/P-02, 결과 분류, recovery_outcome·라벨·"
+          "final_safe_recovery, lane_recovery_robustness, baseline 위치 정렬, margin_delta_m, "
           "지표별 GP 타깃, 가설 지표 LCB")
     return 0
 

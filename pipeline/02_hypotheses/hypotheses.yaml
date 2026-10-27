@@ -8,8 +8,8 @@ meta:
   generated_by: generate_hypotheses.py
   profile_id: sp-code-aware-mpc-lqr
   source_commit: 9b5115168f832cea0cb018711f9fc60e0d9faa9b
-  catalog_version: '2.1'
-  generated_at: '2026-10-27T18:32:38+00:00'
+  catalog_version: '2.2'
+  generated_at: '2026-10-27T19:00:40+00:00'
   frozen_at_commit: null
   status: generated_not_validated
 references:
@@ -48,6 +48,30 @@ references:
     used_for:
     - 조향·차선·횡가속도 제약 모니터링과 위반 비율 비교
     caution: 고곡률/고속에서 반드시 위반한다는 증거가 아님
+  E-01:
+    cite: ISO 11270:2014 Intelligent transport systems — Lane keeping assistance systems (LKAS)
+    values_as_provided_by_user:
+      lateral_acc_mps2: 3.0
+      lateral_jerk_mps3: 5.0
+      jerk_filter: 0.5 s moving average
+    verification: original standard text not verified here (값은 사용자가 제공)
+    used_for:
+    - lat_acc_excess
+    - lat_jerk_excess 기준점
+    caution: 운전자가 개입하는 LKAS 대상 값이라 참고점일 뿐 인증 기준이 아님. 측정 정의도 다를 수 있음 (CARLA a_y는 경로 곡률 수요 포함)
+  E-02:
+    cite: UN Regulation No. 79 (steering equipment)
+    values_as_provided_by_user:
+      lateral_acc_mps2: 3.0
+    verification: original regulation text not verified here (값은 사용자가 제공)
+    used_for:
+    - lat_acc_excess 기준점
+    caution: E-01과 같음. 인증 기준 아님
+  E-03:
+    cite: CARLA Leaderboard 2.1 evaluation (https://leaderboard.carla.org/evaluation_v2_1/)
+    used_for:
+    - 충돌·경로 이탈 infraction 정의 참고 → collisions.json / evaluation_events.json 매핑
+    verification: 페이지 내용은 여기서 다시 확인하지 않음
 outcome_definitions:
   admissible_constraints:
     lateral_error: abs(e_y) <= lane_half_width_m - vehicle_half_width_m
@@ -55,16 +79,107 @@ outcome_definitions:
     steering_rate: abs(delta_dot) <= delta_rate_max_rps
     lateral_accel: abs(a_y) <= a_y_max_mps2
   recovery_success:
-    definition: 'After switch: no constraints violated during T_hold and enters certified invariant region by T_settle
-      if such certificate is available; otherwise outcome unavailable.'
+    definition: final_safe_recovery (binary). 전환이 없으면 false, simulation_invalid면 판정에서 제외
     T_hold_s: 5.0
     T_settle_s: null
+    legacy_definition_v2_1: 'After switch: no constraints violated during T_hold and enters certified invariant
+      region by T_settle if such certificate is available; otherwise outcome unavailable.'
+    changed: 2026-10-27 인증서 없이 판정 가능한 recovery_judgment로 교체 (사용자 승인)
+  recovery_judgment:
+    status: provisional_not_validated
+    window: '[t_sw, t_sw + T_hold_s]  (T_hold_s = 5.0)'
+    signals:
+      lane_margin_m: lane_width_m/2 - |lane_offset_m| - bbox_half_width_m  (monitor_probe.jsonl, sim-eval integration/monitor_logs.py:82-89).
+        방향각 무시 근사 (04_feasibility_expansion/README.md:51과 같은 정의)
+      departed: lane_margin_m < 0
+      e_y: monitor_probe lane_offset_m (의도 차선 기준 실측. 컨트롤러 e_y 아님)
+      e_psi: monitor_probe lane_heading_err_rad
+      collision: collisions.json 의 t가 창 안 (monitor_logs.py:115-116, 136). evaluation_events.json collision 항목과 교차
+        확인
+    thresholds:
+      e_settle_m:
+        value: 0.3
+        status: provisional
+      psi_settle_rad:
+        value: 0.1
+        status: provisional
+      settle_hold_s:
+        value: 1.0
+        status: provisional
+      window_s:
+        value: 5.0
+        status: provisional
+        same_as: recovery_success.T_hold_s
+      calibration:
+        replace_with: baseline 유래 값 = 같은 경로 구간 무고장 MPC 런의 |e_y|, |e_psi| 95번째 백분위수 + margin
+        margin: null
+        data: 팀원 PC av_stack/runs/fault_check_1027 의 무고장 기준 런 (경로 A/B/C, PDM, seed 17)
+        procedure:
+        - baseline의 monitor_probe.jsonl에서 고장 런 창과 같은 경로 구간(onset ~ onset+5 s, 경로 진행 거리로 정렬)을 자른다
+        - '|lane_offset_m|, |lane_heading_err_rad| 의 p95를 경로별로 구한다'
+        - e_settle = max_route(p95_e_y) + margin, psi_settle = max_route(p95_e_psi) + margin (경로별 값을 쓸지도 결정)
+        caution: 기존 관측 무고장 최대 편차 0.22~0.46 m (04 README:55, 최대값이지 p95 아님) → 0.3 m 임시값은 경로 A에서 기준 런도 unsettled로 볼
+          수 있음
+  recovery_outcome:
+    exclusive: true
+    order: 위에서부터 처음 맞는 것 하나
+    classes:
+      simulation_invalid: 경로가 창 끝 전에 끝남 / 창 데이터 누락 / lane_width NaN
+      no_switch: 전환 없음 (outcome_category no_trigger 또는 triggered_no_switch). 아래 recovery 판정 안 함
+      unrecovered: '창 안 충돌, 또는 이탈 후 창 끝까지 차선 복귀 못 함, 또는 복귀했지만 안정화 못 함(reason: returned_not_settled)'
+      recovered_after_departure: 이탈 후 복귀하고, 마지막 이탈 이후 |e_y|<=e_settle 및 |e_psi|<=psi_settle 가 settle_hold_s 이상 연속
+      unsettled: 이탈 없음, 창 안에서 안정화 조건을 못 채움
+      safe_recovery: 이탈 없음, 창 안에서 |e_y|<=e_settle 및 |e_psi|<=psi_settle 가 settle_hold_s 이상 연속
+    decision_open: returned_not_settled 를 unrecovered에 넣었다 (보수적). unsettled로 옮길지 결정 필요
+    safe_stop: 별도 기록만 (recovery_labels.safe_stop). 분류는 위 규칙 그대로
+  recovery_labels:
+    multi_label: true
+    lat_acc_excess:
+      primary: max_t |a_y_fault(t) - a_y_baseline(s(t))| > 3.0 m/s^2  (경로 진행 위치 s로 맞춘 baseline 대비)
+      secondary: max_t |a_y_fault(t)| > 3.0 m/s^2  (전체 값. 경로 곡률 수요 포함)
+      threshold_mps2:
+        value: 3.0
+        status: provisional
+        reference:
+        - E-01
+        - E-02
+      filter:
+        value: 0.5 s moving average
+        status: provisional
+        note: 접촉·연석 순간값 억제용. 참고 규격의 a_y 필터는 확인 안 됨
+      source: monitor_probe.jsonl ay_mps2 (monitor_logs.py:75-77, 87)
+    lat_jerk_excess:
+      primary: max_t |j_fault(t) - j_baseline(s(t))| > 5.0 m/s^3
+      secondary: max_t |j_fault(t)| > 5.0 m/s^3
+      jerk: d(a_y)/dt 차분 (dt 0.05 s) 후 0.5 s 이동평균
+      threshold_mps3:
+        value: 5.0
+        status: provisional
+        reference:
+        - E-01
+    departed_at_switch: lane_margin_m(t_sw) < 0  (전환 틱에 이미 차선 밖)
+    safe_stop: summary.json supervisor.safe_stop (monitor_logs.py:137-138)
+    window: recovery_judgment.window. 전환 없는 런은 safety_spec evaluation_window
+    measurement_mismatch: CARLA a_y(가속도 센서식 차체 횡가속도)는 경로 곡률 수요 v^2*kappa 를 포함한다. 참고 규격 값과 정의가 다를 수 있어 primary는 baseline
+      차이로 본다
+  final_safe_recovery: recovery_outcome == safe_recovery AND NOT lat_acc_excess.primary AND NOT lat_jerk_excess.primary
+  lane_recovery_robustness: min over window of lane_margin_m(t) / (lane_width_m/2 - bbox_half_width_m). 1 = 차선 중앙,
+    0 = 경계 닿음, < 0 = 이탈. 창 안 충돌이면 collision_penalty (-1.0, provisional) 와의 min. 횡가속도 제외. 전환 없거나 invalid면 undefined
+  lat_acc_excess_mps2: max over window of |a_y_fault(t) - a_y_baseline(s(t))| (필터 후). 연속 GP 타깃. baseline 없으면 undefined
+  baseline_alignment:
+    key: 08 paired_runs.match (BASELINE_MATCH_FIELDS) 로 캐시한 무고장 baseline 시계열
+    coordinate: s = 경로 진행 거리. 고장 런 시각 t의 s(t)에서 baseline 값을 선형 보간
+    available_now: s ≈ cumsum(vx * dt), steps.jsonl vx (monitor_logs.py:121). 같은 시작점·seed라 onset 전 일치. 이탈 시 경로 길이
+      오차 있음 (provisional)
+    todo: 'L-5: monitor_probe 에 경로 인덱스 i (monitor_logs.py:72, 1 m 간격 경로라 거리와 같음, pdm_agent.py:164-165) 와 차량 위치 px,
+      py 기록'
+  recovery_robustness: 'SUPERSEDED by lane_recovery_robustness + lat_acc_excess_mps2 (2026-10-27). 기록용: min over
+    [switch_time, switch_time + T_hold_s] of min_i(margin_i / limit_i) over admissible_constraints. < 0 means a
+    constraint was violated. Undefined if no switch.'
   margin_delta_m: 정상(무고장) 기준 런 대비 최소 횡방향 여유 차이 (기존 정의 유지)
   post_switch_saturation_ratio: t_sw 이후 1 s 동안 조향각 또는 조향속도 포화 스텝 비율
   command_jump_rad: abs(u_LQR(t_sw) - u_MPC(t_sw - dt))
   switch_occurred: 보조 지표. 전환 실패(전환 자체가 없음)는 recovery_success = false 로 처리
-  recovery_robustness: min over [switch_time, switch_time + T_hold_s] of min_i(margin_i / limit_i) over admissible_constraints.
-    < 0 means a constraint was violated. Undefined if no switch.
   pre_switch_max_lateral_error_m: max abs(e_y) over [actual_fault_onset, switch_time]
   lateral_error_rmse_m: RMS of e_y over the safety_spec evaluation window
   deadline_miss_rate: solver calls exceeding configured_time_limit_ms / solver calls, evaluation window
@@ -103,11 +218,25 @@ metric_rules:
     minimum_effect: 0.05
     ci_level: 0.99
     gp:
-      target: recovery_robustness
+      target: lane_recovery_robustness
       form: absolute_post_switch
       scale: 0.1
       scale_status: example_only
-      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
+      note: binary recovery_success (= final_safe_recovery) is for decisions only; the GP regresses lane_recovery_robustness.
+        2026-10-27 v2.2 이전 타깃은 recovery_robustness (횡가속도 포함). 횡가속도는 lat_acc_excess_mps2 GP로 분리
+  lat_acc_excess_mps2:
+    unit: m/s^2
+    effect: mean_difference
+    support_direction: positive
+    minimum_effect: 0.5
+    minimum_effect_status: provisional
+    ci_level: 0.99
+    gp:
+      target: lat_acc_excess_mps2
+      form: absolute_post_switch
+      scale: 0.5
+      scale_status: provisional
+      note: 값 자체가 baseline 대비 초과량이라 다시 baseline을 빼지 않는다
   pre_switch_max_lateral_error_m:
     unit: m
     effect: mean_difference
