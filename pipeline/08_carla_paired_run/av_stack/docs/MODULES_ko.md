@@ -197,11 +197,8 @@ python tests/run_all.py
 
 - 오프라인 차량은 제어기의 선형 모델과 일부러 다르게 만들었습니다(타이어 포화, 조향 액추에이터 지연 0.08 s, Iz 차이).
 - `tests/run_all.py`의 22개 테스트가 모두 통과합니다.
-- `examples/`에 그래프가 있습니다: 오프라인 MPC·LQR, 가짜 CARLA에서의 MPC 차선 변경.
 
-## 아직 연결하지 않은 것
+## 남은 것
 
-- **MPC→LQR 전환(Supervisor)과 고장 주입기**는 이전 `steering_sil`에 있습니다. 새 모듈과 연결하는 것은 다음 단계입니다.
-  - 새 MPC 출력에는 Supervisor가 쓰는 필드가 이미 들어 있습니다: `ok`, `status`, `solve_time_s`, `seq`, `stamp_s`, `raw_steer`.
-  - LQR은 매 주기 계산할 수 있을 만큼 가볍습니다(약 0.4 ms).
+- **MPC→LQR 전환(Supervisor)과 고장 주입기**는 `integration/supervised_lateral.py`, `integration/fault_injection.py`에 있습니다 (`SUPERVISOR.md`).
 - **라이선스:** 저장소 LICENSE는 팀이 정해야 합니다. 이식한 코드의 고지는 `THIRD_PARTY_NOTICES.md`에 있습니다.
