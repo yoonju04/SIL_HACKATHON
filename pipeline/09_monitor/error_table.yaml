@@ -21,7 +21,7 @@ results_schema:
   # metrics / baseline_metrics: 02 metric_rules의 모든 지표 + 보조 지표 (정의: 02 outcome_definitions)
   #   계산 불가(예: 전환 없음 → recovery_robustness)는 null. 0으로 대체 금지
   # gp_targets: 06 orientation 적용 후 지표별 z. gp_mean/gp_std: 선택 당시 지표별 예측 {metric: value}
-  # margin_delta_m: 보조 지표로 계속 기록 (H-01/H-04/H-06 secondary_prediction)
+  # margin_delta_m: 보조 지표로 계속 기록 (H-04/H-06 secondary_prediction, H-01 탐색 목표 evaluation)
   metric_names: [recovery_success, recovery_robustness, pre_switch_max_lateral_error_m,
                  switch_count, lateral_error_rmse_m, deadline_miss_rate,
                  mpc_constraint_violation_rate, post_switch_saturation_ratio,

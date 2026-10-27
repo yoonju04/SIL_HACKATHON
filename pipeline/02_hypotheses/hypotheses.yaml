@@ -9,7 +9,7 @@ meta:
   profile_id: sp-code-aware-mpc-lqr
   source_commit: null
   catalog_version: '2.1'
-  generated_at: '2026-10-26T23:13:37+00:00'
+  generated_at: '2026-10-27T18:07:34+00:00'
   frozen_at_commit: null
   status: generated_not_validated
 references:
@@ -192,10 +192,6 @@ status_values:
   refuted: decision_protocol.refute_if 충족
   inconclusive: 최대 checkpoint 도달, 어느 쪽도 충족 못 함
 pattern_application:
-- pattern_id: P-OFF-DESIGN-H-01
-  applies: null
-  reason: 'Missing applies_if fields: controllers.lqr.feedback_design.gain_type'
-  hypothesis_id: H-01
 - pattern_id: P-DELAYED-SWITCH-H-02
   applies: null
   reason: 'Missing applies_if fields: switching.failure_detection_period_ms'
@@ -237,83 +233,6 @@ pattern_application:
   reason: 'Missing applies_if fields: controllers.mpc.implementation.prediction_model'
   hypothesis_id: H-11
 hypotheses:
-- id: H-01
-  from_pattern: P-OFF-DESIGN-H-01
-  phase: after_switch
-  provenance: pattern_instantiation
-  claim: P-OFF-DESIGN
-  based_on: []
-  filled_values:
-    controllers.lqr.feedback_design.gain_type: null
-    controllers.lqr.feedback_design.design_speed_mps: null
-    controllers.lqr.feedback_design.design_curvature_per_m: null
-  condition:
-    curvature_offset: road_curvature_per_m - None > 0.01
-    fault_types:
-    - F-01
-    - F-02
-    onset_event:
-    - curve_entry
-    - curve_apex
-    speed_offset_mps: abs(speed_mps - None) > 5.0
-  control:
-    curvature_offset: road_curvature_per_m - None <= 0.005
-    fault_types:
-    - F-01
-    - F-02
-    onset_event:
-    - curve_entry
-    - curve_apex
-    speed_offset_mps: abs(speed_mps - None) <= 2.0
-  scenario_guidance:
-    odd_dimensions:
-    - speed_mps
-    - road_curvature_per_m
-    fault_dimensions:
-    - fault_type
-    - onset_event
-    candidate_constraints: []
-    selection_objective: seek_boundary_or_uncertainty
-    physical_validity_checks:
-    - finite_values
-    - within_scenario_space
-    - physically_feasible
-  prediction:
-    metric: recovery_success
-    direction: negative
-  secondary_prediction:
-  - metric: margin_delta_m
-    direction: negative
-  evidence:
-  - source: code
-    role: code_only
-    supports: 고정 gain은 설계점(15 m/s, 직선)에서만 최적
-  - source: S-01
-    role: mechanism
-    supports: 복구 가능 영역은 플랜트 동역학에 의존 → v_x가 설계점에서 멀어지면 같은 오차 상태라도 복구 가능성이 달라질 수 있음
-    does_not_claim: S-01은 속도 의존 gain 문제를 다루지 않음
-  - source: S-03
-    role: method_borrowed
-    supports: 속도 프로파일을 바꿔가며 같은 제어기를 비교하는 설계(50–30–50, 90–50–70)
-    does_not_claim: S-03은 고정 gain LQR을 시험하지 않음
-  decision_rule:
-    unit: binary
-    effect: risk_difference
-    support_direction: negative
-    minimum_effect: 0.05
-    ci_level: 0.99
-    gp:
-      target: recovery_robustness
-      form: absolute_post_switch
-      scale: 0.1
-      scale_status: example_only
-      note: binary recovery_success is for hypothesis decisions only; the GP regresses its continuous robustness
-  status: blocked
-  blocked_reason:
-  - 'Missing applies_if fields: controllers.lqr.feedback_design.gain_type'
-  - 'missing profile values: controllers.lqr.feedback_design.gain_type, controllers.lqr.feedback_design.design_speed_mps,
-    controllers.lqr.feedback_design.design_curvature_per_m'
-  - 'missing template values: controllers.lqr.feedback_design.design_curvature_per_m, controllers.lqr.feedback_design.design_speed_mps'
 - id: H-02
   from_pattern: P-DELAYED-SWITCH-H-02
   phase: before_switch
@@ -967,14 +886,6 @@ hypotheses:
     controllers.mpc.constraints.lateral_accel_limit_mps2, vehicle.lane_half_width_m, vehicle.vehicle_half_width_m'
 rejected_proposals: []
 tracking:
-- id: H-01
-  metric: recovery_success
-  runs_condition: 0
-  runs_control: 0
-  effect_estimate: null
-  ci: null
-  mismatch_runs: 0
-  status_history: []
 - id: H-02
   metric: pre_switch_max_lateral_error_m
   runs_condition: 0

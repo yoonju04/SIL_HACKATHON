@@ -188,7 +188,7 @@ SIL_HACKATHON/
 ├── pipeline/                      # code-aware 탐색 파이프라인 (단계별 설정, pipeline/README.md 참고)
 │   ├── 00_prior_knowledge/        # 물리 관계 · 검증 전 가설 (PK)
 │   ├── 01_safety_profile/         # 코드 관측 사실
-│   ├── 02_hypotheses/             # 취약 패턴 카탈로그 v2 + 가설 H-01~11
+│   ├── 02_hypotheses/             # 취약 패턴 카탈로그 v2 + 가설 H-02~11, search_objectives/ (H-01 복구 경계 탐색)
 │   ├── 03_nemotron_a/             # Nemotron A: 시나리오 생성
 │   ├── 04_feasibility_expansion/  # 타당성 검사 G-01~04 + 후보 확장, scenario space
 │   ├── 05a_deterministic_features/# DF-01~05

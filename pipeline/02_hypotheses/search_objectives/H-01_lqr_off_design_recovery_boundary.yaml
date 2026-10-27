@@ -1,0 +1,140 @@
+# H-01_lqr_off_design_recovery_boundary.yaml — 탐색 목표(search objective) 설계안
+#
+# 이 파일은 새 스키마(search_objective v0.1)다. 현재 파이프라인
+# (generate_hypotheses.py, build_scenario_candidates.py, runner_skeleton.py)은 이 파일을 읽지 않는다.
+# 기존 condition/control 가설 P-OFF-DESIGN-H-01을 대체한다
+# (vulnerability_patterns.yaml의 superseded_patterns 참고).
+#
+# 정의되지 않은 값은 만들지 않는다. null / TODO는 아직 정하지 않았다는 뜻이다.
+
+meta:
+  schema: search_objective
+  schema_version: '0.1'
+  status: design_draft_not_consumed_by_pipeline
+  supersedes: P-OFF-DESIGN-H-01
+  kind: recovery_boundary_exploration          # hypothesis_test 아님. condition/control arm 없음
+
+id: H-01
+title: LQR Off-Design Recovery Boundary
+
+objective:
+  description: >
+    Estimate the region where LQR recovery remains successful as operating
+    conditions deviate from its design point.
+  question_ko: >
+    현재 MPC→LQR 시스템에서, 운용 조건(속도·곡률)이 LQR 설계점에서 얼마나
+    벗어나도 LQR이 복구에 성공하는가? 성공 영역과 실패 영역의 경계는 어디인가?
+  not_a_hypothesis_test: true                  # "조건 A가 B보다 나쁘다"를 판정하지 않는다
+
+# 프로필에서 가져올 설계점 (01_safety_profile/safety_profile.yaml)
+design_point:
+  speed_mps: '{controllers.lqr.feedback_design.design_speed_mps}'          # 현재 null
+  curvature_per_m: '{controllers.lqr.feedback_design.design_curvature_per_m}'  # 현재 null
+  applicability_note: >
+    gain_type(controllers.lqr.feedback_design.gain_type)이 fixed일 때 설계점 개념이 가장 분명하다.
+    gain_scheduled / online이면 '설계점'을 스케줄링 격자점 기준으로 다시 정의해야 한다 (TODO).
+
+search_dimensions:
+  - speed_mps                 # 04 scenario_space.environment.speed_mps (range example_only)
+  - road_curvature_per_m      # 04 scenario_space; route_id에 종속되며 자유 변수가 아님
+
+derived_features:
+  # 05a deterministic_features.yaml의 DF-01 / DF-02와 같은 식
+  - name: speed_deviation_mps
+    formula: 'speed_mps - {controllers.lqr.feedback_design.design_speed_mps}'
+    same_as: DF-01 speed_offset_from_design_mps
+  - name: curvature_deviation_per_m
+    formula: 'road_curvature_per_m - {controllers.lqr.feedback_design.design_curvature_per_m}'
+    same_as: DF-02 curvature_offset_from_design
+
+# 복구 상황을 만들기 위한 전환 유발 수단 (탐색 대상이 아니라 고정 또는 부차 변수)
+switch_trigger:
+  purpose: MPC→LQR 전환을 일으켜 LQR 복구를 관측하기 위함
+  faults_carried_from_old_H01: [F-01, F-02]    # 04 scenario_space.faults
+  onset_events_carried_from_old_H01: [curve_entry, curve_apex]
+  status: TODO_confirm   # 고장 종류·시점을 고정할지, 부차 탐색 차원으로 둘지 미정
+
+evaluation:
+  - name: recovery_success
+    role: recorded_label               # 탐색 영역의 성공/실패 표시. GP 타깃 아님
+    type: binary
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_success
+    open_items:
+      - 'T_settle_s가 null이고, certified invariant region 인증서(recoverability_oracle_spec.artifacts)가 없다.
+         정의 문장("...if such certificate is available; otherwise outcome unavailable")은 해석에 따라 인증서가 없으면 판정 불가가 될 수 있으므로, 인증서 없이 쓸 판정 기준(T_hold 동안 제약 위반 없음만 사용할지)을
+         확정해야 한다 (TODO)'
+      - '전환이 일어나지 않은 런은 recovery_success = false로 처리 (outcome_definitions.switch_occurred)'
+  - name: recovery_robustness
+    role: gp_target                    # 연속값, 실제 CARLA 실행 결과에서 계산
+    type: continuous
+    defined_in: 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.recovery_robustness
+    definition_quote: >
+      min over [switch_time, switch_time + T_hold_s] of min_i(margin_i / limit_i)
+      over admissible_constraints. < 0 means a constraint was violated. Undefined if no switch.
+    boundary_level: 0                  # robustness = 0 이 성공/실패 경계 (정의상 < 0 이 제약 위반)
+    requires_profile_values:           # safety_profile.yaml에서 현재 null
+      - controllers.lqr.constraints_and_behavior.steering_saturation
+      - controllers.lqr.constraints_and_behavior.steering_rate_limit
+      - vehicle.lane_half_width_m
+      - vehicle.vehicle_half_width_m
+      - safety_spec.P-02.lateral_acc_threshold_mps2   # a_y_max (admissible_constraints.lateral_accel)
+  - name: margin_delta_m
+    role: secondary_recorded
+    type: continuous
+    defined_in:
+      - 02_hypotheses/vulnerability_patterns.yaml#outcome_definitions.margin_delta_m   # '정상(무고장) 기준 런 대비 최소 횡방향 여유 차이'
+      - scripts/runner_skeleton.py margin_delta_m(p01_fault, p01_baseline) = p01_fault - p01_baseline
+    note: >
+      같은 ODD 점에서 무고장 baseline 런이 필요하다(08 paired_runs의 baseline 캐시).
+      이 baseline은 '같은 조건의 고장 없는 주행'이며 condition/control 가설 arm과는 다르다.
+
+search_strategy:
+  steps:
+    - name: explore_design_point_deviations
+      description: 설계점 주변에서 시작해 속도·곡률 편차를 양쪽 방향으로 넓혀가며 공간을 채운다
+    - name: refine_recovery_boundary
+      description: >
+        GP가 예측한 recovery_robustness가 0 근처이면서 불확실성이 큰 점을 우선 실행해 경계를 정밀화한다.
+        구체적 획득 함수(예: |mean| - beta*std 계열)는 미정 (TODO). 현재 07 orchestrator의
+        LCB(mean_z - beta*std_z, 최소화)는 '가장 위험한 점'을 고르므로 경계 추정 목적과 다르다.
+  observation_requirement: >
+    한계를 찾는다고 실패 유발 조건만 탐색하지 않는다. 경계를 추정하려면 복구 성공 런과
+    복구 실패 런을 모두 관측해야 한다. 한쪽만 관측되면 경계는 추정되지 않은 것으로 보고한다.
+  arms: none                          # condition/control 그룹 불필요
+
+outputs:
+  - recovery_map: 'search_dimensions(또는 derived_features) 위의 GP mean/std of recovery_robustness'
+  - observed_runs: '각 런의 recovery_success, recovery_robustness, margin_delta_m, switch_time, 전환 순간 상태'
+  - boundary_estimate: 'recovery_robustness 예측이 0이 되는 등고선 + 불확실성 띠'
+
+# 두 개념을 분리한다
+scope_distinction:
+  recovery_boundary_exploration:      # 이 파일
+    question: 현재 MPC→LQR 시스템이 어떤 ODD까지 복구 가능한가
+    comparison_baseline: none         # condition/control 그룹 없음
+  regression_verification:            # 별도 목표, 이 파일 범위 아님 (TODO: 별도 스키마)
+    question: 시스템 업데이트 전후, 같은 시나리오에서 복구 성능이 나빠졌는가
+    comparison_baseline: old_system_version_vs_new_system_version
+    requires:
+      - 동일 시나리오 집합(시드·route·고장·시점 고정)
+      - 버전 식별자(source_commit 등)를 런마다 기록
+    note: 회귀 검증에는 구버전/신버전이라는 비교 기준이 여전히 필요하다
+
+limitations:
+  claims_not_made:
+    - 복구 성공 영역을 '측정'한 것은 그 영역의 안전성을 '수학적으로 보증'한 것이 아니다.
+    - 샘플링한 점 사이·밖의 영역에서 복구가 성공한다고 보장하지 않는다 (GP 예측은 추정치다).
+    - 실패를 찾지 못했다고 해서 안전이 증명되는 것은 아니다.
+    - 결과는 사용한 시뮬레이터(CARLA)·차량 모델·고장 모델·route에 한정된다.
+  relation_to_formal_methods: >
+    recoverability_oracle_spec의 라벨 R_REACH_ESTIMATED는 'simulation-estimated, not formally verified'다.
+    형식적 보증(R_LMI 인증서 등)은 별도 작업이며 이 탐색 결과로 대체되지 않는다.
+
+todo:
+  - safety_profile의 design_speed_mps / design_curvature_per_m / gain_type 채우기
+  - recovery_robustness에 필요한 제약 한계값 채우기 (requires_profile_values)
+  - recovery_success의 인증서 없는 판정 기준 확정 (T_settle_s, 인증서 의존 여부)
+  - switch_trigger 고장·시점 고정 여부 결정
+  - 경계 추정용 획득 함수 정의 및 07 orchestrator 연동
+  - 이 스키마를 읽는 로더 작성 (현재 파이프라인은 미사용)
+  - regression_verification 별도 스키마 설계
