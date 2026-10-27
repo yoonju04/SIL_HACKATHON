@@ -1,0 +1,132 @@
+# scenario_space_av_stack.yaml — av_stack(PDM-Lite + MPC/LQR 감독기)용 탐색 공간: 환경 × 고장 × 주입 시점
+# 고장 표와 설명은 README.md. 읽기·검증·샘플링·실행 인자 변환은 scenario_space.py.
+# 팀 템플릿 scenario_space.yaml(F-01~03 지연 계열)과 ID가 다르다. 이 파일의 F-01~09는 이 파일 안에서만 쓴다.
+
+meta:
+  schema_version: '1.0'
+  profile_id: sp-av-stack-pdm-supervised
+  status: draft
+  expectation_basis: "measured = CARLA 실측, estimated = 감독기 코드 구조와 논문 기반 추정"
+
+# 감독기 동작 (pipeline/08_carla_paired_run/av_stack/integration/supervised_lateral.py)
+supervisor:
+  period_s: 0.05
+  instant_checks: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range,
+                   deadline_miss, stale_output, stale_sequence]
+  tracking_divergence: {e_y_m: 1.0, e_psi_rad: 0.6, hold_s: 0.25,
+                        note: "MPC가 보고한 오차를 씀. 정상 샘플 하나면 타이머 리셋"}
+  latched: true                                 # LQR로 넘어가면 MPC로 돌아오지 않음
+
+environment:
+  max_speed_kmh:       {range: [10, 40], unit: km/h, cli: --max-speed}
+  tire_friction_scale: {range: [0.3, 1.0], cli: null, note: "run_benchmark 미지원. 추가 전까지 1.0으로 실행"}
+
+fault_timing:
+  onset_event: {values: [straight, curve_entry, curve_apex, curve_exit]}
+  offset_s:    {range: [-1.0, 1.0], unit: s}
+
+# expectation 등급: low, low_medium, medium, medium_high, high, very_high
+# layer: mpc_output = MPC 조향 출력, mpc_report = 감독기에 보고하는 오차, state_input = 제어기 입력 위치
+faults:
+  - id: F-01
+    name: solver_fail
+    group: control
+    description: "MPC가 '답을 못 구했다'고 보고"
+    layer: mpc_output
+    injector_mode: solver_fail
+    implemented: true
+    expectation: {switch_failure: low, post_switch_instability: low, basis: measured}
+    params:
+      duration_s: {range: [0.1, 3.0], unit: s}
+
+  - id: F-02
+    name: stale
+    group: control
+    description: "MPC가 직전에 낸 답을 그대로 반복"
+    layer: mpc_output
+    injector_mode: stale
+    implemented: true
+    expectation: {switch_failure: low, post_switch_instability: low, basis: estimated}
+    params:
+      duration_s: {range: [0.1, 3.0], unit: s}
+
+  - id: F-03
+    name: bias
+    group: risk
+    description: "조향값에 작은 각도를 계속 더함"
+    layer: mpc_output
+    injector_mode: bias
+    implemented: true
+    expectation: {switch_failure: high, post_switch_instability: medium, basis: measured}
+    params:
+      magnitude_rad: {range: [0.02, 0.10], unit: rad}
+
+  - id: F-04
+    name: drift
+    group: risk
+    description: "조향 오차가 시간이 갈수록 커짐"
+    layer: mpc_output
+    injector_mode: drift
+    implemented: true
+    expectation: {switch_failure: high, post_switch_instability: medium_high, basis: measured}
+    params:
+      rate_rad_s: {range: [0.005, 0.05], unit: rad/s}
+
+  - id: F-05
+    name: scale
+    group: risk
+    description: "조향값을 일정 비율로 줄이거나 키움 (커브에서만 티 남)"
+    layer: mpc_output
+    injector_mode: scale
+    implemented: false
+    expectation: {switch_failure: medium, post_switch_instability: medium, basis: estimated}
+    params:
+      factor: {ranges: [[0.5, 0.9], [1.1, 1.5]]}
+
+  - id: F-06
+    name: saturate
+    group: risk
+    description: "조향을 최대각에 고정"
+    layer: mpc_output
+    injector_mode: saturate
+    implemented: false
+    expectation: {switch_failure: low_medium, post_switch_instability: high, basis: estimated}
+    params:
+      duration_s: {range: [0.1, 1.0], unit: s}
+      side:       {values: [left, right]}
+
+  - id: F-07
+    name: localization_offset
+    group: risk
+    description: "제어기가 받는 차량 위치를 옆으로 틀리게 줌 (LQR도 같이 틀림)"
+    layer: state_input
+    injector_mode: localization_offset
+    implemented: false
+    expectation: {switch_failure: high, post_switch_instability: high, basis: estimated}
+    params:
+      lateral_offset_m: {range: [0.1, 0.6], unit: m}
+      latency_ms:       {range: [0, 200], unit: ms}
+
+  - id: F-08
+    name: covert
+    group: risk
+    description: "조향을 틀리게 하면서 감독기에 보고하는 오차는 정상값으로 거짓 보고"
+    layer: [mpc_output, mpc_report]
+    injector_mode: covert
+    implemented: false
+    expectation: {switch_failure: very_high, post_switch_instability: high, basis: estimated}
+    params:
+      bias_rad: {range: [0.05, 0.2], unit: rad}
+
+  - id: F-09
+    name: threshold_dither
+    group: risk
+    description: "횡오차가 1 m 감지선 근처를 오르내리게 해서 감지 타이머를 계속 리셋"
+    layer: mpc_output
+    injector_mode: threshold_dither
+    implemented: false
+    expectation: {switch_failure: high, post_switch_instability: medium_high, basis: estimated}
+    params:
+      base_bias_rad: {range: [0.06, 0.12], unit: rad}
+      dither_rad:    {range: [0.01, 0.05], unit: rad}
+      period_s:      {range: [0.2, 1.0], unit: s}
