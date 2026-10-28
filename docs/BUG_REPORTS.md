@@ -42,3 +42,6 @@
     `tests/test_engine_monitor.py::test_bug002_undetected_fault_is_triggered_not_no_trigger`(기록 있음 / 효과 없음 / 옛 로그).
   - `real_smoke_1028` 재채점: `R00-0001-output_delay` `no_trigger` → **`triggered_no_switch`** (trigger 13.8 s, 전환 없음),
     `R00-0000-saturate`는 `switched_unsafe` 그대로 (trigger 11.8 s, 감지·전환 12.45 s).
+  - 실제 재실행(2026-10-28 00:05, `results/real_smoke_1028_b`, 2b03cd3): av_stack이 `fault_effective`를 기록하고
+    (최대각 고정 0.5 s = 10틱 true), 출력 지연 런이 **`triggered_no_switch`**(trigger 13.8 s)로 나옴.
+  - 남은 표시 문제: `run.py` 진행 줄의 `trigger=`는 `trigger_source`(감독기 감지 이유)라서 감지 못 한 런은 `trigger=None`으로 찍힘.
