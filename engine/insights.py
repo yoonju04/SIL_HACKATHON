@@ -30,7 +30,9 @@ from .config import PIPELINE_DIR, REPO_ROOT
 MONITOR_DIR = PIPELINE_DIR / "09_monitor"
 # SR-monitor fields that the engine nests under sr_checks; explain.project_record expects them at the top level.
 SR_KEYS = ("sr", "sr_scores", "sr_measures", "failed_requirements", "sr_labels", "detection_latency_s", "ftti_s",
-           "assessment_complete", "unassessed_requirements", "diagnostics", "evaluation_window", "spec_provenance")
+           "assessment_complete", "unassessed_requirements", "evaluation_window", "spec_provenance")
+# sr_checks.diagnostics (report_only, ~3 KB/run) is left out: it pushed 12 runs past explain.py's input budget, and split
+# batches made the model cite run ids it could not see.
 METRIC_MIRRORS = ("detection_latency_s", "ftti_s")
 DEFAULT_MAX_TOKENS = 12000      # Cosmos reasoner thinks before answering; explain.py raises on finish_reason=length
 
@@ -105,7 +107,7 @@ def cosmos_client(llm_cfg: dict, timeout_s: float = 300.0):
 
 
 def run_insights(out: Path, *, mode: str = "real", llm_cfg: dict | None = None, force: bool = False,
-                 max_tokens: int = DEFAULT_MAX_TOKENS, client=None, attempts: int = 3) -> dict:
+                 max_tokens: int = DEFAULT_MAX_TOKENS, client=None, attempts: int = 2) -> dict:
     """Write <out>/insights/. mode == "mock": dataset + dashboard only, no network."""
     out = Path(out)
     src = out / "run_records.jsonl"
@@ -142,9 +144,9 @@ def run_insights(out: Path, *, mode: str = "real", llm_cfg: dict | None = None, 
         # explain.py rejects the whole answer if one evidence value/path is wrong; sampling again usually fixes it.
         calls += ex.process(rec_path, dst, client, force=force or attempt > 0, max_tokens=max_tokens) or 0
         row = json.loads((dst / "insights.json").read_text(encoding="utf-8"))
+        errors.extend(row.get("rejected_answers") or [])     # answers explain.py rejected and re-asked
         if row.get("status") != "error" or not client.ready:
             break
-        errors.append(row.get("error"))
     row["model_calls"] = calls if calls else row.get("model_calls")
     result.update(status=row.get("status"), error=row.get("error"), model_calls=row.get("model_calls"),
                   n_insights=len(row.get("insights") or []), model=row.get("model"), role=role,
@@ -172,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("out", type=Path, help="results folder containing run_records.jsonl")
     ap.add_argument("--force", action="store_true", help="re-run the model even if the dataset is unchanged")
     ap.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
-    ap.add_argument("--attempts", type=int, default=3, help="re-ask when explain.py rejects the answer")
+    ap.add_argument("--attempts", type=int, default=2, help="whole-analysis re-runs (explain.py re-asks each rejected answer twice with the reason)")
     ap.add_argument("--mock", action="store_true", help="no network: dataset + dashboard only")
     a = ap.parse_args(argv)
     if not a.mock:

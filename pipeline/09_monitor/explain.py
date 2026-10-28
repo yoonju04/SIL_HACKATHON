@@ -38,6 +38,15 @@ assessment_complete=false는 전체 안전 기준 통과가 아니다. SR3가 �
 diagnostics와 comfort_reference는 참고 지표이며 안전 판정을 대체하지 않는다.
 runner_outcome과 monitor_outcome은 서로 다른 기준일 수 있다. 코드가 계산한 통계를 사용해라.
 표본 부족, 조건 불균형, 누락 지표, 혼동변수를 명시해라. 실패만 선택된 경우 성공 대비나 전체 실패율을 추론하지 마라.
+모든 문장은 자연스러운 한국어로만 써라. 한자·일본어(가나)는 쓰지 마라. run_id, 판정 라벨(F1_no_or_late_switch 등),
+지표 이름, 고장 이름 같은 식별자는 원문 그대로 써도 된다.
+summary.facts(런 수, 시나리오·경로·고장 종류의 개수와 이름)가 데이터셋의 사실이다. 이와 어긋나는 말(예: 모든 런이 같은
+시나리오)을 쓰지 마라. title·finding·summary에 쓰는 소수 수치는 해당 인사이트 evidence 값이나 summary 통계 값을
+그대로(반올림만 허용) 써라. 범위를 쓰면 양 끝 값이 모두 evidence에 있어야 한다. 고장 유형별 평균은 직접 계산하지 말고
+summary.by_fault_type 값을 finding 문장에 인용해라. evidence에는 records의 실제 run_id와 그 레코드의 지표 값만 넣고,
+평균값이나 그룹 이름을 넣지 마라.
+next_experiments는 시나리오·고장·속도·경로·제어기 파라미터를 바꾸는 실험만 제안해라. 안전 요구사항(SR1~SR6)이나
+판정 임계값을 완화하는 제안은 금지다.
 한국어 JSON 객체 하나로만 답해라. 최대 6개 인사이트와 5개 다음 실험을 제시해라.
 각 인사이트에는 실제 관측값의 근거가 반드시 필요하다. evidence의 metric은 records의 점 구분 경로
 (예: metrics.margin_delta_m, sr.SR1.latency_s), value는 해당 값 그대로, run_id도 그대로 복사해라.
@@ -177,6 +186,36 @@ def project_record(raw):
     return clean(row)
 
 
+def _facts(rows):
+    """Dataset facts the model must not contradict (runs, scenarios, routes, fault types)."""
+    def names(values):
+        return sorted({str(v) for v in values if v not in (None, "")})
+    def route(r):
+        e = r.get("environment") or {}
+        return e.get("route_id") or e.get("route") or e.get("town")
+    scenarios = names(r.get("scenario_id") for r in rows)
+    routes = names(route(r) for r in rows)
+    faults = names((r.get("fault_plan") or {}).get("fault_type") for r in rows)
+    return {"n_runs": len(rows), "n_scenarios": len(scenarios), "n_routes": len(routes), "routes": routes,
+            "n_fault_types": len(faults), "fault_types": faults,
+            "onset_events": names((r.get("fault_plan") or {}).get("onset_event") for r in rows)}
+
+
+def _by_fault_type(rows):
+    """Per fault type: runs, outcome counts and metric means, so the model can quote group numbers."""
+    out = {}
+    for ft in sorted({str(r["fault_plan"].get("fault_type", "unknown")) for r in rows}):
+        sel = [r for r in rows if str(r["fault_plan"].get("fault_type", "unknown")) == ft]
+        vals = defaultdict(list)
+        for r in sel:
+            for name, value in (r.get("metrics") or {}).items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    vals[name].append(value)
+        out[ft] = {"runs": len(sel), "outcome_counts": dict(Counter(r.get("monitor_outcome") or "unknown" for r in sel)),
+                   "metric_means": {k: round(mean(v), 3) for k, v in sorted(vals.items())}}
+    return out
+
+
 def summarize(rows):
     """Compute exact counts, valid-triggered failure rate, metrics and condition groups."""
     counts = Counter(r.get("monitor_outcome") or "unknown" for r in rows)
@@ -192,12 +231,13 @@ def summarize(rows):
     for r in rows:
         groups[(str(r["fault_plan"].get("fault_type", "unknown")),
                 str(r["fault_plan"].get("onset_event", "unknown")))].append(r)
-    return {"total_runs": len(rows), "outcome_counts": dict(counts), "graded_triggered_runs": len(graded),
+    return {"facts": _facts(rows), "total_runs": len(rows), "outcome_counts": dict(counts), "graded_triggered_runs": len(graded),
             "failure_count": failures, "failure_rate": failures / len(graded) if graded else None,
             "unassessed_runs": sum(r.get("assessment_complete") is False for r in rows),
             "failure_rate_denominator": "sim_status=valid AND assessment_complete!=false AND monitor_outcome in {pass,F1,F2,F3}",
             "metrics": {k: {"n": len(v), "missing": len(graded) - len(v), "min": min(v),
                             "max": max(v), "mean": mean(v), "median": median(v)} for k, v in sorted(metrics.items())},
+            "by_fault_type": _by_fault_type(rows),
             "groups": [{"fault_type": k[0], "onset_event": k[1], "total_runs": len(v),
                         "outcome_counts": dict(Counter(r.get("monitor_outcome") or "unknown" for r in v))}
                        for k, v in sorted(groups.items())]}
@@ -228,7 +268,92 @@ def _reject_constant(value):
     raise ValueError(f"Invalid number: {value}")
 
 
-def parse_insights(text, records):
+CJK = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")   # Han ideographs + kana
+RELAX = re.compile(r"완화|느슨|relax|loosen", re.I)
+SAFETY = re.compile(r"SR\s?\d|기준|임계|threshold|요구\s?사항|요건|사양|spec|limit", re.I)
+SAME = re.compile(r"(동일한|같은|단일|하나의|한\s?개의|1개의)\s*(시나리오|경로|route|scenario)", re.I)
+IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_.:\-]*")    # run ids, labels, metric paths: digits inside are not claims
+DECIMAL = re.compile(r"\d+\.\d+")
+
+
+def _numbers(value, out):
+    if isinstance(value, bool) or value is None:
+        return out
+    if isinstance(value, (int, float)):
+        out.add(float(value))
+    elif isinstance(value, dict):
+        for v in value.values():
+            _numbers(v, out)
+    elif isinstance(value, list):
+        for v in value:
+            _numbers(v, out)
+    return out
+
+
+def _stated(text):
+    """Decimal numbers written in prose (identifiers removed). Integers (counts) are not checked."""
+    return [m.group(0) for m in DECIMAL.finditer(IDENT.sub(" ", text))]
+
+
+def _matches(stated, allowed):
+    a = float(stated)
+    tol = 0.5 * 10 ** -len(stated.split(".")[1]) + 1e-9
+    return any(abs(a - abs(b)) <= tol for b in allowed)
+
+
+def _strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _strings(v)
+    elif isinstance(value, list):
+        for v in value:
+            yield from _strings(v)
+
+
+def check_quality(obj, records, summary=None):
+    """Reject answers a reader would catch: non-Korean script, numbers not in the evidence/statistics,
+    'same scenario' claims against the dataset facts, and proposals to relax safety requirements."""
+    for text in _strings(obj):
+        hit = CJK.search(text)
+        if hit:
+            raise ValueError(f"한국어가 아닌 문자(한자/가나 '{hit.group(0)}')가 있습니다: '{text[:40]}'. 한국어로만 쓰세요.")
+    stats = set()
+    for x in _numbers(summary or {}, set()):
+        stats.update((abs(x), abs(x) * 100))
+
+    every = set(stats)
+    for item in obj["insights"]:
+        allowed = set(stats)
+        for e in item["evidence"]:
+            allowed |= _numbers(e.get("value"), set())
+        every |= allowed
+        for field in ("title", "finding"):
+            for n in _stated(item[field]):
+                if not _matches(n, allowed):
+                    raise ValueError(f"인사이트 '{item['title'][:30]}'의 {field}에 쓴 수치 {n}이(가) 그 인사이트의 evidence "
+                                     f"값이나 통계 값에 없습니다. evidence에 있는 값만 쓰거나 해당 근거를 추가하세요.")
+    for n in _stated(obj["summary"]):
+        if not _matches(n, every):
+            raise ValueError(f"summary에 쓴 수치 {n}이(가) evidence 값이나 통계 값에 없습니다.")
+    for item in obj["next_experiments"]:
+        text = item["proposal"] + " " + item["rationale"]
+        if RELAX.search(text) and SAFETY.search(text):
+            raise ValueError(f"다음 실험 '{item['proposal'][:40]}'이(가) 안전 기준/임계값 완화를 제안합니다. "
+                             "안전 기준은 바꾸지 말고 시나리오·고장·제어기 파라미터를 바꾸는 실험을 제안하세요.")
+    facts = (summary or {}).get("facts") or {}
+    if (facts.get("n_scenarios") or 0) > 1 or (facts.get("n_routes") or 0) > 1:
+        claims = [obj["summary"], *obj["limitations"]]
+        claims += [i[k] for i in obj["insights"] for k in ("title", "finding", "interpretation")]
+        for text in claims:
+            hit = SAME.search(text)
+            if hit:
+                raise ValueError(f"'{hit.group(0)}'라고 했지만 데이터셋에는 시나리오 {facts.get('n_scenarios')}개, "
+                                 f"경로 {facts.get('n_routes')}개({', '.join(facts.get('routes') or [])})가 있습니다.")
+
+
+def parse_insights(text, records, summary=None):
     """Reject fabricated run IDs, evidence values, missing structure and invalid JSON."""
     text = text.rsplit("</think>", 1)[-1].strip()
     if text.startswith("```"):
@@ -248,22 +373,32 @@ def parse_insights(text, records):
             raise ValueError("각 인사이트에 confidence와 evidence가 필요합니다.")
         for e in item["evidence"]:
             if not isinstance(e, dict) or not isinstance(e.get("run_id"), str) or e["run_id"] not in index:
-                raise ValueError("인사이트가 입력에 없는 run_id를 인용했습니다.")
+                bad = e.get("run_id") if isinstance(e, dict) else e
+                raise ValueError(f"인사이트가 입력에 없는 run_id {bad!r}를 인용했습니다. evidence의 run_id는 records에 있는 "
+                                 f"실제 값({', '.join(list(index)[:20])})이어야 합니다. 그룹 통계는 evidence가 아니라 "
+                                 "finding 문장에만 쓰세요.")
             if not isinstance(e.get("metric"), str) or "value" not in e:
                 raise ValueError("근거에 metric과 value가 필요합니다.")
-            measured = _lookup(index[e["run_id"]], e["metric"])
+            try:
+                measured = _lookup(index[e["run_id"]], e["metric"])
+            except ValueError as x:
+                raise ValueError(f"{e['run_id']}: {x} (null은 미측정이라 근거로 쓸 수 없고, 경로는 records 그대로 쓰세요)") from None
             if type(measured) is not type(e["value"]) and (isinstance(measured, bool) or isinstance(e["value"], bool)):
                 raise ValueError("근거 값의 타입이 다릅니다.")
             if measured != e["value"]:
-                raise ValueError("근거 값이 모니터의 실제 값과 다릅니다.")
+                raise ValueError(f"근거 값이 모니터의 실제 값과 다릅니다: {e['run_id']} {e['metric']}에 {e['value']}라고 "
+                                 f"했지만 실제 값은 {measured}입니다. evidence에는 레코드 값을 그대로 복사하고, "
+                                 "평균 같은 계산값은 summary.by_fault_type 값을 인용하세요.")
     for item in obj["next_experiments"]:
         if not isinstance(item, dict) or not all(isinstance(item.get(k), str) and item[k].strip() for k in ("proposal", "rationale")):
             raise ValueError("다음 실험 형식 오류")
         refs = item.get("run_ids")
         if not isinstance(refs, list) or any(not isinstance(r, str) or r not in index for r in refs):
-            raise ValueError("다음 실험이 입력에 없는 run_id를 인용했습니다.")
+            raise ValueError(f"다음 실험이 입력에 없는 run_id를 인용했습니다: {([r for r in refs if not isinstance(r, str) or r not in index] if isinstance(refs, list) else refs)!r}. "
+                             "run_ids에는 records의 실제 run_id만 넣으세요.")
     if any(not isinstance(x, str) for x in obj["limitations"]):
         raise ValueError("limitations는 문자열 목록이어야 합니다.")
+    check_quality(obj, records, summary)
     return {k: obj[k] for k in ("summary", "insights", "next_experiments", "limitations")}
 
 
@@ -289,12 +424,28 @@ def _batches(items, context, key, batch_runs, max_chars):
         yield batch
 
 
-def analyze(dataset, client, batch_runs=40, max_chars=MAX_INPUT_CHARS, max_tokens=4000):
+def _ask(client, msgs, records, summary, max_tokens, retries, rejected=None):
+    """One model answer that passes parse_insights; a rejected answer is re-asked with the reason."""
+    for attempt in range(retries + 1):
+        text = client.chat(msgs, max_tokens=max_tokens)
+        try:
+            return parse_insights(text, records, summary)
+        except ValueError as e:
+            if rejected is not None:
+                rejected.append(str(e))
+            if attempt == retries:
+                raise
+            msgs = [*msgs, {"role": "assistant", "content": text.rsplit("</think>", 1)[-1].strip()[:20000]},
+                    {"role": "user", "content": f"직전 답변이 검증에서 거절되었다: {e}\n"
+                                                "이 문제를 고친 JSON 객체 하나로만 다시 답해라. 다른 규칙도 모두 지켜라."}]
+
+
+def analyze(dataset, client, batch_runs=40, max_chars=MAX_INPUT_CHARS, max_tokens=4000, retries=3, rejected=None):
     context = {k: v for k, v in dataset.items() if k != "records"}
+    summary = dataset.get("summary")
     reports, calls = [], 0
     for batch in _batches(dataset["records"], context, "records", batch_runs, max_chars):
-        text = client.chat(messages({**context, "records": batch}), max_tokens=max_tokens)
-        reports.append(parse_insights(text, batch))
+        reports.append(_ask(client, messages({**context, "records": batch}), batch, summary, max_tokens, retries, rejected))
         calls += 1
     while len(reports) > 1:
         reduced = []
@@ -302,10 +453,10 @@ def analyze(dataset, client, batch_runs=40, max_chars=MAX_INPUT_CHARS, max_token
         if len(groups) >= len(reports):
             raise ValueError("요약을 합칠 입력 예산이 부족합니다. --max-input-chars를 늘리세요.")
         for group in groups:
-            text = client.chat(messages({**context, "reports": group}, synthesis=True), max_tokens=max_tokens)
             refs = {e["run_id"] for report in group for item in report["insights"] for e in item["evidence"]}
             refs.update(r for report in group for item in report["next_experiments"] for r in item["run_ids"])
-            reduced.append(parse_insights(text, [r for r in dataset["records"] if r["run_id"] in refs]))
+            reduced.append(_ask(client, messages({**context, "reports": group}, synthesis=True),
+                                [r for r in dataset["records"] if r["run_id"] in refs], summary, max_tokens, retries, rejected))
             calls += 1
         reports = reduced
     return reports[0], calls
@@ -342,7 +493,8 @@ def process(records_path, screen, client=None, failures_only=False, hypotheses=N
            "input_hash": hashlib.sha256(dumps(dataset).encode("utf-8")).hexdigest(), "model": client.model,
            "created": datetime.now(timezone.utc).isoformat(timespec="seconds"), "selection": dataset["selection"],
            "statistics": dataset["summary"], "selected_runs": dataset["selected_runs"], "model_calls": 0,
-           "summary": None, "insights": [], "next_experiments": [], "limitations": [], "error": None}
+           "summary": None, "insights": [], "next_experiments": [], "limitations": [], "error": None,
+           "rejected_answers": []}
     if not dataset["records"]:
         row["status"] = "empty"
         row["limitations"] = ["분석 대상으로 선택된 레코드가 없습니다."]
@@ -352,7 +504,8 @@ def process(records_path, screen, client=None, failures_only=False, hypotheses=N
     else:
         calls_before = client.calls
         try:
-            report, calls = analyze(dataset, client, batch_runs, max_chars, max_tokens)
+            report, calls = analyze(dataset, client, batch_runs, max_chars, max_tokens,
+                                    rejected=row["rejected_answers"])
             row.update(report, status="complete", model_calls=calls)
         except (ValueError, RuntimeError, KeyError, IndexError, TypeError) as e:
             row.update(status="error", error=str(e))

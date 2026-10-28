@@ -65,6 +65,8 @@ class FakeAPI(BaseHTTPRequestHandler):
         report = answer(payload)
         if self.mode == "bad_ref":
             report["insights"][0]["evidence"][0]["run_id"] = "invented"
+        if self.mode == "cjk_once" and len(body["messages"]) == 2:
+            report["insights"][0]["finding"] = "检测 지연이 컸다."
         content = "not JSON" if self.mode == "bad_json" else "<think>private</think>" + json.dumps(report, ensure_ascii=False)
         self.send({"choices": [{"finish_reason": "length" if self.mode == "truncated" else "stop",
                                 "message": {"content": content}}]})
@@ -266,6 +268,14 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(explain.process(self.rr, self.screen, self.client, redo_errors=True), 1)
         self.assertEqual(self.report()["status"], "complete")
 
+    def test_rejected_answer_is_reasked_with_reason(self):
+        FakeAPI.mode = "cjk_once"
+        self.assertEqual(explain.process(self.rr, self.screen, self.client), 2)
+        self.assertEqual(self.report()["status"], "complete")
+        retry = FakeAPI.calls[1]["body"]["messages"]
+        self.assertEqual(len(retry), 4)
+        self.assertIn("거절", retry[-1]["content"])
+
     def test_no_key_still_writes_dataset_and_clear_dashboard_error(self):
         explain.process(self.rr, self.screen, explain.ModelClient(key="", model=""))
         self.assertEqual(self.report()["status"], "error")
@@ -290,6 +300,56 @@ class IntegrationTests(unittest.TestCase):
         page = (self.screen / "campaign.html").read_text(encoding="utf-8")
         self.assertIn("기록이 변경", page)
         self.assertNotIn("차선 여유 감소", page)
+
+
+class QualityTests(unittest.TestCase):
+    def setUp(self):
+        self.ds = explain.build_dataset(records())
+        self.report = answer(self.ds)
+        self.value = self.report["insights"][0]["evidence"][0]["value"]
+
+    def check(self, report):
+        return explain.parse_insights(json.dumps(report, ensure_ascii=False), self.ds["records"], self.ds["summary"])
+
+    def test_facts_count_scenarios_routes_and_faults(self):
+        f = self.ds["summary"]["facts"]
+        self.assertEqual((f["n_runs"], f["n_scenarios"], f["routes"], f["fault_types"]), (2, 2, ["Town04"], ["bias"]))
+
+    def test_clean_answer_with_rounded_evidence_number_passes(self):
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["finding"] = f"차선 여유 변화가 {self.value:.2f}m였다."
+        self.assertEqual(self.check(r)["insights"][0]["finding"], r["insights"][0]["finding"])
+
+    def test_han_or_kana_is_rejected(self):
+        for text in ("检测 지연", "テスト 결과"):
+            r = copy.deepcopy(self.report)
+            r["insights"][0]["interpretation"] = text
+            with self.assertRaises(ValueError):
+                self.check(r)
+
+    def test_number_not_in_evidence_or_statistics_is_rejected(self):
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["finding"] = "차선 여유가 123.457m였다."
+        with self.assertRaises(ValueError) as caught:
+            self.check(r)
+        self.assertIn("123.457", str(caught.exception))
+        r = copy.deepcopy(self.report)
+        r["summary"] = "평균 98.765m 감소"
+        with self.assertRaises(ValueError):
+            self.check(r)
+
+    def test_relaxing_safety_threshold_is_rejected(self):
+        r = copy.deepcopy(self.report)
+        r["next_experiments"][0]["proposal"] = "SR4 기준을 0.5m로 완화한 실험"
+        with self.assertRaises(ValueError):
+            self.check(r)
+
+    def test_same_scenario_claim_rejected_only_when_dataset_has_several(self):
+        r = copy.deepcopy(self.report)
+        r["limitations"] = ["모든 실험은 동일한 시나리오에서 수행되었다."]
+        with self.assertRaises(ValueError):
+            self.check(r)
+        explain.parse_insights(json.dumps(r, ensure_ascii=False), self.ds["records"])  # no facts -> not checked
 
 
 if __name__ == "__main__":
