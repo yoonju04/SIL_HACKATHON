@@ -102,12 +102,18 @@ th{font-size:12px;color:var(--mut);font-weight:600;background:var(--soft);white-
 .listbox thead th{position:sticky;top:0;z-index:1}
 .bar{display:inline-block;width:60px;height:5px;background:var(--line);border-radius:3px;vertical-align:middle;margin-right:6px}
 .bar i{display:block;height:100%;background:var(--acc);border-radius:3px}
-.insw{padding:16px 20px 0}.ins .isum{padding:10px 16px;border-bottom:1px solid var(--line);font-size:14px}
-.ins .irow{padding:8px 16px;border-bottom:1px solid var(--line)}.ins .irow:last-child{border-bottom:0}
-.ins .irow b{font-size:14px}.ins .irow p{margin:2px 0;font-size:13px}.ins .ev{font-size:12px;color:var(--mut)}
-.ins .ev code{background:var(--soft);padding:0 4px;border-radius:3px}.ins h3{margin:0;padding:8px 16px 0;font-size:12px;color:var(--mut)}
-.ins ul{margin:4px 0 8px 34px;padding:0;font-size:13px}.ins .conf{font-size:11px;margin-left:6px}
-.ins .note{padding:10px 16px;color:var(--mut);font-size:13px}.ins h2 a{margin-left:auto;font-size:12px;color:var(--acc)}
+.insw{position:fixed;right:16px;bottom:16px;width:400px;max-width:calc(100vw - 32px);z-index:50}
+.ins{display:flex;flex-direction:column;max-height:min(55vh,480px);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.ins>h2{flex:none}.ins.folded .ibody{display:none}.ins.folded>h2{border-bottom:0}
+.ins .ibody{overflow:auto;padding:10px 14px 12px}
+.ins .ikey{font-size:17px;font-weight:700;margin:0 0 8px}
+.ins ol.itop{margin:0 0 8px 20px;padding:0;font-size:15px;font-weight:600;line-height:1.45}.ins ol.itop li{margin-bottom:4px}
+.ins .conf{font-size:11px;margin-left:4px;vertical-align:middle}
+.ins details{font-size:12px;color:var(--mut)}.ins summary{cursor:pointer;margin-top:4px}
+.ins details p{margin:6px 0}.ins details ul{margin:4px 0 6px 16px;padding:0}.ins details a{color:var(--acc)}
+.insbadge{position:fixed;right:16px;bottom:16px;z-index:50;background:var(--panel);border:1px solid var(--line);
+border-radius:14px;padding:4px 12px;font-size:12px;color:var(--mut);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.insbadge a{color:var(--acc)}
 @media (max-width:860px){.grid{grid-template-columns:1fr;padding:12px}header{padding:10px 12px;flex-wrap:wrap;gap:4px}
 .kv td:first-child{width:70px}}
 """
@@ -380,36 +386,44 @@ def load_insights(out_dir: Path) -> dict | None:
 
 
 def render_insights(ins: dict | None, out_dir: Path = Path(".")) -> str:
-    """Cosmos campaign insights (text-only analysis of SR-monitor numbers). Hypotheses, not verdicts."""
+    """Cosmos campaign insights as a small panel fixed to the bottom-right corner.
+    Big: failure rate + top insight titles. Everything else is small text inside <details>."""
     detail = Path(out_dir).parent / "insights" / "campaign.html"
-    link = (f'<a href="{_e(os.path.relpath(detail, out_dir).replace(os.sep, "/"))}">자세히 보기</a>'
+    link = (f'<a href="{_e(os.path.relpath(detail, out_dir).replace(os.sep, "/"))}">전체 인사이트 화면 열기</a>'
             if detail.is_file() else "")
-    head = f'<h2>Cosmos 캠페인 인사이트 (SR 모니터 수치 분석, 참고용){link}</h2>'
     if not ins or ins.get("status") != "complete":
-        why = ("캠페인이 끝나면 생성됩니다." if not ins else
-               f"생성 실패: {ins.get('error') or ins.get('status')}")
-        return f'<div class="insw"><section class="col ins">{head}<div class="note">아직 인사이트가 없습니다. {_e(why)}</div></section></div>'
+        why = "캠페인이 끝나면 생성" if not ins else f"생성 실패: {ins.get('error') or ins.get('status')}"
+        return f'<div class="insbadge" title="{_e(why)}">Cosmos 인사이트: 아직 없음 ({_e(why[:60])})</div>'
     st = ins.get("statistics") or {}
-    rate = st.get("failure_rate")
-    stat = (f'<div class="note">SR 판정 분포 {_e(", ".join(f"{k} {v}" for k, v in (st.get("outcome_counts") or {}).items()))}'
-            f' · 실패율 {_f(rate * 100 if rate is not None else None, 1, "%")} (채점된 런 {_e(st.get("graded_triggered_runs"))}개)'
-            f' · 모델 {_e(ins.get("model"))} · {_e(ins.get("created"))}</div>')
-    rows = []
-    for it in ins.get("insights") or []:
-        label, cls = CONF_KO.get(it.get("confidence"), (it.get("confidence") or "–", "mut"))
-        ev = " · ".join(f'<code>{_e(e.get("run_id"))}</code> {_e(e.get("metric"))} = <b class="num">{_e(e.get("value"))}</b>'
-                        for e in it.get("evidence") or [])
-        rows.append(f'<div class="irow"><b>{_e(it.get("title"))}</b><span class="tag {cls} conf">{_e(label)}</span>'
-                    f'<p>관측: {_e(it.get("finding"))}</p><p class="mut">해석(가설): {_e(it.get("interpretation"))}</p>'
-                    f'<div class="ev">근거: {ev}</div></div>')
-    nxt = "".join(f'<li>{_e(x.get("proposal"))} <span class="mut">— {_e(x.get("rationale"))}'
-                  f'{(" (근거 " + _e(", ".join(x.get("run_ids") or [])) + ")") if x.get("run_ids") else ""}</span></li>'
-                  for x in ins.get("next_experiments") or [])
+    rate, graded, fails = st.get("failure_rate"), st.get("graded_triggered_runs"), st.get("failure_count")
+    key = (f"SR 기준 실패율 {_f(rate * 100, 1, '%')} · {_e(graded)}개 중 {_e(fails)}개 실패" if rate is not None
+           else "채점된 런이 없습니다")
+    items = sorted(ins.get("insights") or [], key=lambda it: {"high": 0, "medium": 1, "low": 2}.get(it.get("confidence"), 3))
+    top, rest = items[:3], items[3:]
+    top_html = "".join(f'<li>{_e(it.get("title"))}<span class="tag {CONF_KO.get(it.get("confidence"), ("", "mut"))[1]} conf">'
+                       f'{_e(CONF_KO.get(it.get("confidence"), (it.get("confidence") or "–",))[0])}</span></li>' for it in top)
+    small = [f'<p>{_e(ins.get("summary"))}</p>'] if ins.get("summary") else []
+    small += [f'<p><b>{_e(it.get("title"))}</b>: {_e(it.get("finding"))}</p>' for it in top + rest]
+    nxt = "".join(f'<li>{_e(x.get("proposal"))}</li>' for x in ins.get("next_experiments") or [])
     lim = "".join(f"<li>{_e(x)}</li>" for x in ins.get("limitations") or [])
-    return (f'<div class="insw"><section class="col ins">{head}<div class="isum">{_e(ins.get("summary"))}</div>{stat}'
-            f'{"".join(rows) or "<div class=note>근거가 있는 인사이트가 없습니다.</div>"}'
-            + (f"<h3>다음 실험 제안</h3><ul>{nxt}</ul>" if nxt else "")
-            + (f"<h3>한계</h3><ul>{lim}</ul>" if lim else "") + "</section></div>")
+    small += [f"<p>다음 실험</p><ul>{nxt}</ul>"] if nxt else []
+    small += [f"<p>한계</p><ul>{lim}</ul>"] if lim else []
+    small.append(f'<p>{_e(", ".join(f"{k} {v}" for k, v in (st.get("outcome_counts") or {}).items()))} · '
+                 f'{_e(ins.get("model"))} · {_e(ins.get("created"))}</p>')
+    if link:
+        small.append(f"<p>{link}</p>")
+    return ('<div class="insw"><section class="col ins" id="ins">'
+            '<h2>Cosmos 핵심 인사이트 <span class="mut">(참고용)</span>'
+            '<button type="button" id="insfold" aria-expanded="true">접기</button></h2>'
+            f'<div class="ibody"><p class="ikey">{key}</p><ol class="itop">{top_html}</ol>'
+            f'<details><summary>자세히</summary>{"".join(small)}</details></div></section></div>'
+            "<script>(function(){var p=document.getElementById('ins'),b=document.getElementById('insfold'),K='insfold';"
+            "function set(f){p.classList.toggle('folded',f);b.textContent=f?'펼치기':'접기';b.setAttribute('aria-expanded',!f);"
+            "try{sessionStorage.setItem(K,f?'1':'')}catch(e){}}"
+            "var f=false;try{f=sessionStorage.getItem(K)==='1'}catch(e){}set(f);"
+            "b.addEventListener('click',function(){set(!p.classList.contains('folded'))});"
+            "var d=p.querySelector('details');try{d.open=sessionStorage.getItem('insdet')==='1'}catch(e){}"
+            "d.addEventListener('toggle',function(){try{sessionStorage.setItem('insdet',d.open?'1':'')}catch(e){}})})();</script>")
 
 
 def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None = None, spec: dict | None = None,
@@ -447,14 +461,14 @@ def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None 
              if rows else '<div class="empty">아직 기록이 없습니다.</div>')
     body = f"""<header><h1>MPC → LQR 전환 안전성 검증</h1><span class="sp"></span>
 <span>라운드 {max(rounds) if rounds else "–"} · {n}회 실행 · {datetime.now().strftime("%H:%M:%S")} 갱신 · {refresh}초마다 자동 새로고침</span></header>
-{render_insights(insights, out_dir)}
 <div class="grid">
 <div class="stack">
 <section class="col"><h2><span id="lefttitle">방금 돌린 시나리오</span><button id="back" hidden>최신으로</button></h2>{left}</section>
 <section class="col"><h2>회복 판정 (recovery v2) 요약</h2>{render_recovery_summary(records)}</section>
 </div>
 <section class="col"><h2>지금까지 돌린 시나리오 ({n})</h2><div class="counts">{counts_html}</div>{table}</section>
-</div>"""
+</div>
+{render_insights(insights, out_dir)}"""
     return (f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<noscript><meta http-equiv="refresh" content="{refresh}"></noscript><title>전환 안전성 검증</title><style>{CSS}</style></head>'
