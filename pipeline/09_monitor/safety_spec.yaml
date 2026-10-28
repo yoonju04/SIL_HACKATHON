@@ -1,7 +1,7 @@
 # safety_spec.yaml — 안전 명세 P-01~03 (라벨 정의). 09 Monitor의 측면 입력
 
 meta:
-  schema_version: '1.0'
+  schema_version: '3.1'      # merged: engine sections (1.0) + SR monitor v3.1 sections below
   profile_id: sp-code-aware-mpc-lqr
   status: template_unverified
 
@@ -16,6 +16,8 @@ safety_specification:
       robustness: "lateral_acc_threshold - max_over_window(abs(lateral_acc))"
       failure_if: "robustness < 0"
       lateral_acc_threshold_mps2: 4.41         # 2026-10-27 팀원 기준 (junwoo/sim-eval a5242b2 P-02): 0.5 * mu * g, mu = 0.9 가정 (planner 속도계획과 같은 식). basis: design_choice. 이전 3.0 (ISO 11270 / UN R79 참고값, 02 E-01/E-02)
+      evaluation: paired_baseline              # pipeline/09_monitor/monitor.py: limit = max(4.41, baseline peak) + allowance
+      paired_allowance_mps2: 0.3               # R79 5.6.2.1.1 precedent (SR monitor v3.1)
       lateral_acc_formula: {mu: 0.9, g_mps2: 9.81, factor: 0.5}
       role: label_not_failure                  # 2026-10-27: P-02 위반은 recovery_labels.lat_acc_excess 라벨. 차선·충돌 판정과 분리
       primary: baseline_relative               # |a_y_fault - a_y_baseline(같은 경로 위치)| > 4.41
@@ -92,3 +94,474 @@ sr_checks:
   gp_score:                          # sr_scores (참고값, GP 학습에는 안 씀): 1 = 여유, 0 = 한계, <0 = 위반
     clip: [-2.0, 1.0]
     collision_value: -2.0
+
+# ---------------------------------------------------------------------------------------------
+# SR monitor v3.1 (pipeline/09_monitor/monitor.py, from junwoo/sim-eval 3b97fb5).
+# engine/ reads safety_specification and sr_checks above; the SR monitor reads the sections below
+# plus safety_specification.properties P-02.
+# ---------------------------------------------------------------------------------------------
+references:
+  LATERAL_COMPARE_2024:
+    title: 'Lateral control for autonomous vehicles: A comparative evaluation'
+    url: https://arxiv.org/abs/2311.07987
+    verification: fulltext_reviewed
+    use_and_limits: Tracking accuracy and control-action smoothness; no universal 60 deg/s limit.
+  LPV_MPC_2025:
+    title: Real-Time LPV-Based Non-Linear MPC
+    url: https://arxiv.org/abs/2506.04684
+    verification: fulltext_reviewed
+    use_and_limits: Cross-track/heading tracking diagnostics; vehicle-specific performance, not safety thresholds.
+  MULTITIER_2022:
+    title: Integrating Vehicle Slip and Yaw in Multi-Tiered Steering
+    url: https://arxiv.org/abs/2207.05523
+    verification: fulltext_reviewed
+    use_and_limits: Separate tracking, steering rate, yaw and sideslip; no transferable universal stability threshold.
+  SKKU_PID_PP:
+    title: SKKU PID / Pure Pursuit comparison (user label)
+    url: https://scholarx.skku.edu/item/fc7e25a3-3289-46bb-9b0d-24a1bc9e8a0f
+    verification: not_retrieved
+    use_and_limits: No numerical threshold adopted; supplied page timed out.
+  EURONCAP_LSS_43:
+    title: Euro NCAP LSS Test Protocol v4.3, December 2023
+    url: https://cdn.euroncap.com/cars/assets/euro_ncap_lss_test_protocol_v43_f2ddd5f6d6.pdf
+    verification: official_pdf_reviewed
+    use_and_limits: Section 4.1.1 >=100 Hz. DTLE definition is not our rectangular-body lane margin. Original user
+      media URL returned 404.
+  GODTHELP_TLC_1983:
+    title: 'TLC: A new method to describe driving performance'
+    url: https://trid.trb.org/View/208027
+    verification: abstract_reviewed
+    use_and_limits: Predictive time to lane edge under fixed steering strategy; no universal cutoff adopted.
+  MAMMAR_TLC_2006:
+    title: Time to line crossing for lane departure avoidance
+    url: https://hal.archives-ouvertes.fr/hal-00505758
+    verification: fulltext_reviewed
+    use_and_limits: TLC from front-tyre distance to line crossing for straight, constant-steer circular and curved-road
+      paths; vehicle dynamics are needed for TLC to be a usable departure indicator. Our tlc_linear is the simpler
+      constant-closing-rate approximation; no TLC threshold adopted.
+  NUPLAN_2024:
+    title: 'Towards learning-based planning: The nuPlan benchmark'
+    url: https://arxiv.org/abs/2403.04133
+    verification: fulltext_reviewed
+    use_and_limits: Closed-loop planner benchmark; not an MPC/LQR switching safety specification. Table II multiplies
+      collisions, drivable area and driving direction ({0,..,1}) and averages TTC, progress and comfort, the same
+      split as our hard gates vs report-only diagnostics.
+  TREEIRL_2025:
+    title: TreeIRL, Appendix B.1 comfort references
+    url: https://arxiv.org/html/2509.13579v4
+    verification: fulltext_appendix_reviewed
+    use_and_limits: 'Expert-data benchmark bounds: |ay|4.89 m/s2, |yaw rate|0.95 rad/s, |yaw accel|1.93 rad/s2.
+      Reference subset only, not safety limits.'
+  DAUNER_2023:
+    title: 'Parting with Misconceptions: supplementary material'
+    url: https://www.cvlibs.net/publications/Dauner2023CORL_supplementary.pdf
+    verification: fulltext_reviewed
+    use_and_limits: Section 2.2 separates collision/drivable-area multipliers from comfort/efficiency scores.
+  HOLISTIC_2025:
+    title: Holistic Multi-Criteria Trajectory Evaluation
+    url: https://arxiv.org/abs/2509.01291
+    verification: fulltext_reviewed
+    use_and_limits: Safety, comfort and efficiency are separate criteria; jerk diagnostic only.
+  SICKNESS_2026:
+    title: Motion sickness prediction based on dynamics thresholds
+    url: https://trid.trb.org/View/2686822
+    verification: abstract_reviewed
+    use_and_limits: Study-specific delta-ay and angular-velocity statistics, not instantaneous universal comfort
+      limits.
+  ISO2631_SECONDARY:
+    title: Supplied ISO 2631 comfort secondary paper
+    url: https://www.scitepress.org/Papers/2006/12057/12057.pdf
+    verification: fulltext_reviewed
+    use_and_limits: 'Not the ISO standard itself. Quotes the ISO 2631-1 overall weighted r.m.s. scale (< 0.315 m/s2 not
+      uncomfortable, 0.315-0.63 a little uncomfortable, ...; seated k_x = k_y = 1.4). No frequency-weighted RMS/VDV
+      compliance inferred from peak jerk.'
+  R79_PATENT:
+    title: 'US11794805B2: PID lateral-acceleration limiter'
+    url: https://patents.google.com/patent/US11794805B2/en
+    verification: patent_text_reviewed
+    use_and_limits: Design precedent only; patent is not UN R79 normative text.
+  R79_AMENDMENT:
+    title: ECE/TRANS/WP.29/2020/66, Supplement 2 to the 02 series of UN R79
+    url: https://globalautoregs.com/documents/22491
+    verification: primary_text_reviewed
+    use_and_limits: 'ACSF test text, not our compliance target. Annex 8 2.4: ay at the CG sampled >= 100 Hz, 4th-order
+      Butterworth 0.5 Hz; lateral jerk = 0.5 s moving average of d(filtered ay)/dt. 3.2.1.2: front tyre outer edge must
+      not cross the outer edge of the lane marking, jerk <= 5 m/s3. 5.6.2.1.1: ay may exceed the declared aysmax by
+      0.3 m/s2 (40 % for <= 2 s) and the system shall not unreasonably switch control strategy. Used as the signal
+      processing recipe and allowance precedent only.'
+  ISO11270_2014:
+    title: ISO 11270:2014 LKAS
+    url: https://www.iso.org/standard/50347.html
+    verification: official_scope_only
+    use_and_limits: Highway driver-assistance scope; no automatic-driving or guaranteed lane-departure prevention.
+      Numeric clauses not accessed.
+  ISO22735_2021:
+    title: ISO 22735:2021 LKAS test methods
+    url: https://www.iso.org/standard/73762.html
+    verification: official_scope_only
+    use_and_limits: Test methods/vehicle dynamics for M1 LKAS; full numeric clauses not accessed.
+  PHASE_PLANE_2017:
+    title: SAE 2017-01-1560 beta-yaw stability criterion
+    url: https://saemobilus.sae.org/papers/vehicle-stability-criterion-research-based-phase-plane-method-2017-01-1560
+    verification: abstract_reviewed
+    use_and_limits: Stability boundary depends on speed, adhesion and steer; requires calibrated region lookup,
+      not fixed beta/yaw cutoff.
+  ENVELOPE_PATENT:
+    title: 'US11834058B2: vehicle states and constraints'
+    url: https://patents.google.com/patent/US11834058B2/en
+    verification: patent_text_reviewed
+    use_and_limits: State/context-dependent envelope design, not certified recoverability boundary.
+  CARLA_LB21:
+    title: CARLA Leaderboard 2.1 evaluation
+    url: https://leaderboard.carla.org/evaluation_v2_1/
+    verification: official_docs_reviewed
+    use_and_limits: Whole-route infractions/completion complement local switching checks; leaderboard score is not
+      safety proof.
+  SIMLINGO_2025:
+    title: SimLingo
+    url: https://arxiv.org/abs/2503.09594
+    verification: fulltext_reviewed
+    use_and_limits: Closed-loop driving/action-language alignment; contextual benchmark, no threshold adopted.
+  RSS_MOBILEYE:
+    title: 'RSS explained: five safety rules'
+    url: https://www.mobileye.com/blog/rss-explained-the-five-rules-for-autonomous-vehicle-safety/
+    verification: primary_overview_reviewed
+    use_and_limits: Actor-relative separation/reaction assumptions; cannot evaluate without actor geometry and trajectories.
+  SAFE_SWERVE_2020:
+    title: Universally Safe Swerve Manoeuvres
+    url: https://arxiv.org/abs/2001.11159
+    verification: fulltext_reviewed
+    use_and_limits: Collision-avoidance guarantees depend on explicit dynamics/following assumptions; no global
+      scalar bound adopted.
+  STL_RISK_2022:
+    title: Risk of Stochastic Systems for Temporal Logic Specifications
+    url: https://arxiv.org/abs/2205.14523
+    verification: fulltext_reviewed
+    use_and_limits: Signed robustness and population tail risk are distinct. Min normalized margins is not certified
+      STL-risk verification. CARLA lane-keeping example uses G(|c_e| <= 2.25) and F[0,5]G[0,5](|c_e| <= 1.25), thresholds
+      taken from the expert controller error; same eventually-and-hold shape as SR5.
+  DE_WINKEL_2023:
+    title: 'Standards for passenger comfort in automated vehicles: Acceleration and jerk (Applied Ergonomics 106)'
+    url: https://doi.org/10.1016/j.apergo.2022.103881
+    verification: fulltext_reviewed
+    use_and_limits: Discomfort grows with acceleration amplitude; shorter, higher-jerk pulses were not less comfortable.
+      Supports keeping jerk report-only. Cites rail data (20 % complaints at 0.84 m/s2, 0.42 m/s3), not adopted.
+  XU_CBF_2016:
+    title: Correctness Guarantees for the Composition of Lane Keeping and Adaptive Cruise Control
+    url: https://arxiv.org/abs/1609.06807
+    verification: fulltext_reviewed
+    use_and_limits: 'Lane keeping as set invariance: |y| <= 0.9 m, |v_y| <= 1 m/s, |psi| <= 0.05 rad, |r| <= 0.3 rad/s,
+      soft |a_y| <= 0.25 g (highway CarSim example). Candidate shape for an SR3 envelope, values not adopted.'
+  WESTHOFEN_2022:
+    title: 'Criticality Metrics for Automated Driving: A Review and Suitability Analysis'
+    url: https://arxiv.org/abs/2108.02403
+    verification: fulltext_reviewed
+    use_and_limits: Catalogue of actor-relative metrics (TTC, required lateral acceleration, steer threat number, jerk);
+      actor-relative ones stay out of scope with RSS.
+  ZENG_2025:
+    title: A comparative study on trajectory tracking control methods for automated vehicles (Sci. Rep. 15:17073)
+    url: https://doi.org/10.1038/s41598-025-01365-9
+    verification: fulltext_reviewed
+    use_and_limits: LQR / MPC / sliding-mode comparison by max lateral and heading error and RMSE; context for
+      tracking diagnostics, no threshold adopted.
+  ROKONUZZAMAN_2021:
+    title: Review and performance evaluation of path tracking controllers of autonomous vehicles (IET ITS 15:646)
+    url: https://doi.org/10.1049/itr2.12051
+    verification: fulltext_reviewed
+    use_and_limits: Path-tracking controller review; context for tracking diagnostics, no threshold adopted.
+  ISO26262_FTTI:
+    description: 'ISO 26262-1:2018, fault tolerant time interval (FTTI): 고장 발생부터 위험이 생길 수 있는 시점까지의 최소 시간. 감지+반응
+      시간은 FTTI 안에 끝나야 한다'
+    verification: legacy_reference_not_reverified
+    numeric_threshold_authority: false
+  JAEGER2025:
+    description: Jäger, Friedrich, Petersen, Noack, Towards Safe Path Tracking Using the Simplex Architecture, arXiv
+      2503.10559 (늦은 전환, 백업 제어기 수렴 영역, 전환 과도, dwell time)
+    verification: legacy_reference_not_reverified
+    numeric_threshold_authority: false
+  ZACCARIAN_TEEL2005:
+    description: Zaccarian & Teel, The L2 (l2) bumpless transfer problem for linear plants, Automatica 2005 (제어기
+      전환 시 과도 현상 최소화)
+    verification: legacy_reference_not_reverified
+    numeric_threshold_authority: false
+  HESPANHA_MORSE1999:
+    description: Hespanha & Morse, Stability of switched systems with average dwell-time, CDC 1999 (잦은 전환과 안정성)
+    verification: legacy_reference_not_reverified
+    numeric_threshold_authority: false
+  KAYOTEE2019:
+    description: 'Jha et al., Kayotee: A Fault Injection-based System to Assess the Safety and Reliability of Autonomous
+      Vehicles, arXiv 1907.01024 (차선 중심 이탈 0.5 m, 충돌 거리 등 안전 위반 정의)'
+    verification: legacy_reference_not_reverified
+    numeric_threshold_authority: false
+  DRIVEFI2019:
+    description: 'Jha et al., ML-based Fault Injection for Autonomous Vehicles: A Case for Bayesian Fault Injection,
+      DSN 2019 (위험한 순간의 주입, 안전 여유 기반 판정)'
+    verification: legacy_reference_not_reverified
+    numeric_threshold_authority: false
+  AUTOWARE_MPC:
+    description: Autoware autoware_mpc_lateral_controller, steer_rate_lim 40-60 deg/s (정상 운용 조향 속도 한계)
+    verification: legacy_reference_not_reverified
+    numeric_threshold_authority: false
+signals:
+  lane_offset_m:
+    source: monitor_probe.jsonl (의도된 차선 기준)
+    fallback: steps.jsonl.e_y_lane
+  steer_cmd_rad:
+    source: behavior.jsonl steer_rad (안전 필터·Supervisor를 거쳐 CARLA로 보낸 값)
+  active_controller:
+    source: behavior.jsonl active_controller / steer_source
+  fault_active:
+    source: behavior.jsonl fault_injected (주입기 기록, Supervisor는 못 봄)
+  fault_effective:
+    source: monitor_probe.jsonl fault_effective (이번 틱에 MPC 출력이 실제로 바뀌었나)
+requirements:
+  SR1:
+    name: 전환 시간
+    question: 고장이 났을 때 늦지 않게 LQR로 넘어갔나
+    measure: latency = 첫 전환 시각 - 실제 고장 시작 시각 (틱 시각 기준, 계획 격자 아님)
+    applies_if: 고장이 실제로 효과를 냈고, 대응하지 않으면 위험해지는 고장일 때 (FTTI 유한)
+    limit:
+      source: ftti_measured
+      ftti_fraction: 0.5
+      fixed_fallback_s: 0.5
+      basis: 'design_choice: reserve half of observed FTTI; 0.5 s fallback is not a standard-mandated bound'
+    no_reaction_harmless: 'No hazard observed within finite no-reaction window: right-censored FTTI, not proof of
+      globally harmless fault.'
+    robustness: (limit - latency) / limit, [-1, 1]. 전환 없음 = -1
+    refs:
+    - ISO26262_FTTI
+    - JAEGER2025
+    - DRIVEFI2019
+  SR2:
+    name: 전환 매끄러움
+    question: 전환 순간 조향이 튀지 않았나
+    measure: 전환 시각 -dt ~ +0.5 s 구간의 최대 |d steer_cmd / dt| (road-wheel, 실제 송신값)
+    applies_if: 전환이 있었을 때
+    limit_dps: 60.0
+    window_after_switch_s: 0.5
+    robustness: (limit - max_rate) / limit
+    refs:
+    - LATERAL_COMPARE_2024
+    - MULTITIER_2022
+    - ZACCARIAN_TEEL2005
+    role: switch_contract
+    basis: design_choice_pending_vehicle_calibration
+    threshold_note: 60 deg/s retained for experiment continuity; not a universal Autoware/ISO/UN limit. Road-wheel
+      command, not steering-wheel rate.
+    observation_rule: Do not read past evaluated horizon; incomplete transition window => assessment_complete=false.
+  SR3:
+    name: 요·횡슬립 안정성 / 백업 회복 가능 영역
+    role: report_only
+    implemented: state diagnostics only
+    criterion: Vehicle/ODD-calibrated beta-yaw stability or LQR recoverability envelope
+    envelope_artifact: null
+    missing_envelope: unassessed, never infer pass from a fixed beta/yaw threshold
+    refs:
+    - MULTITIER_2022
+    - PHASE_PLANE_2017
+    - ENVELOPE_PATENT
+  SR4:
+    name: 차선 유지
+    question: 차체가 의도된 차선 안에 있었나
+    measure: min over window( min(w/2 - max c_k, w/2 + min c_k) ), c_k = 차체 네 모서리 횡위치
+    applies_if: always
+    nominal_margin: w/2 - half_width (3.5 m 차선, 반폭 0.95 m → 0.80 m)
+    robustness: margin / nominal_margin
+    refs:
+    - EURONCAP_LSS_43
+    - ISO22735_2021
+    - CARLA_LB21
+    role: hard_safety
+    basis: geometric_lane_retention_contract
+    failure_if: signed body-corner margin < 0 OR collision
+    threshold_note: 0 m is the selected corridor boundary; not Euro NCAP DTLE or a universal 0.3/0.5 m path-error
+      limit.
+  SR5:
+    name: 회복
+    question: 전환 후 차선 중심 부근으로 돌아왔나
+    measure: 전환 후 |lane_offset| <= band 가 hold 동안 유지되기 시작한 시각까지 걸린 시간
+    band_m: 0.3
+    within_s: 3.0
+    hold_s: 1.0
+    enforce: false
+    robustness: (within - t_recover) / within
+    role: report_only
+    basis: design_choice
+    observation_rule: Entire hold interval must be inside evaluated window; no future log samples used.
+  SR6:
+    name: 액추에이터 한계
+    question: 조향각·조향 속도가 차량 한계 안이었나
+    max_steer_from: vehicle_params.max_steer_rad
+    max_rate_dps: 90.0
+    note: 안전 필터가 이 한계로 자르므로 구조상 거의 통과한다 — 필터 결함 탐지용
+    robustness: min(1 - max|steer|/max_steer, 1 - max_rate/max_rate_dps)
+    role: hard_command_bound
+    enforce: true
+    basis: vehicle_or_safety_filter_configuration
+    threshold_note: 90 deg/s retained as current configured command limit, not a validated physical motor maximum
+      or regulatory value.
+    rate_interval: Use the whole-trace sample difference whose right endpoint is in the evaluation window, including
+      the interval into fault onset.
+team_metrics:
+  t_hold_s: 5.0
+  post_switch_saturation_window_s: 1.0
+  admissible_limits:
+    lateral_error: 차선 반폭 - 차체 반폭 (프로브 실측)
+    steering_angle: vehicle_params.max_steer_rad
+    steering_rate: SR6 max_rate_dps (90 deg/s)
+    lateral_accel: P-02 lateral_acc_threshold_mps2
+  needs_from_av_stack:
+    deadline_miss_rate: steps.jsonl solve_ms + --deadline-ms (safety_profile configured_time_limit_ms). 없으면 null
+    mpc_constraint_violation_rate: steps.jsonl mpc_constraint_violation (아직 기록 안 함) → 지금은 null
+  recoverability_label: switch_state_label은 오라클 산출물(P 행렬, reach table)이 비어 있어 null. 전환 시점 상태는 metrics.monitor.switch_state에
+    기록
+auxiliary:
+  P-02:
+    name: 횡가속도
+    threshold_policy: friction
+    role: report_only in detailed F1/F2/F3 decision; legacy runner label also uses P02
+  collision:
+    source: collisions.json
+    role: hard_failure
+    on_collision: SR4 실패, SR4 점수 -2 (최저), unsafe. 충돌로 런이 일찍 끝나도 V-03 무효 아님 (그때까지로 채점)
+    record: 충돌 시각, 상대 물체, 충격량 (있으면)
+evaluation_window:
+  start: planned_fault_onset_time
+  length_s: 10.0
+  min_length_s: 5.0
+outcome_categories:
+  invalid: 유효성 검사 V-01~V-09 또는 baseline 불완주
+  no_trigger: 고장이 MPC 출력을 한 번도 바꾸지 않음
+  F1_no_or_late_switch: SR1 적용 대상인데 위반 (unsafe 플래그 = SR4·충돌 위반 여부)
+  F2_switch_transient: 전환했고 SR2 위반
+  F3_not_recovered: SR4 or collision violation, enforced SR6 command bound violation, or enforced SR5 recovery violation
+  pass: 위 어디에도 해당 없음 (놓쳤지만 무해한 경우 note=undetected_harmless)
+  priority:
+  - invalid
+  - no_trigger
+  - F1_no_or_late_switch
+  - F2_switch_transient
+  - F3_not_recovered
+  - pass
+gp_target:
+  scale: '모든 값이 같은 눈금: 1 = 여유 있게 지킴, 0 = 딱 한계, 음수 = 어김 (-1 = 한계만큼 더 어김), [-2, 1]로 자름'
+  per_requirement:
+    SR1: (한계 - 지연) / 한계. 전환 없음 = -1. 적용 안 되면 null
+    SR2: (configured SR2 limit - measured max rate) / configured limit
+    SR4: 차선 여유 / 정상 여유 (0.8 m). 충돌 = -2
+    SR5: (3 - 회복시간) / 3. 회복 못 함 = -1. 참고용 (overall에 안 들어감)
+    SR6: min(1-|steer|/configured_max_steer,1-max_rate/configured_SR6_limit)
+    SR3: unassessed; no GP safety target until calibrated stability envelope exists
+  overall: min applicable SR1,SR2,SR4 and enforced SR6 (+SR5 only if enforce=true); SR3/comfort/TLC never hard GP
+    target
+  null_rule: 적용 안 된 기준은 0이나 1로 채우지 않는다 (안전도 위험도 아님). 그 기준의 GP는 그 행을 건너뜀
+  measures: '점수 뒤의 원래 값도 함께 보냄: 지연 s, 조향속도 °/s, 차선 여유 m, 고장 영향(여유 변화) m, 회복시간 s'
+  collision_value: -2.0
+  clip:
+  - -2.0
+  - 1.0
+  excluded_outcomes:
+  - invalid
+validity_checks:
+  V-01: 로그 비어 있음 / 길이 불일치 / NaN
+  V-02: 틱 간격 이상 (프레임 누락)
+  V-03: 평가 창이 최소 길이 미만 (안전 정지 예외)
+  V-04: 평가 창 안에서 기준 경로 변경
+  V-05: 차선 폭 또는 차체 크기 모름
+  V-06: 실제 고장 시작이 계획과 1틱 넘게 다름
+  V-07: baseline에 고장 켜짐
+  V-08: fault / baseline 창 길이 다름
+  V-09: fault 런에 주입기 로그 없음
+  V-11: collisions.json에 시각(t) 없는 충돌 → 창 안인지 알 수 없음 (조용히 버리지 않음)
+  V-10: fault 런이 고장 시작 전에 이미 전환됨 → 전환을 채점할 수 없음
+  G-04: baseline(무고장)이 이미 SR4 위반 또는 충돌 → 짝 전체 제외 (고장 탓이 아님)
+calibration:
+  noise_floor: 같은 baseline N회(권장 5) 반복 → SR4 margin 표준편차 → delta_min_m = max(2*noise_floor, 0.1)
+scope:
+  target: MPC to LQR handover and post-switch stability in lane-keeping SIL
+  excluded:
+  - hardware fault tolerance
+  - full autonomous-driving safety
+  - ISO/UN/Euro NCAP compliance
+  - RSS safety without actor data
+  lane_contract: Retain the intended lane. Deliberate lane-change/swerve tests require another corridor and spec.
+  baseline: Same ODD, route, seed and observation horizon; no injected fault.
+  no_reaction: Same fault without supervisor; observed FTTI can be right-censored by finite horizon.
+decision_policy:
+  hard_geometry_and_command_limits:
+  - SR4
+  - SR6
+  switch_contract:
+  - SR1
+  - SR2
+  report_only:
+  - SR3
+  - SR5
+  - tracking
+  - TLC
+  - comfort_reference
+  missing_required_signal: assessment_complete=false; do not count as fully evaluated safety pass
+  pass_meaning: Configured evaluated bounds passed in the sampled simulation window; no certification or recoverability
+    guarantee.
+  separate_runner_label: Runner five-way label remains legacy P01/P02/P03; metrics.monitor is the detailed switching
+    assessment.
+diagnostics:
+  role: report_only
+  storage: metrics.monitor.diagnostics
+  low_speed_exclusion_mps: 0.5
+  post_switch_window_s: 5.0
+  window_basis: design_choice
+  phases:
+    pre_switch: '[actual onset, switch)'
+    transition: '[switch-dt, switch+SR2.window_after_switch_s]'
+    post_switch: (transition end, switch+5 s], clipped to evaluated horizon; truncated coverage reported
+  tracking:
+  - lateral_rmse_m
+  - lateral_mae_m
+  - max_abs_lateral_error_m
+  - max_abs_heading_error_rad
+  stability:
+  - max_abs_sideslip_rad
+  - max_abs_yaw_rate_rad_s
+  - min_lane_margin_m
+  comfort:
+  - max_abs_lateral_accel_mps2
+  - max_abs_lateral_jerk_mps3
+  - max_abs_yaw_accel_rad_s2
+  comfort_reference_limits:
+    max_abs_lateral_accel_mps2: 4.89
+    max_abs_yaw_rate_rad_s: 0.95
+    max_abs_yaw_accel_rad_s2: 1.93
+    max_abs_lateral_jerk_mps3: 5.0
+  comfort_reference_basis: TREEIRL_2025 Appendix B.1 for ay and yaw; R79_AMENDMENT 3.2.1.2 for the 0.5 s averaged jerk.
+    Empirical/test references, not ISO 2631 or UN R79 compliance. No composite pass score.
+  lateral_signal:
+    filter: butterworth_low_pass_zero_phase
+    filter_order: 4
+    filter_cutoff_hz: 0.5
+    jerk_moving_average_s: 0.5
+    basis: R79_AMENDMENT Annex 8 2.4 recipe applied to our 20 Hz log (R79 requires >= 100 Hz; no compliance claim).
+      Used for P-02, team recovery metrics and the comfort diagnostics.
+  tlc:
+    metric: tlc_linear_min_s
+    model: body-boundary margin / positive local closing rate
+    threshold_s: null
+    zero: body already touches or exceeds corridor boundary
+    'null': not closing / low speed / unavailable geometry, with reason
+    limits: Not measured FTTI; no constant-steer curved-road prediction (MAMMAR_TLC_2006 shows that one is needed on
+      curves); cannot use as SR1 threshold.
+  derivatives: Use actual timestamps; differentiate whole trace then slice. At least 3 samples for jerk/yaw acceleration.
+  signal_processing: Logged body ay preferred; fallback d(vy)/dt+vx*r with 5-tick moving mean; then the lateral_signal
+    filter. Same recipe as R79 Annex 8 2.4 but sampled at 20 Hz, so no official filtering equivalence is claimed.
+measurement_quality:
+  current_dt_s: 0.05
+  current_frequency_hz: 20
+  derivative_scope: sampled SIL values; between-sample peaks may be missed
+  euroncap_lss_43_requirement_hz: 100
+  compliance_claim: false
+  high_rate_followup: Use independent >=100 Hz acquisition and specified filters before protocol comparisons.
+unimplemented_evaluations:
+  RSS_or_TTC: requires actors, relative velocities, response/braking assumptions
+  ISO2631: requires frequency-weighted acceleration, axes, exposure duration, RMS/VDV processing
+  phase_plane_or_recoverability: requires calibrated vehicle/ODD envelope artifact
+  full_route_score: separate CARLA Leaderboard evaluator, not inferable from a switching window

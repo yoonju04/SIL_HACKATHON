@@ -84,3 +84,12 @@ python -m engine.dashboard --records outputs/<run>/run_records.jsonl --out outpu
 ```
 
 모든 수치는 PROVISIONAL (검증 안 됨). 인증 기준이 아닙니다.
+
+## SR monitor v3.1 (`pipeline/09_monitor/*.py`, from junwoo/sim-eval)
+
+이 브랜치(integration2)에는 `engine/`의 모니터와 함께 junwoo/sim-eval의 SR1~SR6 모니터(v3.1)가 `pipeline/09_monitor/`에 들어 있습니다.
+
+- 코드: `monitor.py`(채점), `performance.py`(진단), `dashboard.py`, `explain.py`, `feedback.py`, `replay.py`, `runner_adapter.py`, `video_clip.py`, `av_stack_probe.py`, 테스트 `test_*.py`
+- 설명: [`MONITOR.md`](MONITOR.md) (sim-eval의 09 README), [`SAFETY_SPEC_REVIEW.md`](SAFETY_SPEC_REVIEW.md), [`COMPATIBILITY.md`](COMPATIBILITY.md)
+- `safety_spec.yaml` 하나를 둘이 같이 씁니다. `engine/`은 `safety_specification`·`sr_checks`를, SR 모니터는 그 아래 섹션(`requirements`, `diagnostics`, `gp_target` …)과 P-02를 읽습니다.
+- 테스트: 이 폴더에서 `python -m unittest test_monitor test_spec_v3 test_explain test_probe test_replay test_runner_compat`
