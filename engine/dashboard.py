@@ -50,6 +50,7 @@ CSS = """
 body{font:14px/1.5 "Segoe UI","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
 .num{font-variant-numeric:tabular-nums}.mut{color:var(--mut)}.ok{color:var(--ok)}.bad{color:var(--bad)}
 header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
+header .live{font-weight:600;padding:2px 10px;border-radius:999px;background:#2563eb22;color:#2563eb}
 header h1{font-size:16px;margin:0}header .sp{flex:1}header span{font-size:12px;color:var(--mut)}
 .grid{display:grid;grid-template-columns:minmax(340px,5fr) 7fr;gap:16px;padding:16px 20px;align-items:start}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:4px;min-width:0}
@@ -423,7 +424,7 @@ def render_insights(ins: dict | None, out_dir: Path = Path(".")) -> str:
 
 
 def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None = None, spec: dict | None = None,
-                out_dir: Path = Path("."), insights: dict | None = None) -> str:
+                out_dir: Path = Path("."), insights: dict | None = None, status: str | None = None) -> str:
     commentary = commentary or {}
     lim = _limits(spec)
     n = len(records)
@@ -455,8 +456,9 @@ def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None 
     table = (f'<div class="wrapx listbox"><table class="list"><thead><tr><th>런</th><th>시나리오</th><th>고장</th><th>시점</th>'
              f'<th>전환</th><th>운행 안정성</th><th>회복 (v2)</th><th>SR 결과</th><th>영상 해설</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
              if rows else '<div class="empty">아직 기록이 없습니다.</div>')
+    live = f'<span class="live">{_e(status)}</span>' if status else ""
     body = f"""<header><h1>MPC → LQR 전환 안전성 검증</h1><span class="sp"></span>
-<span>라운드 {max(rounds) if rounds else "–"} · {n}회 실행 · {datetime.now().strftime("%H:%M:%S")} 갱신 · {refresh}초마다 자동 새로고침</span></header>
+<span>라운드 {max(rounds) if rounds else "–"} · {n}회 실행 · {datetime.now().strftime("%H:%M:%S")} 갱신 · {refresh}초마다 자동 새로고침</span>{live}</header>
 <div class="grid">
 <div class="stack">
 <section class="col"><h2><span id="lefttitle">방금 돌린 시나리오</span><button id="back" hidden>최신으로</button></h2>{left}</section>
@@ -487,8 +489,9 @@ def _read_jsonl(path: Path) -> list[dict]:
     return out
 
 
-def refresh(records_path, out_dir, refresh_s=REFRESH_S, explanations=None, spec=None) -> Path:
-    """Re-draw the page from run_records.jsonl (+ explanations.jsonl). run.py calls this after every round."""
+def refresh(records_path, out_dir, refresh_s=REFRESH_S, explanations=None, spec=None, status=None) -> Path:
+    """Re-draw the page from run_records.jsonl (+ explanations.jsonl). run.py calls this after every run and at
+    every stage change (status = what the loop is doing now, shown in the header)."""
     out_dir = Path(out_dir)
     records = [view(r) for r in _read_jsonl(Path(records_path))]
     commentary = {}
@@ -498,7 +501,7 @@ def refresh(records_path, out_dir, refresh_s=REFRESH_S, explanations=None, spec=
         from .monitor import load_safety_spec
         spec = load_safety_spec(spec)
     target = out_dir / "campaign.html"
-    _write(target, render_page(records, refresh_s, commentary, spec, out_dir, insights=load_insights(out_dir)))
+    _write(target, render_page(records, refresh_s, commentary, spec, out_dir, insights=load_insights(out_dir), status=status))
     return target
 
 

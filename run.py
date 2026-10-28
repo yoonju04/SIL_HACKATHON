@@ -22,6 +22,7 @@ import random
 import shutil
 import sys
 import time
+import webbrowser
 from pathlib import Path
 from typing import Any
 
@@ -174,6 +175,7 @@ class Loop:
         self.stats: dict[str, Any] = {"a_calls": [], "rejected": [], "llm_errors": []}
         self.cosmos = CosmosGuard()       # main() swaps in the auto guard for --real --cosmos-power auto
         self.insights_next = False        # campaign insights follow the last round -> keep Cosmos on
+        self.open_screen = False          # main(): --open-screen on -> open screen/campaign.html once at start
         self._setup_clients()
         self._setup_runner()
 
@@ -218,6 +220,30 @@ class Loop:
                                       host=os.environ.get("CARLA_HOST", rc["host"]), port=int(os.environ.get("CARLA_PORT", rc["port"])),
                                       tm_port=int(rc["traffic_manager_port"]), timeout_s=float(rc["rpc_timeout_s"]),
                                       wall_timeout_s=float(rc["wall_timeout_s"]), chase_view=bool(rc.get("chase_view")))
+
+    # ------------------------------------------------------------------ live screen
+    def screen(self, status: str | None = None) -> None:
+        """Re-draw screen/campaign.html (the open page reloads itself every few seconds). Never fails the run."""
+        self.status = status if status is not None else getattr(self, "status", None)
+        try:
+            refresh_dashboard(self.out / "run_records.jsonl", self.out / "screen",
+                              explanations=self.out / "explanations.jsonl", spec=self.cfg["safety_spec"], status=self.status)
+        except Exception as e:  # noqa: BLE001 - the screen is a view; results are already on disk
+            self.say(f"  screen redraw failed: {type(e).__name__}: {e}")
+
+    def open_browser(self) -> None:
+        """Open the live page once (default browser). Skipped under pytest / SIL_NO_BROWSER=1."""
+        if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("SIL_NO_BROWSER"):
+            return
+        page = (self.out / "screen" / "campaign.html").resolve()
+        try:
+            if hasattr(os, "startfile"):
+                os.startfile(str(page))          # Windows: default browser for .html
+            else:
+                webbrowser.open(page.as_uri())
+            self.say(f"live screen opened: {page}")
+        except Exception as e:  # noqa: BLE001
+            self.say(f"could not open the browser ({type(e).__name__}); open {page} by hand")
 
     # ------------------------------------------------------------------ stages 00-02
     def stage_00_02(self) -> None:
@@ -494,6 +520,8 @@ class Loop:
             self.records.append(rec)
             new.append(rec)
             append_jsonl(self.out / "run_records.jsonl", rec)
+            self.screen(f"라운드 {round_index}: {run_id} 끝 ({len(new)}/{len(batch)}) · 다음 시뮬레이션 중" if queue
+                        else f"라운드 {round_index}: {run_id} 끝 ({len(new)}/{len(batch)})")
             self.say(f"  [08/09] {run_id} {c['route_id']} {c['environment']['max_speed_kmh']:.0f}km/h {c['fault']['mode']} "
                      f"@{c['onset_event']}{c['onset_offset_s']:+.2f}s -> {rec['recovery_outcome']} "
                      f"(lrr={_f(rec['lane_recovery_robustness'])}, trigger={_f(rec['trigger_time'])}s, "
@@ -579,6 +607,9 @@ class Loop:
                                             "video_explainer": self.video_on, "seed": self.seed, "cold_start": self.cold,
                                             "batch_size": self.batch, "rounds": self.rounds, "synthetic": self.mode == "mock",
                                             "scenario_space": str(self.space_path), "av_stack": str(self.av_stack)})
+        self.screen("시작: 사전 지식 정리 중")
+        if self.open_screen:
+            self.open_browser()
         self.stage_00_02()
         mix = self.cfg["orchestrator"]["cold_start"]["mix"]
         for rnd in range(self.rounds + 1):
@@ -587,6 +618,7 @@ class Loop:
                 n_a = int(round(self.cold * float(mix["nemotron_a"]))) if self.flags["use_a"] else 0
                 if self.ablation == "X-2":
                     n_a = self.cold
+                self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
                 a_c = self.stage_03(n_a, rnd)
                 sf = SC.space_filling(self.space, self.route_ids, self.fault_pool, self.cold - len(a_c) + 6, self.rng, round_index=rnd)
                 pool = self.stage_04([self.quantize(c) for c in a_c + sf], rnd)
@@ -604,6 +636,7 @@ class Loop:
                     for _, c, mu, sd in scored[: int(self.cfg["nemotron_a"].get("refine", {}).get("max_candidates", 3))]:
                         near.append({**c, "gp_mean": mu, "gp_std": sd})
                 n_a = int(self.cfg["nemotron_a"]["A_scenario_generation"]["per_round"]) if self.flags["use_a"] else 0
+                self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
                 a_c = self.stage_03(n_a, rnd, near=near if self.flags["use_gp"] else None)
                 sf = SC.space_filling(self.space, self.route_ids, self.fault_pool,
                                       int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd)
@@ -613,6 +646,7 @@ class Loop:
             dump(rdir / "03_04_pool.json", [{k: c.get(k) for k in ("scenario_id", "source", "route_id", "environment", "fault",
                                                                     "onset_event", "onset_offset_s", "tags", "evidence_ids",
                                                                     "expected_mechanism", "expected_side")} for c in pool])
+            self.screen(f"라운드 {rnd}: Nemotron B가 후보 {len(pool)}개 검토 중")
             self.stage_05b(pool)
             dump(rdir / "05b_answers.json", self.b_cache)
             if rnd == 0:
@@ -626,10 +660,12 @@ class Loop:
                 batch = self.stage_07(pool, gps, rnd)
             dump(rdir / "07_batch.json", [{k: c.get(k) for k in ("scenario_id", "source", "selected_by", "gp_mean", "gp_std")} for c in batch])
             self.say(f"[round {rnd}] pool {len(pool)} -> batch {len(batch)} ({self.ablation}, video {'on' if self.video_on else 'off'})")
+            self.screen(f"라운드 {rnd}: 시뮬레이션 {len(batch)}개 시작")
             new = self.stage_08_09(batch, rnd, reserve=[c for c in pool if c not in batch])
+            if self.video_on and new:
+                self.screen(f"라운드 {rnd}: 영상 해설 중")
             self.stage_10(new, rnd)
-            refresh_dashboard(self.out / "run_records.jsonl", self.out / "screen",
-                              explanations=self.out / "explanations.jsonl", spec=self.cfg["safety_spec"])
+            self.screen(f"라운드 {rnd} 끝" + (" · 다음 라운드 준비 중" if rnd < self.rounds else ""))
         return self.finish()
 
     # ------------------------------------------------------------------ evaluation + report
@@ -891,6 +927,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="auto: start the Cosmos dedicated endpoint only for stage 10 / insights and stop it after "
                          "(and at exit); manual: never touch it (Nebius console). mock: no API calls")
     ap.add_argument("--cosmos-start-timeout", type=float, default=15.0, help="minutes to wait for Cosmos ready (auto)")
+    ap.add_argument("--open-screen", choices=("on", "off"), default="on",
+                    help="open OUT/screen/campaign.html in the default browser at start; it is re-drawn after every run "
+                         "and stage, and the page reloads itself every 5 s")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--cold-start", type=int)
     ap.add_argument("--batch-size", type=int)
@@ -924,6 +963,7 @@ def main(argv: list[str] | None = None) -> int:
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on")
     loop.insights_next = args.insights == "on"
+    loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":
         power = CosmosPower.from_env(role_settings(loop.cfg["llm"], "C_cosmos").get("model"), log=log,
                                      timeout_s=args.cosmos_start_timeout * 60)
@@ -935,15 +975,15 @@ def main(argv: list[str] | None = None) -> int:
             log(f"[cosmos-power] auto: endpoint {power.routing_key} is started only for stage 10 / insights")
     try:
         m = loop.run()
+        if args.insights == "on":
+            loop.screen("캠페인 인사이트 만드는 중")
         ins = campaign_insights(out, mode, loop.cfg, loop.cosmos) if args.insights == "on" else None
+    except BaseException:
+        loop.screen("중단됨 (오류 또는 Ctrl+C)")
+        raise
     finally:  # also on Ctrl+C / crash: never leave the paid endpoint running
         loop.cosmos.shutdown("end of run")
-    if ins:  # redraw the main screen so screen/campaign.html carries the insights section
-        try:
-            refresh_dashboard(out / "run_records.jsonl", out / "screen", explanations=out / "explanations.jsonl",
-                              spec=loop.cfg["safety_spec"])
-        except Exception as e:  # noqa: BLE001
-            log(f"screen redraw after insights failed: {type(e).__name__}: {e}")
+    loop.screen("완료")  # final redraw also carries the insights section
     log(json.dumps({k: m[k] for k in ("n_runs", "n_switched", "n_final_safe_recovery", "n_failures", "both_sides_observed",
                                       "boundary_band_runs", "explanations", "explanations_accepted")}, ensure_ascii=False))
     log(f"outputs: {out}  (report.md, run_records.jsonl, screen/campaign.html" + (", explanations.jsonl, monitor_rule_candidates.yaml" if loop.video_on else "")

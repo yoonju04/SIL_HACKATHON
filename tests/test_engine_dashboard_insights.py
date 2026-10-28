@@ -45,3 +45,11 @@ def test_main_screen_without_insights_shows_small_badge(tmp_path):
     page = D.refresh(tmp_path / "run_records.jsonl", tmp_path / "screen", spec={}).read_text(encoding="utf-8")
     assert 'class="insbadge"' in page and "아직 없음" in page
     assert 'id="ins"' not in page and page.index("지금까지 돌린 시나리오") < page.index('id="insbadge"')
+
+
+def test_live_status_shown_in_header(tmp_path):
+    from engine import dashboard as D
+    page = D.refresh(tmp_path / "none.jsonl", tmp_path / "screen", status="라운드 0: 시뮬레이션 중")
+    html = page.read_text(encoding="utf-8")
+    assert '<span class="live">라운드 0: 시뮬레이션 중</span>' in html
+    assert "location.reload" in html          # self-reload (works on file:// pages)
