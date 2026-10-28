@@ -247,7 +247,7 @@ def _checks(r, lim: dict) -> list[tuple]:
     labels = r.get("recovery_labels") or {}
     acc = (labels.get("lat_acc_excess") or {}).get("primary")
     ro = r.get("recovery_outcome")
-    return [
+    rows = [
         ("전환 순간 조향 튐 (SR2)", s2.get("pass") if s2.get("applies") else None,
          _f(s2.get("max_rate_dps"), 0, " °/s") if switched else "전환 안 함", f"{_f(lim['sr2'], 0)} °/s 이하"),
         ("차선 유지 · 차체 사각형 (SR4)", s4.get("pass"),
@@ -266,6 +266,11 @@ def _checks(r, lim: dict) -> list[tuple]:
          f"{_f(s6.get('max_steer_deg'), 0, '°')} · {_f(s6.get('max_rate_dps'), 0, ' °/s')}" if s6.get("applies") else "기록 없음",
          f"차량 한계 · {_f(lim['sr6'], 0)} °/s"),
     ]
+    if ro == "no_switch":
+        # fallback never engaged: no green ✓ (nothing was graded after a switch); a real lane departure (SR4) or
+        # collision stays ✗, every other row is shown muted with its observed value.
+        rows = [(n, False if (i in (1, 2) and ok is False) else None, meas, lm) for i, (n, ok, meas, lm) in enumerate(rows)]
+    return rows
 
 
 def _stability_short(r) -> str:
@@ -273,8 +278,16 @@ def _stability_short(r) -> str:
         return '<span class="mut">–</span>'
     names = {"SR2": "조향 튐", "SR4": "차선", "SR5": "회복", "SR6": "조향 한계"}
     bad = [names[k] for k in (r.get("failed_requirements") or []) if k in names]
-    if ((r.get("sr") or {}).get("SR4") or {}).get("collision"):
+    s4 = (r.get("sr") or {}).get("SR4") or {}
+    if s4.get("collision"):
         bad = [b for b in bad if b != "차선"] + ["충돌"]
+    if r.get("recovery_outcome") == "no_switch":
+        # fallback never engaged: nothing to grade after a switch. Only real collision / lane departure count.
+        bad = [b for b in bad if b in ("차선", "충돌")]
+        if s4.get("pass") is False and "차선" not in bad and "충돌" not in bad:
+            bad.append("차선")
+        return (f'<span class="bad">✗ {_e(", ".join(bad))}</span>' if bad
+                else '<span class="mut">전환 없음 · 판정 보류</span>')
     return f'<span class="bad">✗ {_e(", ".join(bad))}</span>' if bad else '<span class="ok">✓</span>'
 
 
@@ -347,7 +360,9 @@ def render_run_panel(r: dict, hidden: bool, lim: dict, out_dir: Path, commentary
         f'<tr><td class="mark {"ok" if ok else "bad" if ok is False else "mut"}">{"✓" if ok else "✗" if ok is False else "–"}</td>'
         f'<td>{_e(name)}</td><td class="num">{_e(meas)}</td><td class="mut">{_e(lm)}</td></tr>'
         for name, ok, meas, lm in _checks(r, lim))
-    out.append(f'<div class="blk"><h3>전환 후 운행 안정성</h3><table>{rows}</table></div></div>')
+    held = ' <span class="mut" style="font-weight:400">· 전환 없음 · 판정 보류 (아래는 런 전체 관측값)</span>' \
+        if r.get("recovery_outcome") == "no_switch" else ""
+    out.append(f'<div class="blk"><h3>전환 후 운행 안정성{held}</h3><table>{rows}</table></div></div>')
     return "".join(out)
 
 

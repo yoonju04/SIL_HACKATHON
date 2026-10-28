@@ -79,3 +79,33 @@ def test_method_card_counts_a_hypotheses(tmp_path):
     assert [(x["run_id"], x["hit"]) for x in m["tests"]] == [("R1", True), ("R2", None)]
     html = D.render_method(camp / "screen")
     assert "A 가설 적중 1/1" in html and "전환 안 돼 시험 못 함 1" in html and "lqr.py" in html
+
+
+def test_stability_short_no_switch_is_held_not_green():
+    from engine import dashboard as D
+    base = {"display_outcome": "fail", "recovery_outcome": "no_switch", "failed_requirements": ["SR5"],
+            "sr": {"SR4": {"pass": True, "collision": False}}}
+    s = D._stability_short(base)
+    assert "판정 보류" in s and "✓" not in s and 'class="mut"' in s
+    lane = dict(base, failed_requirements=["SR4", "SR5"], sr={"SR4": {"pass": False, "collision": False}})
+    assert "✗" in D._stability_short(lane) and "차선" in D._stability_short(lane)
+    hit = dict(base, failed_requirements=["SR4"], sr={"SR4": {"pass": False, "collision": True}})
+    assert "충돌" in D._stability_short(hit)
+    ok = {"display_outcome": "pass", "recovery_outcome": "safe_recovery", "failed_requirements": [],
+          "sr": {"SR4": {"pass": True}}}
+    assert "✓" in D._stability_short(ok)
+
+
+def test_checks_no_switch_rows_have_no_green_but_keep_lane_and_collision():
+    from engine import dashboard as D
+    lim = {"sr2": 60, "sr6": 90, "win": 5, "acc": 3.0, "rj": {}}
+    r = {"recovery_outcome": "no_switch", "switch_time": None,
+         "sr": {"SR4": {"pass": False, "collision": True, "margin_m": -0.4}, "SR6": {"applies": True, "pass": True}},
+         "recovery_labels": {"lat_acc_excess": {"primary": False}}}
+    marks = [ok for _, ok, _, _ in D._checks(r, lim)]
+    assert True not in marks
+    assert marks[1] is False and marks[2] is False
+    clean = dict(r, sr={"SR4": {"pass": True, "collision": False, "margin_m": 0.5}})
+    assert all(ok is None for _, ok, _, _ in D._checks(clean, lim))
+    sw = dict(clean, recovery_outcome="safe_recovery", switch_time=10.0)
+    assert True in [ok for _, ok, _, _ in D._checks(sw, lim)]
