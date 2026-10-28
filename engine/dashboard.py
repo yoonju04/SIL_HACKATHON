@@ -109,7 +109,7 @@ th{font-size:12px;color:var(--mut);font-weight:600;background:var(--soft);white-
 .ins ol.itop{margin:0 0 8px 20px;padding:0;font-size:15px;font-weight:600;line-height:1.45}.ins ol.itop li{margin-bottom:4px}
 .ins .conf{font-size:11px;margin-left:4px;vertical-align:middle}
 .ins details{font-size:12px;color:var(--mut)}.ins summary{cursor:pointer;margin-top:4px}
-.ins details p{margin:6px 0}.ins details ul{margin:4px 0 6px 16px;padding:0}.ins details a{color:var(--acc)}
+.meth .mkey{font-size:15px;font-weight:700;margin:0 0 6px}.meth ol.msteps{margin:0 0 6px 18px;padding:0;font-size:12px;line-height:1.5;color:var(--mut)}.meth ol.msteps b{color:var(--fg,inherit)}.meth .mtab{font-size:11px;width:100%}.meth .mtab th{text-align:left}.ins details p{margin:6px 0}.ins details ul{margin:4px 0 6px 16px;padding:0}.ins details a{color:var(--acc)}
 .insbadge{padding:8px 16px;font-size:12px;color:var(--mut)}
 @media (max-width:860px){.grid{grid-template-columns:1fr;padding:12px}header{padding:10px 12px;flex-wrap:wrap;gap:4px}
 .kv td:first-child{width:70px}}
@@ -423,6 +423,107 @@ def render_insights(ins: dict | None, out_dir: Path = Path(".")) -> str:
             "d.addEventListener('toggle',function(){try{sessionStorage.setItem('insdet',d.open?'1':'')}catch(e){}})})();</script>")
 
 
+SIDE_KO = {"recover": "회복", "fail": "실패", "boundary": "경계"}
+
+
+def load_method(out_dir: Path) -> dict:
+    """How this campaign worked, from the files run.py already writes next to screen/ (no new outputs needed).
+
+    code: 01_profile_summary.json (code observations Nemotron A reads) + round_*/05b_answers.json (files Nemotron B cited)
+    hypotheses: Nemotron A proposals in round_*/03_04_pool.json (expected_side + expected_mechanism)
+    check: run_records.jsonl outcomes vs expected_side, evaluation_metrics.json GP leave-one-out sign accuracy."""
+    camp = Path(out_dir).parent
+
+    def rj(path, default=None):
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return default
+    prof = rj(camp / "01_profile_summary.json", {}) or {}
+    rounds = sorted(camp.glob("round_*"))
+    b_files, b_cands, a_props = set(), 0, {}
+    for rd in rounds:
+        for row in (rj(rd / "05b_answers.json", {}) or {}).values():
+            b_cands += 1
+            for ans in (row.get("answers") or {}).values():
+                for ev in ans.get("evidence") or []:
+                    if ev.get("file"):
+                        b_files.add(ev["file"])
+        for c in rj(rd / "03_04_pool.json", []) or []:
+            if str(c.get("source", "")).startswith("nemotron_a"):
+                a_props.setdefault(c["scenario_id"], c)
+    recs = _read_jsonl(camp / "run_records.jsonl")
+    tests = []
+    for r in recs:
+        c = a_props.get(r.get("scenario_id"))
+        kind = "A 원안"
+        if c is None:
+            c, kind = a_props.get(r.get("seed_scenario_id")), "A 변형"
+        if c is None:
+            continue
+        exp = c.get("expected_side")
+        lrr = r.get("lane_recovery_robustness")
+        if r.get("recovery_outcome") == "no_switch" or r.get("final_safe_recovery") is None:
+            actual, hit = "전환 안 됨", None                  # S1 (LQR recovery) not exercised
+        else:
+            actual = "회복" if r.get("final_safe_recovery") else "실패"
+            if exp == "boundary":
+                hit = lrr is not None and abs(lrr) < 0.2
+            else:
+                hit = (exp == "recover") == bool(r.get("final_safe_recovery"))
+        tests.append({"run_id": r.get("run_id"), "kind": kind, "expected": SIDE_KO.get(exp, exp or "–"), "actual": actual,
+                      "hit": hit, "lrr": lrr, "why": c.get("expected_mechanism")})
+    gp = (rj(camp / "evaluation_metrics.json", {}) or {}).get("gp_boundary_sign_accuracy") or {}
+    return {"n_obs": prof.get("observations"), "n_verified": prof.get("verified"), "b_files": sorted(b_files),
+            "b_cands": b_cands, "n_props": len(a_props),
+            "sides": {SIDE_KO.get(k, k): sum(1 for c in a_props.values() if c.get("expected_side") == k)
+                      for k in ("recover", "fail", "boundary")},
+            "tests": tests, "gp": gp}
+
+
+def render_method(out_dir: Path = Path(".")) -> str:
+    """Small card under the insights: code -> hypotheses (Nemotron) -> checked by runs + statistics."""
+    m = load_method(out_dir)
+    t = m["tests"]
+    graded = [x for x in t if x["hit"] is not None and x["kind"] == "A 원안"]
+    hits = sum(1 for x in graded if x["hit"])
+    var = [x for x in t if x["hit"] is not None and x["kind"] == "A 변형"]
+    gp = m["gp"]
+    gp_txt = (f'GP 남겨두고 맞히기(LOO) 회복/실패 부호 정확도 {_f(gp["accuracy"] * 100, 0, "%")} ({_e(gp.get("n"))}런)'
+              if gp.get("accuracy") is not None else "GP 정확도는 캠페인이 끝나면 계산")
+    sides = " · ".join(f"{k} {v}" for k, v in m["sides"].items() if v)
+    steps = (
+        f'<li><b>코드 읽기</b>: Nemotron A는 제어 코드에서 파일·줄 근거와 함께 뽑아 둔 관찰 {_e(m["n_obs"] if m["n_obs"] is not None else "–")}개'
+        f'(사람 검토 전이라 "단서"로만 씀)와 사전 지식을 읽습니다. Nemotron B는 av_stack 소스 '
+        f'{_e(len(m["b_files"]) or "–")}개 파일({_e(", ".join(Path(f).name for f in m["b_files"]) or "–")})을 줄번호째 읽고 '
+        f'후보 {_e(m["b_cands"])}개마다 질문 3개에 3번씩 답합니다.</li>'
+        f'<li><b>가설 세우기</b>: A가 시나리오 {_e(m["n_props"])}개를 내면서 각각 "회복/실패/경계" 예상과 이유를 붙였습니다'
+        f'{f" ({_e(sides)})" if sides else ""}.</li>'
+        f'<li><b>통계로 확인</b>: CARLA에서 고장 없는 기준 실행과 짝으로 돌리고, 모니터가 규칙대로 채점합니다. '
+        f'GP가 결과로 회복 경계를 추정하고 다음 시나리오를 고릅니다. {gp_txt}.</li>')
+    key = (f"A 가설 적중 {hits}/{len(graded)}" if graded else "A 가설을 시험한 런이 아직 없습니다")
+    key += (f" · 변형 {sum(1 for x in var if x['hit'])}/{len(var)}" if var else "")
+    n_untested = sum(1 for x in t if x["hit"] is None)
+    key += f" · 전환 안 돼 시험 못 함 {n_untested}" if n_untested else ""
+    rows = ""
+    for x in t:
+        margin = "" if x["lrr"] is None else " (%+.2f)" % x["lrr"]
+        hit = "–" if x["hit"] is None else ("맞음" if x["hit"] else "틀림")
+        rows += (f'<tr><td>{_e(x["run_id"])}</td><td>{_e(x["kind"])}</td><td>{_e(x["expected"])}</td>'
+                 f'<td>{_e(x["actual"])}{margin}</td><td>{hit}</td></tr>')
+    table = (f'<table class="kv mtab"><tr><th>런</th><th>출처</th><th>예상</th><th>실제 (차선 여유)</th><th>적중</th></tr>{rows}</table>'
+             if rows else "")
+    return ('<section class="col ins meth" id="meth"><h2>이 시스템은 이렇게 검증합니다</h2>'
+            f'<div class="ibody"><p class="mkey">{_e(key)}</p><ol class="msteps">{steps}</ol>'
+            f'<details><summary>가설별 결과</summary>{table or "<p>아직 없음</p>"}'
+            '<p>적중은 전환이 일어난 런만 셉니다("전환 안 됨"은 LQR 회복을 시험하지 못함). 경계 예상은 |차선 여유| &lt; 0.2이면 맞음. '
+            '"A 변형"은 A 시나리오를 GP가 조금 바꾼 것이라 원래 예상을 참고로만 비교합니다.</p>'
+            '</details></div></section>'
+            "<script>(function(){var d=document.querySelector('#meth details');if(!d)return;"
+            "try{d.open=sessionStorage.getItem('methdet')==='1'}catch(e){}"
+            "d.addEventListener('toggle',function(){try{sessionStorage.setItem('methdet',d.open?'1':'')}catch(e){}})})();</script>")
+
+
 def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None = None, spec: dict | None = None,
                 out_dir: Path = Path("."), insights: dict | None = None, status: str | None = None) -> str:
     commentary = commentary or {}
@@ -467,6 +568,7 @@ def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None 
 <div class="stack">
 <section class="col"><h2>지금까지 돌린 시나리오 ({n})</h2><div class="counts">{counts_html}</div>{table}</section>
 {render_insights(insights, out_dir)}
+{render_method(out_dir)}
 </div>
 </div>"""
     return (f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'

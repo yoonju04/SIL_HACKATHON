@@ -53,3 +53,29 @@ def test_live_status_shown_in_header(tmp_path):
     html = page.read_text(encoding="utf-8")
     assert '<span class="live">라운드 0: 시뮬레이션 중</span>' in html
     assert "location.reload" in html          # self-reload (works on file:// pages)
+
+
+def test_method_card_counts_a_hypotheses(tmp_path):
+    import json
+    from engine import dashboard as D
+    camp = tmp_path / "camp"
+    (camp / "round_00").mkdir(parents=True)
+    (camp / "01_profile_summary.json").write_text(json.dumps({"observations": 25, "verified": 0}), encoding="utf-8")
+    pool = [{"scenario_id": "SA", "source": "nemotron_a", "expected_side": "fail", "expected_mechanism": "m"},
+            {"scenario_id": "SB", "source": "nemotron_a", "expected_side": "recover"},
+            {"scenario_id": "SR", "source": "space_filling"}]
+    (camp / "round_00" / "03_04_pool.json").write_text(json.dumps(pool), encoding="utf-8")
+    (camp / "round_00" / "05b_answers.json").write_text(json.dumps(
+        {"k": {"answers": {"Q-B1": {"evidence": [{"file": "lqr_controller/lqr.py", "line": 3}]}}}}), encoding="utf-8")
+    recs = [{"run_id": "R1", "scenario_id": "SA", "seed_scenario_id": "SA", "recovery_outcome": "unrecovered",
+             "final_safe_recovery": False, "lane_recovery_robustness": -2.0},
+            {"run_id": "R2", "scenario_id": "SB", "seed_scenario_id": "SB", "recovery_outcome": "no_switch",
+             "final_safe_recovery": None, "lane_recovery_robustness": None},
+            {"run_id": "R3", "scenario_id": "SX", "seed_scenario_id": "SR", "recovery_outcome": "safe_recovery",
+             "final_safe_recovery": True, "lane_recovery_robustness": 0.9}]
+    (camp / "run_records.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs), encoding="utf-8")
+    m = D.load_method(camp / "screen")
+    assert m["n_obs"] == 25 and m["n_props"] == 2 and m["b_files"] == ["lqr_controller/lqr.py"]
+    assert [(x["run_id"], x["hit"]) for x in m["tests"]] == [("R1", True), ("R2", None)]
+    html = D.render_method(camp / "screen")
+    assert "A 가설 적중 1/1" in html and "전환 안 돼 시험 못 함 1" in html and "lqr.py" in html

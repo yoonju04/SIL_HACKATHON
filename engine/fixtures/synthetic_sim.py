@@ -36,6 +36,10 @@ ROUTES = {
     "bench2drive:28035": [(70, 0.0), (18, 1 / 10), (150, 0.0), (25, -1 / 20), (100, 0.0)],
     "town10_long": [(120, 0.0), (35, 1 / 25), (80, 0.0), (35, -1 / 25), (73, 0.0)],
     "town04_highway": [(300, 0.0), (200, 1 / 250), (300, 0.0), (200, -1 / 300), (400, 0.0)],
+    # rough shapes from the 2026-10-28 CARLA 30 km/h baselines (curve timing / |kappa| only, SYNTHETIC)
+    "bench2drive:24206": [(30, 0.0), (25, 1 / 45), (180, 0.0)],
+    "bench2drive:28048": [(200, 0.0), (20, 1 / 15), (60, 0.0)],
+    "bench2drive:28154": [(120, 0.0), (25, -1 / 40), (10, 0.0)],
 }
 
 
@@ -201,7 +205,8 @@ def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict
                   stop_after_fault=stop_after_fault_s, max_speed_kmh=max_speed_kmh, dt=DT, out=str(out),
                   geometry=dict(max_steer_rad=MAX_STEER, lf=1.35, lr=1.55), **marker)
     (out / "agent_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
-    town = {"bench2drive:26956": "Town05", "bench2drive:28035": "Town01"}.get(route, route)
+    town = {"bench2drive:26956": "Town05", "bench2drive:28035": "Town01", "bench2drive:24206": "Town03",
+            "bench2drive:28048": "Town02", "bench2drive:28154": "Town10HD"}.get(route, route)
     (out / "manifest.json").write_text(json.dumps(dict(route_id=route, town=town, planner="pdm",
                                                        controller=controller, seed=seed, **marker), indent=2))
     with (out / "agent_controls.jsonl").open("w") as ac, (out / "steps.jsonl").open("w") as st, \

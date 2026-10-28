@@ -17,7 +17,8 @@ carla:
       route_id_arg: 26956
       town: Town05
       note: 'scenarios_1027 A'
-      enabled: true
+      # 2026-10-28 끔: 25~35 km/h baseline이 ~13 s에 충돌(BUG-004 잔여). real_gen_1028에서 G-04 거절 5/11 (BUG-011)
+      enabled: false
     - route_id: bench2drive:28035
       routes_arg: bench2drive
       route_id_arg: 28035
@@ -30,6 +31,26 @@ carla:
       town: Town10HD
       extra_args: [--green-lights]
       note: 'scenarios_1027 C'
+      enabled: true
+    # 2026-10-28 추가 (BUG-011). 검증 = PC CARLA 0.9.15, 30 km/h, fault 없음 baseline 1회 + baseline_gate.
+    # 다른 속도에서는 아직 확인 안 함. straight 이벤트는 정지 구간에 잡히는 문제 있음(BUG-012) — 주의
+    - route_id: bench2drive:24206
+      routes_arg: bench2drive
+      route_id_arg: 24206
+      town: Town03
+      note: 'ParkingCrossingPedestrian. 30km/h 검증: 36.4 s 완주, curve_entry/apex/exit/straight 모두 gate 통과 (곡선 6.2~11.3 s, 출발 직후라 저속)'
+      enabled: true
+    - route_id: bench2drive:28048
+      routes_arg: bench2drive
+      route_id_arg: 28048
+      town: Town02
+      note: 'T_Junction. 30km/h 검증: 38.5 s 완주, straight/curve_entry 통과, curve_apex/exit는 V-03(창 짧음)'
+      enabled: true
+    - route_id: bench2drive:28154
+      routes_arg: bench2drive
+      route_id_arg: 28154
+      town: Town10HD
+      note: 'T_Junction 155 m. 30km/h 검증: 31.3 s 완주, straight만 통과, 곡선 3개는 V-03(곡선이 끝에 있음)'
       enabled: true
   ego_vehicle_blueprint: null
   fixed_delta_seconds: 0.05                  # 1/frame_rate 20 Hz (sim-eval tfpp_benchmark/agent_config dt 0.05) = 제어 주기 50 ms
