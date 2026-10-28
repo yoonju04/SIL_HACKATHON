@@ -102,18 +102,14 @@ th{font-size:12px;color:var(--mut);font-weight:600;background:var(--soft);white-
 .listbox thead th{position:sticky;top:0;z-index:1}
 .bar{display:inline-block;width:60px;height:5px;background:var(--line);border-radius:3px;vertical-align:middle;margin-right:6px}
 .bar i{display:block;height:100%;background:var(--acc);border-radius:3px}
-.insw{position:fixed;right:16px;bottom:16px;width:400px;max-width:calc(100vw - 32px);z-index:50}
-.ins{display:flex;flex-direction:column;max-height:min(55vh,480px);box-shadow:0 6px 20px rgba(0,0,0,.18)}
-.ins>h2{flex:none}.ins.folded .ibody{display:none}.ins.folded>h2{border-bottom:0}
-.ins .ibody{overflow:auto;padding:10px 14px 12px}
+.ins.folded .ibody{display:none}.ins.folded>h2{border-bottom:0}
+.ins .ibody{padding:12px 16px 14px}
 .ins .ikey{font-size:17px;font-weight:700;margin:0 0 8px}
 .ins ol.itop{margin:0 0 8px 20px;padding:0;font-size:15px;font-weight:600;line-height:1.45}.ins ol.itop li{margin-bottom:4px}
 .ins .conf{font-size:11px;margin-left:4px;vertical-align:middle}
 .ins details{font-size:12px;color:var(--mut)}.ins summary{cursor:pointer;margin-top:4px}
 .ins details p{margin:6px 0}.ins details ul{margin:4px 0 6px 16px;padding:0}.ins details a{color:var(--acc)}
-.insbadge{position:fixed;right:16px;bottom:16px;z-index:50;background:var(--panel);border:1px solid var(--line);
-border-radius:14px;padding:4px 12px;font-size:12px;color:var(--mut);box-shadow:0 2px 8px rgba(0,0,0,.12)}
-.insbadge a{color:var(--acc)}
+.insbadge{padding:8px 16px;font-size:12px;color:var(--mut)}
 @media (max-width:860px){.grid{grid-template-columns:1fr;padding:12px}header{padding:10px 12px;flex-wrap:wrap;gap:4px}
 .kv td:first-child{width:70px}}
 """
@@ -386,14 +382,14 @@ def load_insights(out_dir: Path) -> dict | None:
 
 
 def render_insights(ins: dict | None, out_dir: Path = Path(".")) -> str:
-    """Cosmos campaign insights as a small panel fixed to the bottom-right corner.
+    """Cosmos campaign insights as a card in the right column, directly below the scenario list.
     Big: failure rate + top insight titles. Everything else is small text inside <details>."""
     detail = Path(out_dir).parent / "insights" / "campaign.html"
     link = (f'<a href="{_e(os.path.relpath(detail, out_dir).replace(os.sep, "/"))}">전체 인사이트 화면 열기</a>'
             if detail.is_file() else "")
     if not ins or ins.get("status") != "complete":
         why = "캠페인이 끝나면 생성" if not ins else f"생성 실패: {ins.get('error') or ins.get('status')}"
-        return f'<div class="insbadge" title="{_e(why)}">Cosmos 인사이트: 아직 없음 ({_e(why[:60])})</div>'
+        return f'<section class="col" id="insbadge"><div class="insbadge" title="{_e(why)}">Cosmos 인사이트: 아직 없음 ({_e(why[:60])})</div></section>'
     st = ins.get("statistics") or {}
     rate, graded, fails = st.get("failure_rate"), st.get("graded_triggered_runs"), st.get("failure_count")
     key = (f"SR 기준 실패율 {_f(rate * 100, 1, '%')} · {_e(graded)}개 중 {_e(fails)}개 실패" if rate is not None
@@ -412,11 +408,11 @@ def render_insights(ins: dict | None, out_dir: Path = Path(".")) -> str:
                  f'{_e(ins.get("model"))} · {_e(ins.get("created"))}</p>')
     if link:
         small.append(f"<p>{link}</p>")
-    return ('<div class="insw"><section class="col ins" id="ins">'
+    return ('<section class="col ins" id="ins">'
             '<h2>Cosmos 핵심 인사이트 <span class="mut">(참고용)</span>'
             '<button type="button" id="insfold" aria-expanded="true">접기</button></h2>'
             f'<div class="ibody"><p class="ikey">{key}</p><ol class="itop">{top_html}</ol>'
-            f'<details><summary>자세히</summary>{"".join(small)}</details></div></section></div>'
+            f'<details><summary>자세히</summary>{"".join(small)}</details></div></section>'
             "<script>(function(){var p=document.getElementById('ins'),b=document.getElementById('insfold'),K='insfold';"
             "function set(f){p.classList.toggle('folded',f);b.textContent=f?'펼치기':'접기';b.setAttribute('aria-expanded',!f);"
             "try{sessionStorage.setItem(K,f?'1':'')}catch(e){}}"
@@ -466,9 +462,11 @@ def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None 
 <section class="col"><h2><span id="lefttitle">방금 돌린 시나리오</span><button id="back" hidden>최신으로</button></h2>{left}</section>
 <section class="col"><h2>회복 판정 (recovery v2) 요약</h2>{render_recovery_summary(records)}</section>
 </div>
+<div class="stack">
 <section class="col"><h2>지금까지 돌린 시나리오 ({n})</h2><div class="counts">{counts_html}</div>{table}</section>
+{render_insights(insights, out_dir)}
 </div>
-{render_insights(insights, out_dir)}"""
+</div>"""
     return (f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<noscript><meta http-equiv="refresh" content="{refresh}"></noscript><title>전환 안전성 검증</title><style>{CSS}</style></head>'
