@@ -790,6 +790,28 @@ def load_dotenv(path: Path = REPO_ROOT / ".env") -> None:
             os.environ[k] = v
 
 
+def campaign_insights(out: Path, mode: str, cfg: dict) -> dict | None:
+    """09 monitor Cosmos campaign insights (pipeline/09_monitor/explain.py) after the loop -> out/insights/.
+    Text-only (monitor numbers, no video). mock: no network. Never fails the run."""
+    try:
+        from engine.insights import run_insights
+        res = run_insights(out, mode=mode, llm_cfg=cfg["llm"])
+    except Exception as e:  # noqa: BLE001 - insights are a report add-on; run results are already written
+        log(f"campaign insights failed (run results unaffected): {type(e).__name__}: {e}")
+        return None
+    log(f"campaign insights ({res.get('role') or mode}): {res['status']}, {res.get('n_insights', 0)} insights, "
+        f"{res.get('model_calls', 0)} model calls -> {res['path']}" + (f"  error: {res['error']}" if res.get("error") else ""))
+    try:
+        with (out / "report.md").open("a", encoding="utf-8") as fh:
+            fh.write(f"\n## 캠페인 인사이트 (09 monitor explain.py, Cosmos 텍스트 분석)\n"
+                     f"- 상태: {res['status']}, 인사이트 {res.get('n_insights', 0)}개, 모델 호출 {res.get('model_calls', 0)}회"
+                     + (f", 오류: {res['error']}" if res.get("error") else "") + "\n"
+                     f"- 결과: `insights/insights.json`, 화면: `insights/campaign.html` (SR 모니터 기준 판정, 참고용)\n")
+    except OSError as e:
+        log(f"report.md insights line not written: {e}")
+    return res
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_mutually_exclusive_group()
@@ -800,6 +822,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path)
     ap.add_argument("--ablation", default="X-5", choices=sorted(ABLATIONS))
     ap.add_argument("--video-explainer", choices=("on", "off"), default="on")
+    ap.add_argument("--insights", choices=("on", "off"), default="on",
+                    help="09 monitor Cosmos campaign insights after the loop -> OUT/insights/ (mock: no network)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--cold-start", type=int)
     ap.add_argument("--batch-size", type=int)
@@ -833,9 +857,11 @@ def main(argv: list[str] | None = None) -> int:
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on")
     m = loop.run()
+    ins = campaign_insights(out, mode, loop.cfg) if args.insights == "on" else None
     log(json.dumps({k: m[k] for k in ("n_runs", "n_switched", "n_final_safe_recovery", "n_failures", "both_sides_observed",
                                       "boundary_band_runs", "explanations", "explanations_accepted")}, ensure_ascii=False))
-    log(f"outputs: {out}  (report.md, run_records.jsonl, screen/campaign.html" + (", explanations.jsonl, monitor_rule_candidates.yaml" if loop.video_on else "") + ")")
+    log(f"outputs: {out}  (report.md, run_records.jsonl, screen/campaign.html" + (", explanations.jsonl, monitor_rule_candidates.yaml" if loop.video_on else "")
+        + (f", insights/{Path(ins['path']).name}, insights/campaign.html" if ins else "") + ")")
     return 0
 
 
