@@ -1,0 +1,245 @@
+{
+  "a_calls": [
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 699,
+        "prompt_tokens": 8935,
+        "total_tokens": 9634,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 8935
+      },
+      "schema_error_examples": [],
+      "items_returned": 4,
+      "items_valid": 4,
+      "round": 0,
+      "requested": 4
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2494,
+        "prompt_tokens": 9942,
+        "total_tokens": 12436,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 9942
+      },
+      "schema_error_examples": [],
+      "items_returned": 15,
+      "items_valid": 15,
+      "round": 1,
+      "requested": 15
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 5981,
+        "prompt_tokens": 5901,
+        "total_tokens": 11882,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 5565,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 5901
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 1,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2134,
+        "prompt_tokens": 10666,
+        "total_tokens": 12800,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 10666
+      },
+      "schema_error_examples": [],
+      "items_returned": 14,
+      "items_valid": 14,
+      "round": 2,
+      "requested": 15
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 9871,
+        "prompt_tokens": 6391,
+        "total_tokens": 16262,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 9418,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 6391
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 2,
+      "requested": 3,
+      "refine": true
+    }
+  ],
+  "rejected": [
+    {
+      "scenario_id": "SC-921db508ac",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.75 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-2572d9cdb7",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-2edbaa6e22",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.25 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-30319ebe29",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-51a2c5f229",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-bb320ef83f",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-de74066e05",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-1f50f74656",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.25 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-c172f62479",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.75 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-b2b4c67ba3",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-439c51a1fe",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.75 s in the evaluation window"
+      ]
+    }
+  ],
+  "llm_errors": [],
+  "gp_train_counts": [
+    {
+      "round": 1,
+      "recovery_success": 3,
+      "switched_indicator": 5
+    },
+    {
+      "round": 2,
+      "recovery_success": 5,
+      "switched_indicator": 9
+    }
+  ]
+}

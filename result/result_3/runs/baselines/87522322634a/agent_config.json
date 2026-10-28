@@ -1,0 +1,33 @@
+{
+  "model": null,
+  "planner": "pdm",
+  "record_front": true,
+  "controller": "supervised",
+  "longitudinal": "tfpp",
+  "mpc_extension": "linear",
+  "speed_policy": "follow",
+  "mpc_fault": "none",
+  "fault_start": 20.0,
+  "fault_duration": 5.0,
+  "fault_magnitude": 0.05,
+  "fault_on_s": 0.2,
+  "fault_off_s": 0.2,
+  "stop_after_fault": null,
+  "max_speed_kmh": 35.0,
+  "comfort": true,
+  "monitor_period": 0.0,
+  "view": false,
+  "green_lights": true,
+  "out": "C:\\Users\\dongh\\Desktop\\junwoo\\SIL_HACKATHON\\results\\real_gen_1028\\runs\\baselines\\87522322634a",
+  "device": "cuda",
+  "dt": 0.05,
+  "geometry": {
+    "mass": 1696.0,
+    "iz": 3356.051708949377,
+    "lf": 1.1718374378966971,
+    "lr": 1.6886336019650383,
+    "cf": 113066.66666666666,
+    "cr": 131911.1111111111,
+    "max_steer_rad": 1.2217303432379762
+  }
+}

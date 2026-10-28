@@ -1,0 +1,53 @@
+INFO:  Found the required file in cache!  Carla/Maps/Nav/Town10HD_Opt.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town10HD_Opt.bin 
+
+[1m========= Preparing RouteScenario_26956 (repetition 0) =========[0m
+[1m> Loading the world[0m
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town05.bin 
+[1m> Setting up the agent[0m
+[av_stack] PDM-Lite + supervised steering | max speed 25 km/h | comfort pedals on | traffic lights normal
+[1m> Running the route[0m
+Sparse Waypoints: 4
+Dense Waypoints: 74
+WARNING: Cannot spawn actor vehicle.* at position Location(x=17.167255, y=-4.492480, z=0.000000)
+[1m> Stopping the route[0m
+
+[1m========= Results of RouteScenario_26956 (repetition 0) ------ [91mFAILURE[0m [1m=========[0m
+
+╒═══════════════════════╤═════════════════════╕
+│ Start Time            │ 2026-10-28 11:06:32 │
+├───────────────────────┼─────────────────────┤
+│ End Time              │ 2026-10-28 11:07:04 │
+├───────────────────────┼─────────────────────┤
+│ System Time           │ 32.34s              │
+├───────────────────────┼─────────────────────┤
+│ Game Time             │ 28.4s               │
+├───────────────────────┼─────────────────────┤
+│ Ratio (Game / System) │ 0.878               │
+╘═══════════════════════╧═════════════════════╛
+
+╒═══════════════════════╤═════════╤══════════╕
+│ Criterion             │ Result  │ Value    │
+├───────────────────────┼─────────┼──────────┤
+│ RouteCompletionTest   │ [91mFAILURE[0m │ 53.44 %  │
+├───────────────────────┼─────────┼──────────┤
+│ OutsideRouteLanesTest │ [92mSUCCESS[0m │ 0 %      │
+├───────────────────────┼─────────┼──────────┤
+│ CollisionTest         │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ RunningRedLightTest   │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ RunningStopTest       │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ MinSpeedTest          │ [91mFAILURE[0m │ 309.55 % │
+├───────────────────────┼─────────┼──────────┤
+│ InRouteTest           │ [92mSUCCESS[0m │          │
+├───────────────────────┼─────────┼──────────┤
+│ AgentBlockedTest      │ [92mSUCCESS[0m │          │
+├───────────────────────┼─────────┼──────────┤
+│ ScenarioTimeoutTest   │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ Timeout               │ [92mSUCCESS[0m │          │
+╘═══════════════════════╧═════════╧══════════╛
+
+[1m> Registering the route statistics[0m

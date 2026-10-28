@@ -1,0 +1,60 @@
+INFO:  Found the required file in cache!  Carla/Maps/Nav/Town10HD_Opt.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town10HD_Opt.bin 
+
+[1m========= Preparing RouteScenario_0 (repetition 0) =========[0m
+[1m> Loading the world[0m
+[1m> Setting up the agent[0m
+[av_stack] PDM-Lite + supervised steering | max speed 35 km/h | comfort pedals on | traffic lights green for the ego
+[1m> Running the route[0m
+Sparse Waypoints: 18
+Dense Waypoints: 556
+[supervisor] t=43.85s MPC -> LQR reason=tracking_divergence
+
+============================================================================
+  [SUPERVISOR] fault detected -> steering switched MPC -> LQR   (t=43.85 s)
+    detected : vehicle diverging from the path (|e_y| > 1.0 m or |e_psi| > 0.6 rad for 0.25 s)
+    when     : no fault injected
+    state    : e_y=-2.54 m, e_psi=-52.3 deg, v=27.9 km/h
+============================================================================
+
+[1m> Stopping the route[0m
+
+[1m========= Results of RouteScenario_0 (repetition 0) ------ [91mFAILURE[0m [1m=========[0m
+
+╒═══════════════════════╤═════════════════════╕
+│ Start Time            │ 2026-10-28 11:04:11 │
+├───────────────────────┼─────────────────────┤
+│ End Time              │ 2026-10-28 11:05:11 │
+├───────────────────────┼─────────────────────┤
+│ System Time           │ 59.71s              │
+├───────────────────────┼─────────────────────┤
+│ Game Time             │ 58.15s              │
+├───────────────────────┼─────────────────────┤
+│ Ratio (Game / System) │ 0.974               │
+╘═══════════════════════╧═════════════════════╛
+
+╒═══════════════════════╤═════════╤═════════╕
+│ Criterion             │ Result  │ Value   │
+├───────────────────────┼─────────┼─────────┤
+│ RouteCompletionTest   │ [91mFAILURE[0m │ 31.46 % │
+├───────────────────────┼─────────┼─────────┤
+│ OutsideRouteLanesTest │ [91mFAILURE[0m │ 4.29 %  │
+├───────────────────────┼─────────┼─────────┤
+│ CollisionTest         │ [91mFAILURE[0m │ 1 times │
+├───────────────────────┼─────────┼─────────┤
+│ RunningRedLightTest   │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ RunningStopTest       │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ MinSpeedTest          │ [91mFAILURE[0m │ 216.1 % │
+├───────────────────────┼─────────┼─────────┤
+│ InRouteTest           │ [92mSUCCESS[0m │         │
+├───────────────────────┼─────────┼─────────┤
+│ AgentBlockedTest      │ [92mSUCCESS[0m │         │
+├───────────────────────┼─────────┼─────────┤
+│ ScenarioTimeoutTest   │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ Timeout               │ [92mSUCCESS[0m │         │
+╘═══════════════════════╧═════════╧═════════╛
+
+[1m> Registering the route statistics[0m

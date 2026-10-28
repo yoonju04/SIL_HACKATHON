@@ -1,0 +1,348 @@
+[
+  {
+    "scenario_id": "SC-921db508ac",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.6,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "O-018",
+      "PK-003"
+    ],
+    "expected_mechanism": "LQR recovery fails due to combined saturation from high path error and steering rate limits at moderate speed.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-2572d9cdb7",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.6,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "O-018",
+      "PK-003"
+    ],
+    "expected_mechanism": "LQR recovery fails due to opposite-direction saturation interacting with negative cross-track error at curve exit.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-2edbaa6e22",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.0
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-002",
+      "O-007",
+      "O-018",
+      "PK-002"
+    ],
+    "expected_mechanism": "MPC solver failure forces immediate LQR switch; LQR may recover if error state is small and within rate limits.",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-30319ebe29",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 3.0
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.8,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "O-018",
+      "PK-002"
+    ],
+    "expected_mechanism": "Prolonged MPC failure at high speed and large error; LQR likely cannot recover due to combined cross-track error and saturation.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-51a2c5f229",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 1
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.972,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ce15a12e7c",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 0.4242
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.738,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3b20d17aab",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 4
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.362,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-bb320ef83f",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.1495
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.099,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-de74066e05",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.9931,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.272,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-982666faa4",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.5071
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.101,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-1f50f74656",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.976,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-125768b97d",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.324,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.592,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ff5bd77f53",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.3616
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.699,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-c172f62479",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.404
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.495,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  }
+]

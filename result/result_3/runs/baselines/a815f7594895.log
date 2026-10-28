@@ -1,0 +1,69 @@
+INFO:  Found the required file in cache!  Carla/Maps/Nav/Town10HD_Opt.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town10HD_Opt.bin 
+
+[1m========= Preparing RouteScenario_0 (repetition 0) =========[0m
+[1m> Loading the world[0m
+[1m> Setting up the agent[0m
+[av_stack] PDM-Lite + supervised steering | max speed 15 km/h | comfort pedals on | traffic lights green for the ego
+[1m> Running the route[0m
+Sparse Waypoints: 18
+Dense Waypoints: 556
+C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack\third_party\carla_garage\team_code\kinematic_bicycle_model.py:47: RuntimeWarning: invalid value encountered in cast
+  steers, throttles, brakes = actions[:, 0], actions[:, 1], actions[:, 2].astype(np.uint8)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+[1m> Stopping the route[0m
+
+[1m========= Results of RouteScenario_0 (repetition 0) ------ [91mFAILURE[0m [1m=========[0m
+
+╒═══════════════════════╤═════════════════════╕
+│ Start Time            │ 2026-10-28 10:44:18 │
+├───────────────────────┼─────────────────────┤
+│ End Time              │ 2026-10-28 10:47:08 │
+├───────────────────────┼─────────────────────┤
+│ System Time           │ 169.91s             │
+├───────────────────────┼─────────────────────┤
+│ Game Time             │ 167.75s             │
+├───────────────────────┼─────────────────────┤
+│ Ratio (Game / System) │ 0.987               │
+╘═══════════════════════╧═════════════════════╛
+
+╒═══════════════════════╤═════════╤══════════╕
+│ Criterion             │ Result  │ Value    │
+├───────────────────────┼─────────┼──────────┤
+│ RouteCompletionTest   │ [92mSUCCESS[0m │ 100 %    │
+├───────────────────────┼─────────┼──────────┤
+│ OutsideRouteLanesTest │ [92mSUCCESS[0m │ 0 %      │
+├───────────────────────┼─────────┼──────────┤
+│ CollisionTest         │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ RunningRedLightTest   │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ RunningStopTest       │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ MinSpeedTest          │ [91mFAILURE[0m │ 124.47 % │
+├───────────────────────┼─────────┼──────────┤
+│ InRouteTest           │ [92mSUCCESS[0m │          │
+├───────────────────────┼─────────┼──────────┤
+│ AgentBlockedTest      │ [92mSUCCESS[0m │          │
+├───────────────────────┼─────────┼──────────┤
+│ ScenarioTimeoutTest   │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ Timeout               │ [92mSUCCESS[0m │          │
+╘═══════════════════════╧═════════╧══════════╛
+
+[1m> Registering the route statistics[0m

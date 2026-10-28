@@ -1,0 +1,58 @@
+[
+  {
+    "scenario_id": "SC-921db508ac",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-2572d9cdb7",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-2edbaa6e22",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-30319ebe29",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-51a2c5f229",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-ce15a12e7c",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-3b20d17aab",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-bb320ef83f",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  }
+]

@@ -1,0 +1,38 @@
+﻿started 2026-10-28T10:18:21
+[00-02] prior payload (25 unverified obs omitted), objectives ['S1'], scenario space C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\04_feasibility_expansion\scenario_space_av_stack.yaml
+[round 0] pool 14 -> batch 8 (X-5, video on)
+  [08] skip SC-921db508ac bench2drive:26956 30km/h saturate: G-04 baseline collides at 13.75 s in the evaluation window
+  [08] skip SC-2572d9cdb7 bench2drive:28035 30km/h saturate: baseline: V-03 window shorter than minimum
+  [08] skip SC-2edbaa6e22 bench2drive:26956 25km/h solver_fail: G-04 baseline collides at 13.25 s in the evaluation window
+  [08] skip SC-30319ebe29 bench2drive:28035 35km/h solver_fail: baseline: V-03 window shorter than minimum
+  [08] skip SC-51a2c5f229 bench2drive:26956 30km/h output_delay: baseline: V-03 window shorter than minimum
+  [08/09] R00-0000-solver_fail bench2drive:28035 15km/h solver_fail @curve_entry-0.74s -> safe_recovery (lrr=0.89, trigger=51.40s, detected=solver_failure, sr=F2_switch_transient, sel=cold_start_space_filling)
+  [08/09] R00-0001-output_delay town10_long 30km/h output_delay @straight-0.36s -> no_switch (lrr=None, trigger=8.30s, detected=None, sr=F1_no_or_late_switch, sel=cold_start_space_filling)
+  [08] skip SC-bb320ef83f bench2drive:28035 40km/h solver_fail: baseline: V-03 window shorter than minimum
+  [08] skip SC-de74066e05 town10_long 10km/h saturate: baseline failed
+  [08/09] R00-0002-solver_fail town10_long 30km/h solver_fail @curve_exit-0.10s -> safe_recovery (lrr=0.79, trigger=38.90s, detected=solver_failure, sr=F2_switch_transient, sel=replacement_for_SC-2572d9cdb7)
+  [08] skip SC-1f50f74656 bench2drive:26956 25km/h output_delay: G-04 baseline collides at 13.25 s in the evaluation window
+  [08/09] R00-0003-saturate town10_long 15km/h saturate @curve_apex-0.59s -> no_switch (lrr=None, trigger=39.45s, detected=None, sr=F1_no_or_late_switch, sel=replacement_for_SC-30319ebe29)
+  [08/09] R00-0004-solver_fail bench2drive:28035 20km/h solver_fail @straight+0.70s -> safe_recovery (lrr=1.00, trigger=10.15s, detected=solver_failure, sr=pass, sel=replacement_for_SC-51a2c5f229)
+  [08] skip SC-c172f62479 bench2drive:26956 35km/h solver_fail: G-04 baseline collides at 13.75 s in the evaluation window
+  [10] R00-0002-solver_fail explained via video -> rejected ['departure_time_s']
+  [10] R00-0003-saturate explained via video -> rejected ['departure_time_s']
+[round 1] pool 219 -> batch 4 (X-5, video on)
+  [08/09] R01-0005-saturate bench2drive:26956 15km/h saturate @curve_entry-0.50s -> no_switch (lrr=None, trigger=14.10s, detected=None, sr=F1_no_or_late_switch, sel=acquisition)
+  [08] skip SC-b2b4c67ba3 bench2drive:28035 25km/h saturate: baseline: V-03 window shorter than minimum
+  [08/09] R01-0006-saturate town10_long 35km/h saturate @curve_exit+0.80s -> unrecovered (lrr=-2.00, trigger=43.10s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=acquisition)
+  [08/09] R01-0007-stale town10_long 30km/h stale @curve_apex+0.03s -> safe_recovery (lrr=0.86, trigger=37.45s, detected=stale_sequence, sr=pass, sel=random_space_filling)
+  [08/09] R01-0008-saturate bench2drive:26956 25km/h saturate @curve_apex+0.20s -> no_switch (lrr=None, trigger=13.35s, detected=None, sr=F1_no_or_late_switch, sel=replacement_for_SC-b2b4c67ba3)
+  [10] R01-0006-saturate explained via video -> rejected ['departure_time_s', 'collision_seen']
+[round 2] pool 203 -> batch 4 (X-5, video on)
+  [08/09] R02-0009-saturate town10_long 30km/h saturate @curve_apex-0.66s -> unrecovered (lrr=-2.00, trigger=36.75s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=acquisition)
+  [08/09] R02-0010-saturate town10_long 30km/h saturate @curve_apex-0.66s -> unrecovered (lrr=-2.00, trigger=36.75s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=acquisition)
+  [08] skip SC-439c51a1fe bench2drive:26956 30km/h saturate: G-04 baseline collides at 13.75 s in the evaluation window
+  [08/09] R02-0011-stale bench2drive:26956 40km/h stale @straight-0.12s -> safe_recovery (lrr=1.00, trigger=7.10s, detected=stale_sequence, sr=F3_not_recovered, sel=random_space_filling)
+  [08/09] R02-0012-saturate bench2drive:28035 25km/h saturate @curve_entry-0.40s -> no_switch (lrr=None, trigger=46.05s, detected=None, sr=invalid, sel=replacement_for_SC-439c51a1fe)
+  [10] R02-0009-saturate explained via video -> rejected ['departure_time_s', 'tags_in_taxonomy']
+  [10] R02-0010-saturate explained via video -> rejected ['departure_time_s']
+campaign insights (C_cosmos): error, 0 insights, 2 model calls -> results\real_gen_1028\insights\insights.json  error: Token Factory HTTP 404
+{"n_runs": 13, "n_switched": 8, "n_final_safe_recovery": 4, "n_failures": 5, "both_sides_observed": true, "boundary_band_runs": 0, "explanations": 5, "explanations_accepted": 0}
+outputs: results\real_gen_1028  (report.md, run_records.jsonl, screen/campaign.html, explanations.jsonl, monitor_rule_candidates.yaml, insights/insights.json, insights/campaign.html)
+exit_code 0 finished 2026-10-28T11:19:06

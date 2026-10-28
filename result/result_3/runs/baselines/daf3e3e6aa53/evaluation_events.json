@@ -1,0 +1,134 @@
+[
+  {
+    "criterion": "RouteCompletionTest",
+    "frame": 0,
+    "event_type": "ROUTE_COMPLETION",
+    "message": "Agent has completed 100 of the route"
+  },
+  {
+    "criterion": "CollisionTest",
+    "frame": 116786,
+    "event_type": "COLLISION_VEHICLE",
+    "message": "Agent collided against object with type=vehicle.mini.cooper_s_2021 and id=175 at (x=13.629, y=-4.191, z=-0.002)"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116554,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 91.28% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116567,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 154.94% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116578,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 465.89% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116694,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 32.43% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116720,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 191.66% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116733,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 515.76% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116743,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 576.08% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116753,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 493.22% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116763,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 541.02% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116773,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 541.93% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116782,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 678.55% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116793,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 1484.53% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116805,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 659.08% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116814,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 547.81% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116824,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 478.21% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116834,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 456.31% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116843,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 347.95% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116853,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 262.34% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116857,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 225.62% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 116857,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 225.62% of the surrounding traffic's one"
+  }
+]

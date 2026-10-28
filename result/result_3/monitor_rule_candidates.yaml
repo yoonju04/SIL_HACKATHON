@@ -1,0 +1,9 @@
+meta:
+  generated_by: engine/feedback.py taxonomy_proposals
+  auto_apply: false
+  note: Candidates only. A human must define/approve a rule before 09 monitor uses
+    it.
+  accepted_explanations: 0
+already_covered_by_monitor: {}
+rule_candidates: []
+text_clusters: []
