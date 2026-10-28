@@ -26,6 +26,26 @@ The 24 supplied sources are registered individually in `pipeline/09_monitor/safe
 - `dashboard.py`: uses returned threshold values, reports incomplete assessments and exposes diagnostic phase metrics separately.
 - `explain.py` and `feedback.py`: preserve diagnostics for insight analysis and exclude incomplete safety assessments from complete-data analysis.
 
+## v3.1 update (2026-10-27, primary texts supplied)
+
+Full texts of the R79 amendment, Mammar 2006, the ISO 2631 secondary paper, nuPlan, STL risk, Holistic, SimLingo and
+Safe Swerve were supplied and their `verification` raised; de Winkel 2023, Xu 2016 (CBF lane keeping), Westhofen 2022,
+Zeng 2025 and Rokonuzzaman 2021 were added. Changes:
+
+1. **P-02 is paired with the baseline.** In `fault_check_1027` the no-fault baselines already reach 7-17 m/s² in junction
+   turns (routes 26956, 28035, town10_long; vx·r confirms it is motion, not noise), so the absolute 4.41 m/s² bound failed
+   every run regardless of the fault. Now `limit = max(4.41, baseline peak) + 0.3 m/s²`; the 0.3 m/s² allowance follows
+   R79 5.6.2.1.1. `absolute_robustness` is still reported. The team recovery metric uses the same limit.
+2. **Lateral signal follows R79 Annex 8 2.4.** ay is low-passed with a zero-phase 4th-order Butterworth at 0.5 Hz (P-02,
+   recovery metric and diagnostics), and lateral jerk is the 0.5 s moving average of its derivative. Raw-derivative jerk
+   at 20 Hz was dominated by noise. 5 m/s³ (R79 3.2.1.2) is added as a report-only jerk reference. R79 requires ≥100 Hz,
+   so no equivalence is claimed.
+3. **TLC renamed `tlc_linear_min_s`.** Mammar et al. show that curves need the constant-steer, curved-road TLC on the front
+   tyres; ours stays the constant-closing-rate approximation and the name now says so.
+
+Open from this review: SR5 as an STL eventually-and-hold robustness with a baseline-calibrated band (Lindemann et al.),
+and a Xu-style state box as an SR3 envelope candidate.
+
 ## Experimental protocol
 
 Freeze criteria before observing campaign results. Record source commit, simulator/controller versions, seed, dt, spec SHA-256 and resolved overrides. Use matched baseline/fault/no-reaction configurations. Keep safety labels separate from comfort/accuracy hypotheses. Compare paired differences and multiple independently varied seeds; repeated synthetic traces are only a display/test fixture.

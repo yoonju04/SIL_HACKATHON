@@ -149,7 +149,7 @@ python pipeline/09_monitor/test_probe.py
 ```
 
 새 v3 회귀 테스트는 설정 한계 일관성, SR6 반영, 평가 창 밖 참조 방지, 측정 누락,
-선형 TLC, 저속 null, 실제 시각 jerk, baseline 짝 비교와 비정상 채널 처리를 검증합니다.
+선형 TLC(`tlc_linear_min_s`), 저속 null, 실제 시각 jerk, baseline 짝 비교와 비정상 채널 처리를 검증합니다.
 
 ## 러너 호환성 검사 재현
 

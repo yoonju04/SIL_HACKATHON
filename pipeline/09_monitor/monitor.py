@@ -71,6 +71,13 @@ class MonitorConfig:
     # auxiliary
     mu: float = 0.9
     ay_smoothing_ticks: int = 5
+    # UN R79 Annex 8 2.4 style signal processing (sampled at our 20 Hz, so no compliance claim)
+    ay_filter_cutoff_hz: float = 0.5
+    ay_filter_order: int = 4
+    jerk_average_s: float = 0.5
+    # P-02 is judged against the paired baseline: limit = max(threshold, baseline peak) + allowance
+    p02_paired: bool = True
+    p02_allowance_mps2: float = 0.3
     # GP target
     gp_clip: tuple = (-2.0, 1.0)
     gp_collision_value: float = -2.0
@@ -110,6 +117,14 @@ def load_spec(path: str | Path, **overrides) -> MonitorConfig:
     p02 = next((x for x in (s.get("safety_specification") or {}).get("properties", []) if x.get("id") == "P-02"), {})
     if p02.get("lateral_acc_threshold_mps2") is not None:
         cfg.a_y_max_mps2 = float(p02["lateral_acc_threshold_mps2"])
+    if p02.get("evaluation") is not None:
+        cfg.p02_paired = p02["evaluation"] == "paired_baseline"
+    if p02.get("paired_allowance_mps2") is not None:
+        cfg.p02_allowance_mps2 = float(p02["paired_allowance_mps2"])
+    sp = (s.get("diagnostics") or {}).get("lateral_signal") or {}
+    cfg.ay_filter_cutoff_hz = float(sp.get("filter_cutoff_hz", cfg.ay_filter_cutoff_hz))
+    cfg.ay_filter_order = int(sp.get("filter_order", cfg.ay_filter_order))
+    cfg.jerk_average_s = float(sp.get("jerk_moving_average_s", cfg.jerk_average_s))
     diagnostics = s.get("diagnostics") or {}
     cfg.diagnostic_low_speed_mps = float(diagnostics.get("low_speed_exclusion_mps", 0.5))
     cfg.diagnostic_post_window_s = float(diagnostics.get("post_switch_window_s", 5.0))
@@ -124,7 +139,7 @@ def load_spec(path: str | Path, **overrides) -> MonitorConfig:
             setattr(cfg, k, v)
     for key in ('dt','window_s','min_window_s','sr1_ftti_fraction','sr1_fixed_limit_s','sr2_limit_dps',
                 'sr2_window_s','sr5_band_m','sr5_within_s','sr5_hold_s','sr6_max_rate_dps',
-                'diagnostic_post_window_s','diagnostic_low_speed_mps','mu'):
+                'diagnostic_post_window_s','diagnostic_low_speed_mps','mu','ay_filter_cutoff_hz','jerk_average_s'):
         if not math.isfinite(getattr(cfg,key)) or getattr(cfg,key) <= 0:
             raise ValueError(f"invalid positive spec parameter: {key}")
     if cfg.sr1_ftti_fraction > 1 or cfg.min_window_s > cfg.window_s:
@@ -181,6 +196,24 @@ def lateral_acceleration(tr: Trace, cfg: MonitorConfig):
     if k > 1:
         ay = np.convolve(np.pad(ay, (k // 2, k - 1 - k // 2), mode="edge"), np.ones(k) / k, mode="valid")
     return ay
+
+
+def filtered_lateral_acceleration(tr: Trace, cfg: MonitorConfig):
+    """Lateral acceleration low-passed as in UN R79 Annex 8 2.4 (4th-order Butterworth, 0.5 Hz), zero phase.
+
+    Returns (ay, method). Falls back to the unfiltered signal when the trace is too short for the filter
+    or scipy is missing, and says so in `method`.
+    """
+    ay = lateral_acceleration(tr, cfg)
+    try:
+        from scipy.signal import butter, filtfilt
+    except ImportError:
+        return ay, "unfiltered (scipy unavailable)"
+    b, a = butter(cfg.ay_filter_order, cfg.ay_filter_cutoff_hz, fs=1.0 / cfg.dt)
+    if len(ay) <= 3 * max(len(a), len(b)):
+        return ay, "unfiltered (trace shorter than filter padding)"
+    return filtfilt(b, a, ay), "butterworth order %d, %.2f Hz, zero phase" % (cfg.ay_filter_order,
+                                                                          cfg.ay_filter_cutoff_hz)
 
 
 def _first(mask, t):
@@ -414,11 +447,17 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
                      "limit_rate_dps": cfg.sr6_max_rate_dps, "limit_steer_deg": math.degrees(max_steer),
                      "enforced": cfg.sr6_enforce}
 
-    # auxiliary P-02
-    ay = lateral_acceleration(fault, cfg)
+    # auxiliary P-02 on the R79-filtered signal, judged against the paired baseline
+    ay, ay_method = filtered_lateral_acceleration(fault, cfg)
+    ay_base, _ = filtered_lateral_acceleration(baseline, cfg)
     thr = cfg.a_y_max_mps2 if cfg.a_y_max_mps2 is not None else 0.5 * cfg.mu * G
-    aux = {"P02_lat_acc": {"threshold_mps2": thr, "max_abs_mps2": float(np.max(np.abs(ay[w]))),
-                           "robustness": thr - float(np.max(np.abs(ay[w])))}}
+    peak_f = float(np.max(np.abs(ay[w])))
+    peak_b = float(np.max(np.abs(ay_base[bc.win])))
+    limit = max(thr, peak_b) + cfg.p02_allowance_mps2 if cfg.p02_paired else thr
+    aux = {"P02_lat_acc": {"threshold_mps2": thr, "max_abs_mps2": peak_f, "baseline_max_abs_mps2": peak_b,
+                           "evaluation": "paired_baseline" if cfg.p02_paired else "absolute",
+                           "effective_limit_mps2": limit, "robustness": limit - peak_f,
+                           "absolute_robustness": thr - peak_f, "signal": ay_method}}
 
     # ---- outcome (priority order from the spec)
     failed = [k for k, v in sr.items() if v.get("applies") and not v.get("pass")
@@ -517,17 +556,20 @@ def _geometry(tr: Trace, cfg: MonitorConfig):
 
 
 def run_metrics(tr: Trace, chk: RunCheck, cfg: MonitorConfig, onset: float, switch_time: float | None,
-                triggered: bool, is_fault: bool) -> dict:
-    """Team metrics (02 outcome_definitions) for one run. Not computable -> None (never 0)."""
+                triggered: bool, is_fault: bool, a_lim: float | None = None) -> dict:
+    """Team metrics (02 outcome_definitions) for one run. Not computable -> None (never 0).
+
+    a_lim: lateral-acceleration limit for recovery; pass P-02's paired effective limit for a fault run.
+    """
     t = np.asarray(tr.t, float)
     w = chk.win
     e_y = np.asarray(tr.lane_offset_m, float)
     lane_w, half_w = _geometry(tr, cfg)
     lat_lim = 0.5 * lane_w - half_w                          # lane_half_width - vehicle_half_width
-    a_lim = cfg.a_y_max_mps2 or 0.5 * cfg.mu * G
+    a_lim = a_lim or cfg.a_y_max_mps2 or 0.5 * cfg.mu * G
     r_lim = math.radians(cfg.steer_rate_max_dps or cfg.sr6_max_rate_dps)
     d_lim = tr.max_steer_rad or cfg.max_steer_rad
-    ay = np.abs(lateral_acceleration(tr, cfg))
+    ay = np.abs(filtered_lateral_acceleration(tr, cfg)[0])
     st = None if tr.steer_cmd_rad is None else np.asarray(tr.steer_cmd_rad, float)
     rate = None
     if st is not None:
@@ -648,11 +690,12 @@ def evaluate_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfi
     bc = check_run(baseline, onset, cfg, "baseline")
     act = d.get("actual_fault_onset")
     m = run_metrics(fault, fc, cfg, onset if act is None else act, d["switch_time"], d.get("trigger_time") is not None,
-                    True)
+                    True, d["aux"]["P02_lat_acc"]["effective_limit_mps2"])
     bm = run_metrics(baseline, bc, cfg, onset, None, False, False)
     m["margin_delta_m"] = d["margin_delta_m"]
     from performance import switch_diagnostics
-    baseline_phases = switch_diagnostics(baseline, cfg, bc, onset, d['switch_time'], lateral_acceleration(baseline, cfg))['phases']
+    baseline_phases = switch_diagnostics(baseline, cfg, bc, onset, d['switch_time'],
+                                         filtered_lateral_acceleration(baseline, cfg)[0])['phases']
     d['diagnostics']['baseline_phases_at_fault_anchor'] = baseline_phases
     delta_fields = ('lateral_rmse_m','lateral_mae_m','max_abs_lateral_error_m',
                     'max_abs_lateral_accel_mps2','max_abs_lateral_jerk_mps3')

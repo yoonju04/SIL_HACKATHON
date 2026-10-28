@@ -1,7 +1,9 @@
 """Switch-aligned tracking, stability and comfort diagnostics; never a safety oracle.
 
-TLC is a local constant-boundary-closing-rate approximation, not a curved-road
-prediction or measured FTTI. Benchmark comfort limits do not change monitor labels.
+TLC is a linear constant-boundary-closing-rate approximation (tlc_linear), not the curved-road
+constant-steer TLC of Mammar et al. 2006 or measured FTTI. Lateral jerk follows UN R79 Annex 8 2.4:
+the 0.5 s moving average of the derivative of the filtered lateral acceleration (ay arrives filtered).
+Benchmark comfort limits do not change monitor labels.
 """
 from __future__ import annotations
 import numpy as np
@@ -14,7 +16,7 @@ def switch_diagnostics(tr, cfg, check, onset, switch_time, ay):
     heading = None if tr.lane_heading_err is None else np.asarray(tr.lane_heading_err, float)
     ay = np.asarray(ay, float)
     yaw_accel = np.gradient(yaw, t)
-    jerk = np.gradient(ay, t)
+    jerk = _moving_average(np.gradient(ay, t), max(1, int(round(cfg.jerk_average_s / cfg.dt))))
     moving = vx > cfg.diagnostic_low_speed_mps
     beta = np.full(len(t), np.nan)
     beta[moving] = np.arctan2(vy[moving], vx[moving])
@@ -75,7 +77,7 @@ def switch_diagnostics(tr, cfg, check, onset, switch_time, ay):
                   'max_abs_yaw_rate_rad_s': peak(yaw,mask),
                   'max_abs_yaw_accel_rad_s2': peak(yaw_accel,mask) if samples >= 3 else None,
                   'max_abs_sideslip_rad': peak(beta,mask),
-                  'tlc_local_min_s': float(np.min(measured_tlc)) if measured_tlc.size else None,
+                  'tlc_linear_min_s': float(np.min(measured_tlc)) if measured_tlc.size else None,
                   'tlc_status': tlc_status}
         result[name] = values
 
@@ -88,10 +90,21 @@ def switch_diagnostics(tr, cfg, check, onset, switch_time, ay):
     return {'role': 'report_only', 'phases': result,
             'not_applicable_phases': ['pre_switch','transition','post_switch'] if switch_time is None else [],
             'signal_processing': {'derivative': 'numpy.gradient(actual timestamps), differentiate before slicing',
+                                  'lateral_jerk': '%.2f s moving average of d(ay)/dt (UN R79 Annex 8 2.4 style)'
+                                                  % cfg.jerk_average_s,
                                   'lateral_acceleration': 'logged body ay' if tr.ay_mps2 is not None else 'd(vy)/dt + vx*r',
                                   'fallback_ay_moving_average_ticks': cfg.ay_smoothing_ticks if tr.ay_mps2 is None else None,
                                   'sideslip_low_speed_exclusion_mps': cfg.diagnostic_low_speed_mps},
-            'comfort_reference': {'source': 'TREEIRL_2025, Appendix B.1; benchmark-inspired subset only',
+            'comfort_reference': {'source': 'TREEIRL_2025 Appendix B.1 (ay, yaw); R79_AMENDMENT 3.2.1.2 (jerk 5 m/s3); '
+                                            'references only, no compliance',
                                   'window': 'post_switch' if switch_time is not None else 'evaluation',
                                   'full_nuplan_comfort_score': False, 'comparisons': comparisons},
-            'tlc_model': 'local footprint-boundary margin / positive closing rate; not FTTI or nonlinear TLC'}
+            'tlc_model': 'tlc_linear: footprint-boundary margin / positive closing rate; not FTTI or the '
+                         'constant-steer curved-road TLC (MAMMAR_TLC_2006)'}
+
+
+def _moving_average(x, k):
+    """Centred k-sample moving mean with edge padding (same length as x)."""
+    if k <= 1:
+        return x
+    return np.convolve(np.pad(x, (k // 2, k - 1 - k // 2), mode='edge'), np.ones(k) / k, mode='valid')

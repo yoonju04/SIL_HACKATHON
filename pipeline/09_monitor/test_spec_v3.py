@@ -23,7 +23,7 @@ class SpecV3Tests(unittest.TestCase):
         path = Path(__file__).with_name('safety_spec.yaml')
         cfg = monitor.load_spec(path, lane_width_default_m=3.5, vehicle_half_width_m=.95,
                                 vehicle_half_length_m=2.4, max_steer_rad=1.2)
-        self.assertEqual(cfg.spec_provenance['schema_version'],'3.0')
+        self.assertEqual(cfg.spec_provenance['schema_version'],'3.1')
         self.assertEqual(len(cfg.spec_provenance['sha256']),64)
         self.assertTrue(cfg.sr6_enforce)
         self.assertEqual(cfg.comfort_reference_limits['max_abs_lateral_accel_mps2'],4.89)
@@ -45,7 +45,10 @@ class SpecV3Tests(unittest.TestCase):
     def test_configured_ay_limit_is_consistent_between_aux_and_team_metrics(self):
         r=self.grade(trace(drift(.3,.2),fault_at=ONSET,switch_at=10.2,vx=15,r=.2),replace(CFG,a_y_max_mps2=2.0))
         self.assertEqual(r['aux']['P02_lat_acc']['threshold_mps2'],2.0)
-        self.assertAlmostEqual(r['aux']['P02_lat_acc']['robustness'],-1)
+        self.assertAlmostEqual(r['aux']['P02_lat_acc']['absolute_robustness'],-1)
+        # paired: the straight baseline peak is below 2.0, so the limit is 2.0 + 0.3 allowance
+        self.assertAlmostEqual(r['aux']['P02_lat_acc']['effective_limit_mps2'],2.3)
+        self.assertAlmostEqual(r['aux']['P02_lat_acc']['robustness'],-0.7)
         self.assertLess(r['metrics']['recovery_robustness'],0)
 
     def test_sr6_violation_after_transition_is_enforced(self):
@@ -80,7 +83,7 @@ class SpecV3Tests(unittest.TestCase):
         self.assertAlmostEqual(phase['lateral_rmse_m'],.2)
         self.assertAlmostEqual(phase['lateral_mae_m'],.2)
         self.assertAlmostEqual(r['diagnostics']['paired_deltas']['post_switch']['lateral_rmse_m'],.2)
-        self.assertIsNone(phase['tlc_local_min_s'])
+        self.assertIsNone(phase['tlc_linear_min_s'])
         self.assertEqual(phase['tlc_status'],'not_closing_under_local_model')
         json.dumps(r['diagnostics'],allow_nan=False)
 
@@ -88,11 +91,11 @@ class SpecV3Tests(unittest.TestCase):
         cfg=replace(CFG,window_s=1,min_window_s=.5)
         fault=trace(lambda t:.1*(t-10),fault_at=ONSET,switch_at=10.2)
         r=self.grade(fault,cfg)
-        self.assertAlmostEqual(r['diagnostics']['phases']['evaluation']['tlc_local_min_s'],7,places=6)
+        self.assertAlmostEqual(r['diagnostics']['phases']['evaluation']['tlc_linear_min_s'],7,places=6)
         fault.lane_heading_err=None
         r=self.grade(fault,cfg)
         self.assertEqual(r['diagnostics']['phases']['evaluation']['tlc_status'],'unavailable_geometry')
-        self.assertIsNone(r['diagnostics']['phases']['evaluation']['tlc_local_min_s'])
+        self.assertIsNone(r['diagnostics']['phases']['evaluation']['tlc_linear_min_s'])
 
     def test_low_speed_sideslip_is_not_filled_with_zero(self):
         r=self.grade(trace(drift(.3,.2),fault_at=ONSET,switch_at=10.2,vx=0))
@@ -103,7 +106,25 @@ class SpecV3Tests(unittest.TestCase):
         fault=trace(fault_at=ONSET,switch_at=10.2)
         fault.ay_mps2=.5*np.asarray(fault.t)
         r=self.grade(fault)
-        self.assertAlmostEqual(r['diagnostics']['phases']['post_switch']['max_abs_lateral_jerk_mps3'],.5)
+        self.assertAlmostEqual(r['diagnostics']['phases']['post_switch']['max_abs_lateral_jerk_mps3'],.5,places=5)
+
+    def test_p02_is_judged_against_a_baseline_that_already_turns_hard(self):
+        # baseline and fault both corner at 6 m/s2: absolute P-02 fails, paired P-02 passes
+        base=trace(vx=15,r=.4)
+        r=monitor.view(monitor.evaluate_pair(trace(fault_at=ONSET,switch_at=10.2,vx=15,r=.4),base,ONSET,CFG,
+                                             dangerous_no_reaction(),{'run_id':'r'}))
+        p02=r['aux']['P02_lat_acc']
+        self.assertLess(p02['absolute_robustness'],0)
+        self.assertAlmostEqual(p02['robustness'],CFG.p02_allowance_mps2,places=6)
+        self.assertEqual(p02['evaluation'],'paired_baseline')
+        self.assertTrue(p02['signal'].startswith('butterworth'))
+
+    def test_r79_filter_removes_one_tick_ay_spike(self):
+        fault=trace(fault_at=ONSET,switch_at=10.2)
+        ay=np.zeros(len(fault.t)); ay[230]=20.0
+        fault.ay_mps2=ay
+        r=self.grade(fault)
+        self.assertLess(r['aux']['P02_lat_acc']['max_abs_mps2'],2.0)
 
     def test_recovery_cannot_look_past_evaluation_window(self):
         cfg=replace(CFG,window_s=1,min_window_s=.5)
