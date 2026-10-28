@@ -157,7 +157,7 @@ class CarlaRunner(BaseRunner):
         return fault_cli_local(self.space, c, onset_s)
 
     def _run(self, c, out, fault_args=None, controller="supervised"):
-        out = Path(out)
+        out = Path(out).resolve()   # run_benchmark.py runs with cwd=av_stack, so a relative --out would land there
         if (out / "results.json").exists():
             raise FileExistsError(f"{out} already has results.json (run_benchmark.py needs a fresh --out)")
         out.parent.mkdir(parents=True, exist_ok=True)
