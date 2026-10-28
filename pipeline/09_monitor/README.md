@@ -91,7 +91,7 @@ python -m engine.dashboard --records outputs/<run>/run_records.jsonl --out outpu
 루프(`run.py`)에서는 `engine/monitor.py` → `engine/sr_checks.py`(어댑터)가 이 모니터를 호출해 run_record의 `sr_*` 필드를 채웁니다.
 예전 Monitor v2 구현과 safety_spec의 `sr_checks` 섹션은 삭제했습니다.
 
-- 코드: `monitor.py`(채점), `performance.py`(진단), `dashboard.py`, `explain.py`, `feedback.py`, `replay.py`, `runner_adapter.py`, `video_clip.py`, `av_stack_probe.py`, 테스트 `test_*.py`
-- 설명: [`MONITOR.md`](MONITOR.md) (sim-eval의 09 README), [`SAFETY_SPEC_REVIEW.md`](SAFETY_SPEC_REVIEW.md), [`COMPATIBILITY.md`](COMPATIBILITY.md)
+- 코드: `monitor.py`(채점), `performance.py`(진단), `dashboard.py`, `explain.py`, `feedback.py`, `replay.py`, `video_clip.py`, 테스트 `test_*.py`
+- 설명: [`MONITOR.md`](MONITOR.md) (sim-eval의 09 README), [`SAFETY_SPEC_REVIEW.md`](SAFETY_SPEC_REVIEW.md)
 - `safety_spec.yaml`: `engine/judgment`(recovery v2)는 `safety_specification`을, SR 모니터는 그 아래 섹션(`requirements`, `diagnostics`, `gp_target` …)과 P-02를 읽습니다.
-- 테스트: 이 폴더에서 `python -m unittest test_monitor test_spec_v3 test_explain test_probe test_replay test_runner_compat`
+- 테스트: 이 폴더에서 `python -m unittest test_monitor test_spec_v3 test_explain test_replay`

@@ -6,8 +6,8 @@
 - Commit: `d7b45c1e159e6d13296f7a3a4e8b13e6c2d62c18`
 - Files and original license: `third_party/carla_0915/`.
 - Local modification: `PATCHES.md` records the exact-zero-angle hazard fix.
-- Behavior/route planning is reused; the upstream PID endpoint is replaced in
-  `integration/behavior_agent.py`. MPC/LQR remain the lateral actuator owners.
+- Put on the import path by `integration/tfpp_bootstrap.py` for the CARLA Garage / PDM-Lite agents.
+  (The earlier BehaviorAgent bridge that replaced the upstream PID endpoint was removed.)
 
 ## CARLA Garage / TransFuser++ and Bench2Drive (MIT code, CC BY 4.0 weights): fetched, not vendored
 

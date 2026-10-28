@@ -46,40 +46,8 @@ TreeIRL Appendix B.1의 |ay|=4.89 m/s², |yaw rate|=0.95 rad/s, |yaw acceleratio
 
 ## 데이터 계약과 피드백
 
-기존 `junwoo/sim-eval`용 `monitor.evaluate_pair()`는 최상위 28개 필드를 유지합니다.
-최신 `new_pipeline` 러너는 **37개 필드**이며, `runner_adapter.py`로 연결합니다.
-확인한 러너 커밋: `d743fac6ec11b5f8c1ba53033dc2523483db59d1`.
-`runner_skeleton.py`가 다시 내보내는 `pipeline/engine/judgment.py`와 실제
-`pipeline/engine/monitor.py`를 읽어 스키마, 복구 판정, GP 출력의 일치를 검사했습니다.
-
-어댑터는 해당 러너가 계산한 모든 필드·지표·복구 라벨·GP 타깃을 그대로 보존하고
-`metrics.monitor`에 새 SR 판정을 추가합니다. 러너의 `switched_safe`와 SR의 `pass`는
-정의가 다릅니다. 화면과 수치 인사이트는 `monitor.view()`를 통해 SR 판정을 사용합니다.
-현재 `pipeline/run.py`는 engine 모니터를 직접 호출하므로, **09 파일만 수정한 이 변경으로
-러너 전체 실행 경로가 자동 교체되지는 않습니다.** 아래 어댑터 진입점을 사용해야 합니다.
-
-```powershell
-python pipeline/09_monitor/runner_adapter.py --runner-root C:/path/to/new_pipeline --fault-run results/fault --baseline-run results/baseline --patterns pipeline/02_hypotheses/vulnerability_patterns.yaml --out results/run_records.jsonl
-```
-
-`--runner-root`는 실제 engine 소스가 있는 체크아웃입니다. new_pipeline에서 실행하면 생략합니다.
-실행한 engine 파일의 SHA-256도 결과에 기록합니다. 기록된 고장 시작 시각과 `--onset`이
-다르면 중단합니다. API/시뮬레이션을 호출하지 않고 이미 저장된 로그만 읽습니다.
-`agent_controls.jsonl`의 정규화된 조향은 `agent_config.json.geometry.max_steer_rad`를
-곱해 실제 road-wheel radians로 변환합니다. 명령이나 변환 한계가 없으면 미판정입니다.
-새 SR 결과, 진단 지표, 명세 provenance는 `metrics.monitor` 아래에 저장합니다.
-`monitor.view()`는 러너 결과와 상세 결과를 함께 읽는 화면용 뷰입니다.
-
-- 기존 28필드 모니터의 5분류는 P01/P02/P03 기준입니다. 최신 37필드 러너는 recovery_outcome·baseline 상대 가속도/jerk 라벨 기준이며 어댑터가 이를 보존합니다. 상세 F1/F2/F3 판정과 같다고 가정하지 않습니다.
-- `metrics`, `baseline_metrics`, `gp_targets`의 팀 지표 구조는 유지합니다.
-- `switch_state_label`은 검증된 회복 가능 영역이 없어 null입니다.
-- SR1/2/4와 enforced SR6(+설정 시 SR5)의 적용 가능한 최소 정규화 여유가 상세 overall입니다.
-- 미적용 지표는 null이며, comfort/TLC/SR3 미판정 값은 안전 GP 타깃에 넣지 않습니다.
-
-`feedback.py`는 원본 판정 모음으로 2단계 hypothesis_tracking.json, 3단계 failure_table.json,
-6단계 gp_training.jsonl을 만듭니다. 가설의 조건군/대조군 기술통계는 체크포인트 전에도 집계하지만,
-신뢰구간/최종 판정은 사전 정의된 10·20·30회 체크포인트를 따릅니다. 무효·결측·비유한 값과
-불완전 안전 평가는 완전 데이터 분석에서 제외합니다. 화면의 관측 평균 차이와 정식 통계 판정은 구분합니다.
+`monitor.evaluate_pair()`는 최상위 28개 필드를 돌려줍니다. 루프(`run.py`)에서는 `engine/sr_checks.py`가
+`grade_pair()`를 직접 불러 run_record의 `sr_*` 필드를 채웁니다 (예전 러너 어댑터와 호환성 검사는 삭제).
 
 ## Cosmos Reason 수치 인사이트
 
@@ -145,20 +113,8 @@ python pipeline/09_monitor/test_monitor.py
 python pipeline/09_monitor/test_spec_v3.py
 python pipeline/09_monitor/test_explain.py
 python pipeline/09_monitor/test_replay.py
-python pipeline/09_monitor/test_probe.py
 ```
 
 새 v3 회귀 테스트는 설정 한계 일관성, SR6 반영, 평가 창 밖 참조 방지, 측정 누락,
 선형 TLC(`tlc_linear_min_s`), 저속 null, 실제 시각 jerk, baseline 짝 비교와 비정상 채널 처리를 검증합니다.
 
-## 러너 호환성 검사 재현
-
-```powershell
-$env:SIL_RUNNER_ROOT="C:/path/to/new_pipeline"
-python -m unittest discover -s pipeline/09_monitor -p test_runner_compat.py -v
-```
-
-실제 engine으로 만든 원본 결과와 어댑터 결과에서 `metrics.monitor`만 제거한 결과가
-37개 필드 모두 정확히 같은지 비교합니다. 정상 복구, SR6 위반, 조향 로그 누락,
-복구 창 부족, 충돌을 포함합니다. `SIL_RUNNER_ROOT`가 없으면 실제 러너 검사는 skip되므로
-skip을 호환성 통과로 해석하지 않습니다. 검증 입력은 합성 로그이며 CARLA 실주행 검증은 아닙니다.

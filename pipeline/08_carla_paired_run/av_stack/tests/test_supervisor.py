@@ -49,9 +49,10 @@ def test_wall_deadline_and_repeated_sequence_are_detected() -> None:
 def test_fault_is_temporary_and_off_by_default() -> None:
     original = output()
     assert MPCFaultInjector(FaultConfig()).apply(original, 1.0) is original
-    injector = MPCFaultInjector(FaultConfig('nan', 1.0, 0.2))
+    injector = MPCFaultInjector(FaultConfig('solver_fail', 1.0, 0.2))
     assert injector.apply(original, 0.95) is original
-    assert math.isnan(injector.apply(original, 1.0).steer)
+    failed = injector.apply(original, 1.0)
+    assert not failed.ok and failed.steer is None
     assert injector.apply(original, 1.2) is original
 
 
@@ -109,7 +110,7 @@ def test_lqr_nonfinite_output_requires_safe_stop() -> None:
     params = asdict(PlantParams())
     params.pop('max_steer_rate_rad_s')
     trajectory = ReferencePlanner().plan([0, 30, 60], [0, 0, 0])
-    controller = SupervisedLateral(params, 0.05, trajectory, FaultConfig('nan', 0, 1))
+    controller = SupervisedLateral(params, 0.05, trajectory, FaultConfig('solver_fail', 0, 1))
     original = controller.lqr.compute
     controller.lqr.compute = lambda *args: replace(original(*args), steer=math.nan)
     result = controller.step(0, 0, 0, 0, 5, 0, 0)
@@ -123,7 +124,7 @@ def test_takeover_tracks_both_turn_directions_with_nonlinear_physics() -> None:
         params.pop('max_steer_rate_rad_s')
         route = arc_route(radius=35, straight=15, exit_len=20, direction=direction)
         trajectory = ReferencePlanner(PlannerConfig(v_max=5, v_start=5)).plan(*route)
-        controller = SupervisedLateral(params, 0.05, trajectory, FaultConfig('nan', 5, 0.2))
+        controller = SupervisedLateral(params, 0.05, trajectory, FaultConfig('solver_fail', 5, 0.2))
         plant = BicyclePlant()
         plant.s.x, plant.s.y, plant.s.yaw = trajectory.x[0], trajectory.y[0], trajectory.yaw[0]
         plant.s.vx = 5

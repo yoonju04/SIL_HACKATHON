@@ -1,4 +1,4 @@
-"""Offline stand-ins used by tests and run_offline.py (not part of the vehicle software)."""
+"""Offline stand-ins used by the tests (not part of the vehicle software)."""
 from .plant import BicyclePlant, PlantParams, PlantState
 from .tracks import demo_route, arc_route, straight_route
 

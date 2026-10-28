@@ -54,8 +54,7 @@ def describe(fault: FaultConfig) -> str:
         return 'MPC steering held at the %s actuator limit' % ('positive' if fault.magnitude > 0 else 'negative')
     if fault.mode == 'output_delay':
         return f'MPC command delayed by {round(fault.magnitude)} ticks (fresh stamp)'
-    return {'solver_fail': 'MPC solver failure', 'nan': 'MPC outputs NaN', 'stale': 'MPC repeats a stale sample',
-            'exception': 'MPC raises an exception', 'delay': 'MPC answers 75 ms late (> 50 ms deadline)',
+    return {'solver_fail': 'MPC solver failure', 'stale': 'MPC repeats a stale sample',
             'none': 'fault cleared'}[fault.mode]
 
 

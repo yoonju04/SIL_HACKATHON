@@ -1,5 +1,0 @@
--r requirements.txt
-carla==0.9.15
-networkx==2.8.8
-shapely==1.8.5.post1
-opencv-python==4.8.1.78

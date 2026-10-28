@@ -102,10 +102,7 @@ An **`av_stack view`** window opens with the chase camera and the steering owner
 | Command | Kind | What happens to the MPC output | Expected supervisor reaction |
 |---|---|---|---|
 | `solver_fail` | availability | `ok=False`, no steering | immediate (`solver_failure`) |
-| `nan` | availability | steering = NaN | immediate (`nonfinite_output`) |
 | `stale` | availability | previous sample repeated | immediate (`stale_sequence`) |
-| `exception` | availability | MPC raises | immediate (`controller_exception`) |
-| `delay` | availability | answer arrives 75 ms late (> 50 ms period) | immediate (`deadline_miss`) |
 | `bias <rad>` | **integrity** | healthy-looking output + constant offset | only via path divergence, late or never |
 | `drift <rad/s>` | **integrity** | healthy-looking output + growing offset | only via path divergence, late |
 | `intermittent_bias <rad> <on s> <off s>` | **integrity** | offset switched on and off periodically | only via path divergence, late |
@@ -140,7 +137,7 @@ Bench2Drive score **100**, route 100 %, 0 collisions, 0 lane departures; takeove
 
 | Fault | Outcome | Detection delay | Max path error |
 |---|---|---|---|
-| solver_fail / nan / stale / exception / delay | switched, safe | 0.0 s | 0.63 m |
+| solver_fail / stale (and the removed nan / exception / delay modes) | switched, safe | 0.0 s | 0.63 m |
 | bias 0.02 rad | **not detected** (stayed safe) | — | 0.71 m |
 | bias 0.05 rad | switched, **unsafe** | 4.7 s | **1.13 m** |
 | bias 0.10 rad | switched, **unsafe** | 2.3 s | **1.57 m** |
@@ -210,10 +207,9 @@ powershell -ExecutionPolicy Bypass -File .\tools\fetch_third_party.ps1
 uv venv .venv-tfpp --python 3.10
 uv pip install --python .\.venv-tfpp\Scripts\python.exe -r requirements-tfpp-lock.txt
 ```
-Controller-only work (offline simulation, unit tests) runs in any Python ≥ 3.8 with `numpy`, `scipy`:
+Controller-only unit tests run in any Python ≥ 3.8 with `numpy`, `scipy`:
 ```powershell
-python tests\run_all.py          # planner / MPC / LQR / fake-CARLA tests
-python run_offline.py --controller mpc --plot
+python tests\run_all.py          # planner / MPC / LQR tests
 ```
 
 ## Repository layout
@@ -229,8 +225,7 @@ pipeline/08_carla_paired_run/av_stack/
 ├─ experiments/        closed-loop sweeps behind controller tuning choices
 ├─ tests/              offline tests (no CARLA server needed)
 ├─ docs/MODULES_ko.md  detailed notes on the planner / MPC / LQR ports (Korean)
-├─ run_benchmark.py    main entry point (Bench2Drive routes, PDM-Lite / TF++ / TCP)
-└─ run_carla.py, run_urban.py, run_autonomy.py, run_offline.py   earlier runners
+└─ run_benchmark.py    entry point (Bench2Drive routes, PDM-Lite / TF++ / TCP)
 ```
 
 ## Credits and licences

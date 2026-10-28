@@ -47,7 +47,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--timeout", type=float, default=120.0, help="Wall-clock RPC/watchdog timeout, not route duration")
     parser.add_argument("--device", choices=("cuda", "cuda:0"), default="cuda")
-    parser.add_argument("--mpc-fault", choices=("none", "solver_fail", "nan", "stale", "exception", "delay", "bias", "drift",
+    parser.add_argument("--mpc-fault", choices=("none", "solver_fail", "stale", "bias", "drift",
                                                 "intermittent_bias", "saturate", "output_delay"), default="none")
     parser.add_argument("--fault-magnitude", type=float, default=0.05,
                         help="bias [rad], drift rate [rad/s], saturate side (sign) or output_delay ticks")

@@ -1,32 +1,7 @@
 # av_stack: 궤적 생성 / MPC / LQR 분리 구현 (CARLA 실행)
 
-## 긴 도심 시나리오
-
-`run_urban.py`는 Town05의 약 1.47 km 경로에서 좌회전 2회·우회전 5회,
-주변 차량 30대·AI 보행자 60명, 횡단 보행자, 앞차 정지/출발, 신호 대기를 실행합니다.
-실제 CARLA 서버 실행·영상·재생 기록 사용법은 `URBAN_SCENARIO.md`를 참고하세요.
-자차 조향은 MPC/LQR이 계속 담당합니다. 영상 주행은 Epic 품질에서 검증했습니다.
-
-## 추가: 공식 CARLA BehaviorAgent 연결 (2026-10-22)
-
-`run_autonomy.py`는 CARLA 0.9.15 공식 BehaviorAgent의 주변 객체 조회,
-보행자 정지, 앞차 추종, 빨간불 대응, 경로 계획을 기존 MPC/LQR에 연결합니다.
-조향은 선택한 MPC/LQR만 계산하고, 속도는 기존 PI가 제어합니다.
-공식 PID의 run_step은 실행하지 않습니다. 긴급 정지 판단은 가속을 차단하고 제동합니다.
-
-```powershell
-cd "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack"
-$PY = "C:\Users\dongh\.conda\envs\carla\python.exe"
-# CARLA 서버는 먼저 직접 실행합니다.
-& $PY run_autonomy.py --controller lqr --town Town04 --spawn 10 --speed 5 --route-length 300 --duration 90 --follow --plot --out runs\autonomy_lqr
-# 경로 30 m 지점에 정지 보행자를 배치하는 데모입니다. 보행자가 남으므로 완주는 기대하지 않습니다.
-& $PY run_autonomy.py --controller mpc --town Town04 --spawn 10 --speed 5 --route-length 120 --duration 30 --demo pedestrian --follow --plot --out runs\autonomy_mpc_pedestrian
-```
-
-전체 사용법, 출처, 검증 범위는 `AUTONOMY.md`를 참고하세요.
-이 모드는 시뮬레이터 정답 객체 정보를 사용합니다. 카메라/LiDAR 인식 모델이나
-범용 장애물 우회, 정지 표지판 대응을 구현한 것은 아닙니다.
-기존 `run_carla.py`와 `run_offline.py`는 고정 기준 궤적 추종 실험용입니다.
+CARLA 실행은 `run_benchmark.py --planner pdm --controller supervised` 하나입니다 (README의 Quick start).
+경로·속도·위험 판단은 PDM-Lite가, 조향은 아래 MPC/LQR이 맡습니다.
 
 공개 오픈소스(Autoware, Apollo, PythonRobotics)와 논문을 근거로 만든 세 개의 독립 모듈입니다. CARLA에서 바로 돌아가도록 연결해 두었습니다.
 
@@ -147,46 +122,25 @@ out = lqr.compute(x, y, yaw, vx, vy, yaw_rate)      # out.steer, out.steer_feedb
 ## 실행
 
 ```bash
-pip install numpy scipy matplotlib
-pip install carla==<CARLA 서버 버전>        # 예: 0.9.15 (run_carla.py에만 필요)
-
-# 오프라인 (CARLA 없이 같은 파이프라인, 비선형 차량 모델)
-python run_offline.py --controller mpc --plot
-python run_offline.py --controller lqr --track arc --a-lat 4.4 --plot
-python run_offline.py --controller mpc --track straight --lane-change 100:60:3.5 --plot
-
-# CARLA (서버 먼저 실행 — Windows: CarlaUE4.exe, Linux: ./CarlaUE4.sh -RenderOffScreen)
-python run_carla.py --controller mpc --town Town04 --spawn 10 --follow --plot
-python run_carla.py --controller lqr --town Town04 --spawn 10 --speed 12 --plot
-python run_carla.py --controller mpc --town Town04 --spawn 10 --lane-change 120:50:-3.5
+# CARLA 서버를 먼저 켭니다 (start_carla_stable.ps1). 명령 전체는 README의 Quick start / Command reference.
+.\.venv-tfpp\Scripts\python.exe run_benchmark.py --route-id 26956 --planner pdm --controller supervised --out runs\<new>
 
 # 테스트 (pytest 없이)
 python tests/run_all.py
 ```
-
-`--out` 폴더(기본값 `runs/<simulator>_<controller>`)에 저장되는 파일:
-
-| 파일 | 내용 |
-|---|---|
-| `steps.jsonl` | 주기별 로그: 상태, e_y(궤적 기준), e_y_lane(차선 중심 기준), 조향, solve time, QP 반복수 |
-| `trajectory.json` | 계획된 궤적 |
-| `summary.json` | 요약 지표 |
-| `episode.png` | 그래프 (`--plot`을 줬을 때만) |
 
 ## CARLA에서 주의할 점
 
 - **좌표계**
   - CARLA는 왼손 좌표계입니다(y 오른쪽, yaw 시계방향, steer + = 오른쪽).
   - 변환은 `integration/carla_io.py` 한 곳에서만 합니다.
-  - 가짜 CARLA 테스트로 확인합니다(`tests/fake_carla.py`). 부호를 일부러 뒤집으면 차량이 경로를 벗어나는 것까지 테스트에 들어 있습니다.
 - **동기 모드:** `fixed_delta_seconds = dt`(기본 0.05 s)이고, 매 주기 `world.tick()`을 호출합니다. 실행 중에는 BLAS 스레드를 1로 고정합니다(결정성).
 - **조향 곡선:** CARLA는 기본적으로 속도가 높을수록 최대 조향각을 줄입니다. 실행기는 `steering_curve`를 평평하게 바꿔서 `steer = δ / max_steer` 관계를 유지합니다.
 - **차량 파라미터:** 질량, 축 위치, 최대 조향각은 CARLA physics control에서 읽습니다.
   - **타이어 코너링 강성은 CARLA가 제공하지 않습니다.** 그래서 기본값을 질량 비율로 맞춘 값을 씁니다.
   - 추종이 나쁘면 `--cf/--cr`로 조정하세요. 그 차량으로 강성을 식별하는 것이 가장 좋습니다.
-- **검증 범위:** 실제 CARLA 서버에서는 아직 돌려보지 않았습니다. 이 환경에서는 CARLA를 설치할 수 없어서, 실제 API 호출 형태와 좌표 규칙을 흉내 낸 가짜 모듈로만 확인했습니다. 대상은 CARLA 0.9.13–0.9.15입니다.
 
-## 검증 결과 (2026-10-22)
+## 검증 결과 (2026-10-22, 당시 오프라인·가짜 CARLA 실행기 기준. 그 실행기는 삭제됨)
 
 | 시나리오 | MPC 최대 \|e_y\| | LQR 최대 \|e_y\| |
 |---|---|---|
@@ -196,7 +150,6 @@ python tests/run_all.py
 | 가짜 CARLA demo 경로 (왼손 좌표계) | 0.094 m | 0.047 m |
 
 - 오프라인 차량은 제어기의 선형 모델과 일부러 다르게 만들었습니다(타이어 포화, 조향 액추에이터 지연 0.08 s, Iz 차이).
-- `tests/run_all.py`의 22개 테스트가 모두 통과합니다.
 
 ## 남은 것
 

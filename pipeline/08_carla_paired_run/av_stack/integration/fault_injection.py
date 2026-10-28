@@ -1,7 +1,6 @@
 """Opt-in simulator faults at the MPC output boundary; never changes LQR.
 
-Availability faults (solver_fail, nan, stale, exception, delay) make the MPC output visibly
-unusable. Integrity attacks keep a healthy-looking output but change its steering:
+Availability faults (solver_fail, stale) make the MPC output visibly unusable. Integrity attacks keep a healthy-looking output but change its steering:
   bias               adds `magnitude` rad
   drift              adds `magnitude` rad per second since the fault start
   intermittent_bias  adds `magnitude` rad for `on_s`, then nothing for `off_s`, repeating
@@ -14,12 +13,11 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, replace
 import math
-import time
 
 from mpc_controller import MPCOutput
 
 
-AVAILABILITY_FAULTS = ('solver_fail', 'nan', 'stale', 'exception', 'delay')
+AVAILABILITY_FAULTS = ('solver_fail', 'stale')
 INTEGRITY_FAULTS = ('bias', 'drift', 'intermittent_bias', 'saturate', 'output_delay')
 FAULT_MODES = ('none',) + AVAILABILITY_FAULTS + INTEGRITY_FAULTS
 MAX_DELAY_TICKS = 15
@@ -56,19 +54,6 @@ class FaultConfig:
     def config_active_since(self, t: float, seconds: float) -> bool:
         """True once a configured fault started at least `seconds` ago (demo stop option)."""
         return self.mode != 'none' and t >= self.at_s + seconds
-
-
-class InjectedMPCFailure(RuntimeError):
-    """Temporary controller failure used only by the explicit simulator injector."""
-
-
-def _raise_failure(output: MPCOutput) -> MPCOutput:
-    raise InjectedMPCFailure('Temporary MPC computation failure')
-
-
-def _delay(output: MPCOutput) -> MPCOutput:
-    time.sleep(0.075)
-    return output
 
 
 class MPCFaultInjector:
@@ -109,10 +94,7 @@ class MPCFaultInjector:
             return output
         faults = {
             'solver_fail': lambda value: replace(value, ok=False, steer=None, status='injected_solver_failure'),
-            'nan': lambda value: replace(value, steer=math.nan),
             'stale': lambda value: self.previous if self.previous is not None else replace(value, stamp_s=t-1),
-            'exception': _raise_failure,
-            'delay': _delay,
             'bias': lambda value: self._shift(value, self.config.magnitude),
             'drift': lambda value: self._shift(value, self.config.magnitude * (t - self.config.at_s)),
             'intermittent_bias': lambda value: self._intermittent(value, t),

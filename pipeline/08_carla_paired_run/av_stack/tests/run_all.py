@@ -8,7 +8,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 failed = 0
-for mod_name in ("test_separation", "test_planner", "test_lqr", "test_mpc", "test_carla_runner"):
+for mod_name in ("test_separation", "test_planner", "test_lqr", "test_mpc"):
     mod = importlib.import_module(mod_name)
     for name in sorted(n for n in dir(mod) if n.startswith("test_")):
         t0 = time.time()

@@ -1,5 +1,4 @@
 numpy>=1.24
 scipy>=1.10
 matplotlib>=3.7      # --plot only
-# carla==<your CARLA server version>   # run_carla.py only, e.g. carla==0.9.15
 # osqp                                 # optional: MPCConfig(qp_solver="osqp")

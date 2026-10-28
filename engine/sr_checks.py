@@ -63,7 +63,7 @@ def _num_or_nan(v: Any) -> float:
 def trace_from_run(run) -> Trace:
     """Adapter: engine.monitor.RunData (our joined steps/behavior/monitor_probe/agent_controls ticks) -> Trace.
 
-    steer_cmd_rad: behavior/steps `steer_rad` if logged (autonomy_episode), else agent_controls `steer` (CARLA
+    steer_cmd_rad: behavior/steps `steer_rad` if logged, else agent_controls `steer` (CARLA
     normalised, left-handed) * agent_config geometry.max_steer_rad with the sign flipped to right-handed."""
     ticks = run.ticks
     t = np.array([r["t"] for r in ticks], float)
