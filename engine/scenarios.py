@@ -238,43 +238,60 @@ def fault_dict_for_sim(space: dict, c: dict, onset_s: float) -> dict:
 
 def detect_route_events(ticks: list[dict], dt: float = 0.05, *, kappa_on: float = 1 / 60, kappa_off: float = 1 / 300,
                         min_curve_s: float = 1.0, min_straight_s: float = 3.0, t_min: float = 5.0,
-                        event_index: int = 0) -> dict:
+                        event_index: int = 0, min_speed_mps: float = 2.0, straight_speed_frac: float = 0.6,
+                        curve_speed_frac: float = 0.5) -> dict:
     """onset_event -> absolute time from a NO-FAULT baseline run (PROVISIONAL thresholds).
 
     Driven-path curvature kappa = yaw_rate / max(vx, 1) (steps.jsonl), 0.5 s moving average.
+    Only ticks where the car is actually moving count (BUG-012): a stopped car has yaw_rate 0 and so reads
+    as kappa 0 = "straight". v_ref = 90th percentile of the moving speed (cruise speed of this baseline);
+    straight ticks need vx >= max(min_speed_mps, straight_speed_frac * v_ref), curve ticks need
+    vx >= max(min_speed_mps, curve_speed_frac * v_ref) (kappa from yaw_rate/vx is noisy near standstill).
+    The launch phase (before vx first reaches the straight speed) is skipped, as is t < t_min.
     curve_entry/apex/exit = start / |kappa| max / end of the event_index-th segment with |kappa| > kappa_on
-    for >= min_curve_s after t_min; straight = middle of the first segment with |kappa| < kappa_off for
-    >= min_straight_s after t_min.
+    for >= min_curve_s; straight = middle of the first segment with |kappa| < kappa_off for >= min_straight_s.
+    A stop ends a segment.
     """
     t = [r["t"] for r in ticks]
     vx = [float(r.get("vx") or 0.0) for r in ticks]
     k = [float(r.get("yaw_rate") or 0.0) / max(v, 1.0) for r, v in zip(ticks, vx)]
     k = J.moving_average(k, 0.5, dt)
+    moving = sorted(v for v in vx if v > 0.5)
+    v_ref = moving[int(0.9 * (len(moving) - 1))] if moving else 0.0
+    v_s = max(min_speed_mps, straight_speed_frac * v_ref)
+    v_c = max(min_speed_mps, curve_speed_frac * v_ref)
+    t_launch = next((ti for ti, v in zip(t, vx) if v >= v_s), None)
+    t0 = max(t_min, t_launch) if t_launch is not None else float("inf")
+    cls: list[str | None] = []
+    for ti, v, ki in zip(t, vx, k):
+        if ti < t0:
+            cls.append(None)
+        elif abs(ki) > kappa_on and v >= v_c:
+            cls.append("c")
+        elif abs(ki) < kappa_off and v >= v_s:
+            cls.append("s")
+        else:
+            cls.append(None)
     need_c, need_s = int(min_curve_s / dt), int(min_straight_s / dt)
     curves, straights = [], []
     i, n = 0, len(t)
     while i < n:
-        if t[i] < t_min:
+        c = cls[i]
+        if c is None:
             i += 1; continue
-        if abs(k[i]) > kappa_on:
-            j = i
-            while j < n and abs(k[j]) > kappa_on:
-                j += 1
-            if j - i >= need_c:
-                curves.append((i, j - 1))
-            i = j
-        elif abs(k[i]) < kappa_off:
-            j = i
-            while j < n and abs(k[j]) < kappa_off:
-                j += 1
-            if j - i >= need_s:
-                straights.append((i, j - 1))
-            i = j
-        else:
-            i += 1
+        j = i
+        while j < n and cls[j] == c:
+            j += 1
+        if c == "c" and j - i >= need_c:
+            curves.append((i, j - 1))
+        elif c == "s" and j - i >= need_s:
+            straights.append((i, j - 1))
+        i = j
     ev: dict[str, Any] = {"curve_entry": None, "curve_apex": None, "curve_exit": None, "straight": None,
                           "kappa_at": {}, "speed_at": {}, "n_curves": len(curves),
-                          "method": "yaw_rate/vx, PROVISIONAL thresholds", "kappa_on": kappa_on}
+                          "method": "yaw_rate/vx, moving ticks only, PROVISIONAL thresholds", "kappa_on": kappa_on,
+                          "v_ref_mps": v_ref, "min_straight_speed_mps": v_s, "min_curve_speed_mps": v_c,
+                          "t_launch": t_launch}
     if len(curves) > event_index:
         a, b = curves[event_index]
         apex = max(range(a, b + 1), key=lambda m: abs(k[m]))

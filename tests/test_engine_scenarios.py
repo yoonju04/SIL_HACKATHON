@@ -49,6 +49,36 @@ def test_detect_route_events():
     assert 29.5 <= ev["curve_entry"] <= 31 and 35 <= ev["curve_exit"] <= 37 and ev["straight"] is not None
 
 
+def test_detect_route_events_ignores_stopped_and_launch():
+    """BUG-012: a stopped car reads kappa 0 and must not be picked as 'straight'; launch is skipped."""
+    ticks = []
+    for i in range(1200):
+        t = i * 0.05
+        if t < 10:
+            v = 0.0                      # waiting at a light: yaw_rate 0 -> kappa 0
+        elif t < 13:
+            v = 8.0 * (t - 10) / 3       # launch
+        else:
+            v = 8.0
+        k = 1 / 30 if 40 <= t < 46 else 0.0
+        ticks.append({"t": t, "vx": v, "yaw_rate": v * k})
+    ev = SC.detect_route_events(ticks, 0.05)
+    assert ev["straight"] is not None and ev["straight"] > 12 and ev["speed_at"]["straight"] >= 0.6 * 8.0 - 1e-6
+    assert 39.5 <= ev["curve_entry"] <= 41 and ev["speed_at"]["curve_entry"] >= 4.0
+
+
+def test_detect_route_events_stop_breaks_segment_and_low_speed_curve_dropped():
+    ticks = []
+    for i in range(1200):
+        t = i * 0.05
+        v = 1.5 if 20 <= t < 30 else 8.0  # crawling: kappa from yaw_rate/vx is noisy here
+        k = 1 / 20 if 22 <= t < 26 else 0.0
+        ticks.append({"t": t, "vx": v, "yaw_rate": v * k})
+    ev = SC.detect_route_events(ticks, 0.05)
+    assert ev["curve_entry"] is None and ev["n_curves"] == 0
+    assert ev["straight"] is not None and not (20 <= ev["straight"] < 30)
+
+
 @pytest.mark.skipif(not os.environ.get("SIM_EVAL_ROOT"), reason="SIM_EVAL_ROOT not set (sim-eval checkout)")
 def test_parity_with_sim_eval_to_cli():
     from engine.config import resolve_scenario_space

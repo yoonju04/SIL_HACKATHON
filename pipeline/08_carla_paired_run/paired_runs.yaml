@@ -33,7 +33,7 @@ carla:
       note: 'scenarios_1027 C'
       enabled: true
     # 2026-10-28 추가 (BUG-011). 검증 = PC CARLA 0.9.15, 30 km/h, fault 없음 baseline 1회 + baseline_gate.
-    # 다른 속도에서는 아직 확인 안 함. straight 이벤트는 정지 구간에 잡히는 문제 있음(BUG-012) — 주의
+    # 다른 속도에서는 아직 확인 안 함. 결과는 BUG-012 수정(정지 구간 제외) 후 기준
     - route_id: bench2drive:24206
       routes_arg: bench2drive
       route_id_arg: 24206
@@ -44,7 +44,7 @@ carla:
       routes_arg: bench2drive
       route_id_arg: 28048
       town: Town02
-      note: 'T_Junction. 30km/h 검증: 38.5 s 완주, straight/curve_entry 통과, curve_apex/exit는 V-03(창 짧음)'
+      note: 'T_Junction. 30km/h 검증: 38.5 s 완주, curve_entry만 통과. straight는 BUG-012 수정 후 경로 끝(36.8 s)이라 V-03, curve_apex/exit도 V-03'
       enabled: true
     - route_id: bench2drive:28154
       routes_arg: bench2drive
@@ -111,3 +111,7 @@ event_detection:                               # baseline 곡률(yaw_rate/vx)로
   min_curve_s: 1.0
   min_straight_s: 3.0
   t_min: 5.0                                   # 출발 직후 제외
+  # BUG-012: 정지 구간이 '직선'으로 잡히던 문제. 실제로 움직이는 틱만 씀 (v_ref = 이동 속도 90번째 백분위)
+  min_speed_mps: 2.0                           # 절대 최소 속도
+  straight_speed_frac: 0.6                     # 직선: vx >= max(2.0, 0.6 v_ref). 처음 이 속도에 닿기 전(출발 구간)은 제외
+  curve_speed_frac: 0.5                        # 곡선: vx >= max(2.0, 0.5 v_ref) (저속에서 yaw_rate/vx 곡률이 흔들림)
