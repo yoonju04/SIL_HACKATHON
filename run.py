@@ -377,19 +377,55 @@ class Loop:
         return forced + batch
 
     # ------------------------------------------------------------------ 08 + 09
-    def stage_08_09(self, batch: list[dict], round_index: int) -> list[dict]:
+    def baseline_gate(self, base_dir: Path, onset: float) -> str | None:
+        """Reasons the paired baseline cannot grade a fault at `onset` (BUG-003 / BUG-004), or None.
+
+        Same checks the SR monitor applies afterwards: evaluation window long enough (V-03), and the no-fault
+        baseline neither leaves the lane nor collides inside that window (G-04). Checking before the fault run
+        saves the CARLA time of a pair that would be invalid anyway."""
+        from engine import sr_checks as SRC
+        import numpy as np
+        run = load_av_stack_run(base_dir)
+        tr = SRC.trace_from_run(run)
+        chk = SRC.M.check_run(tr, onset, SRC.config_from_spec(self.cfg["safety_spec"], dt=run.dt), "baseline")
+        if not chk.valid:
+            return "; ".join(chk.reasons)
+        if float(np.min(chk.margin[chk.win])) < 0:
+            return "G-04 baseline footprint leaves the lane in the evaluation window"
+        hits = [x for x in tr.collisions_t if chk.window[0] <= x <= chk.window[1]]
+        return f"G-04 baseline collides at {hits[0]:.2f} s in the evaluation window" if hits else None
+
+    def stage_08_09(self, batch: list[dict], round_index: int, reserve: list[dict] | None = None) -> list[dict]:
+        """Paired runs for the batch. A candidate whose baseline cannot grade it is replaced by the next reserve one."""
         new = []
         mr = self.metric_rules
-        for c in batch:
+        queue, reserve = list(batch), list(reserve or [])
+        while queue:
+            c = queue.pop(0)
+
+            def reject(tag: str, problem: str) -> None:
+                self.stats["rejected"].append({"scenario_id": c["scenario_id"], "tags": [tag], "problems": [problem]})
+                self.say(f"  [08] skip {c['scenario_id']} {c['route_id']} {c['environment']['max_speed_kmh']:.0f}km/h "
+                         f"{c['fault']['mode']}: {problem}")
+                if reserve:
+                    nxt = reserve.pop(0)
+                    nxt["selected_by"] = "replacement_for_" + c["scenario_id"]
+                    nxt.setdefault("normalized_features",
+                                   SC.numeric_features(nxt, self.space, self.route_ids, self.fault_pool)[0])
+                    queue.append(nxt)
+
             base_dir, cached = self.runner.ensure_baseline(c)
             if not (base_dir / ".complete").is_file():
-                self.stats["rejected"].append({"scenario_id": c["scenario_id"], "tags": ["G-04_reject"], "problems": ["baseline failed"]})
+                reject("G-04_reject", "baseline failed")
                 continue
             ev = self.route_events(c)
             onset = SC.onset_time(c, ev or {})
             if onset is None:
-                self.stats["rejected"].append({"scenario_id": c["scenario_id"], "tags": ["G-01_reject"],
-                                               "problems": [f"route has no {c['onset_event']} (baseline event detection)"]})
+                reject("G-01_reject", f"route has no {c['onset_event']} (baseline event detection)")
+                continue
+            problem = self.baseline_gate(base_dir, onset)
+            if problem:
+                reject("G-04_reject" if "G-04" in problem else "V-03_reject", problem)
                 continue
             run_id = f"R{round_index:02d}-{len(self.records):04d}-{c['fault']['mode']}"
             c["parameters"] = {"route_id": c["route_id"], "environment": c["environment"], "fault": c["fault"],
@@ -412,7 +448,8 @@ class Loop:
             append_jsonl(self.out / "run_records.jsonl", rec)
             self.say(f"  [08/09] {run_id} {c['route_id']} {c['environment']['max_speed_kmh']:.0f}km/h {c['fault']['mode']} "
                      f"@{c['onset_event']}{c['onset_offset_s']:+.2f}s -> {rec['recovery_outcome']} "
-                     f"(lrr={_f(rec['lane_recovery_robustness'])}, trigger={rec['trigger_source']}, "
+                     f"(lrr={_f(rec['lane_recovery_robustness'])}, trigger={_f(rec['trigger_time'])}s, "
+                     f"detected={rec['trigger_source']}, "
                      f"sr={rec.get('sr_outcome')}, sel={c.get('selected_by')})")
         return new
 
@@ -533,7 +570,7 @@ class Loop:
                 batch = self.stage_07(pool, gps, rnd)
             dump(rdir / "07_batch.json", [{k: c.get(k) for k in ("scenario_id", "source", "selected_by", "gp_mean", "gp_std")} for c in batch])
             self.say(f"[round {rnd}] pool {len(pool)} -> batch {len(batch)} ({self.ablation}, video {'on' if self.video_on else 'off'})")
-            new = self.stage_08_09(batch, rnd)
+            new = self.stage_08_09(batch, rnd, reserve=[c for c in pool if c not in batch])
             self.stage_10(new, rnd)
             refresh_dashboard(self.out / "run_records.jsonl", self.out / "screen",
                               explanations=self.out / "explanations.jsonl", spec=self.cfg["safety_spec"])
