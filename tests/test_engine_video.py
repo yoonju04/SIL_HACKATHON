@@ -64,3 +64,35 @@ def test_prompt_hides_observations(clip_and_timeline):
     assert "switch_time_s\": " in text or "switch_time_s" in text
     good = stub_explanation(tl, clip, random.Random(0), hallucinate_p=0.0)
     assert not verify(dict(good, collision_seen=not good["collision_seen"]), tl, clip, TAX)["accepted"]
+
+
+def test_departure_reference_is_first_visible_frame():
+    """BUG-017: the model sees only the 4 fps frames. Reference = first frame inside a departure interval;
+    a departure entirely between two frames is not visible (null is right, a claim must sit on the interval)."""
+    from engine.explainer import visible_departure
+    from engine.video import Clip
+    ft = [35.1 + 0.25 * k for k in range(27)]
+    clip = Clip(None, None, [], ft, ft[0], ft[-1], 37.1, "front.mp4", "front_frames.jsonl", True)
+    tl = {"switch_time_s": 37.1, "lane_departure_intervals_s": [[37.15, 37.3]], "collision_times_s": []}
+    assert visible_departure(tl, ft) == (None, [(37.15, 37.3)])
+    base = {"switch_time_s": 37.1, "departure_time_s": None, "collision_seen": False, "evidence_frames_s": [37.1],
+            "mechanism_tags": []}
+    assert verify(base, tl, clip, TAX)["accepted"]
+    assert verify(dict(base, departure_time_s=37.35), tl, clip, TAX)["accepted"]
+    assert not verify(dict(base, departure_time_s=38.5), tl, clip, TAX)["accepted"]
+    tl2 = dict(tl, lane_departure_intervals_s=[[40.1, 41.3]])
+    assert visible_departure(tl2, ft)[0] == 40.1 + 1e-9 or abs(visible_departure(tl2, ft)[0] - 40.1) < 1e-6
+    assert not verify(base, tl2, clip, TAX)["accepted"]                 # visible departure, claimed none
+
+
+def test_prompt_lists_frame_times(clip_and_timeline):
+    clip, tl = clip_and_timeline
+    text = build_messages(clip, tl, TAX, "video", "think_answer")[-1]["content"][-1]["text"]
+    assert f"{clip.frame_times[0]:.2f}" in text and f"{clip.frame_times[-1]:.2f}" in text and "Frame list" in text
+
+
+def test_overlay_font_is_large():
+    from engine.video import overlay_font
+    f = overlay_font(37)
+    box = f.getbbox("t=12.35 s")
+    assert box[3] - box[1] >= 20      # PIL's default bitmap font was ~10 px

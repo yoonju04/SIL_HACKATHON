@@ -86,19 +86,40 @@ def pick_indices(times: list[float], start: float, end: float, fps: float) -> li
     return out
 
 
+OVERLAY_FONTS = ("DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf", "DejaVuSans.ttf", "arial.ttf")
+
+
+def overlay_font(size: int):
+    """A scalable font for the timestamp. BUG-017: PIL's default bitmap font is ~10 px high, so on a 450-720 px frame
+    the "t=.. s" text was unreadable once the model downscaled the video, and the model guessed every time."""
+    from PIL import ImageFont
+    for name in OVERLAY_FONTS:
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    try:
+        return ImageFont.load_default(size=size)   # Pillow >= 10.1
+    except TypeError:
+        return ImageFont.load_default()
+
+
 def _overlay(paths: list[Path], times: list[float], max_h: int) -> bool:
     try:
         from PIL import Image, ImageDraw
     except Exception:
         return False
+    font = None
     for p, t in zip(paths, times):
         im = Image.open(p).convert("RGB")
         if im.height > max_h:
             im = im.resize((int(im.width * max_h / im.height) // 2 * 2, max_h))
         d = ImageDraw.Draw(im)
-        bar = max(14, im.height // 12)
-        d.rectangle([0, im.height - bar, im.width, im.height], fill=(0, 0, 0))
-        d.text((6, im.height - bar + 2), f"t={t:.2f} s", fill=(255, 255, 255))
+        size = max(18, im.height // 12)            # ~37 px on 450 px, 60 px on 720 px
+        font = font or overlay_font(size)
+        bar = size + size // 2
+        d.rectangle([0, im.height - bar, im.width // 2, im.height], fill=(0, 0, 0))
+        d.text((size // 3, im.height - bar + size // 4), f"t={t:.2f} s", fill=(255, 255, 0), font=font)
         im.save(p)
     return True
 
