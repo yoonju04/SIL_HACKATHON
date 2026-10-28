@@ -102,6 +102,12 @@ th{font-size:12px;color:var(--mut);font-weight:600;background:var(--soft);white-
 .listbox thead th{position:sticky;top:0;z-index:1}
 .bar{display:inline-block;width:60px;height:5px;background:var(--line);border-radius:3px;vertical-align:middle;margin-right:6px}
 .bar i{display:block;height:100%;background:var(--acc);border-radius:3px}
+.insw{padding:16px 20px 0}.ins .isum{padding:10px 16px;border-bottom:1px solid var(--line);font-size:14px}
+.ins .irow{padding:8px 16px;border-bottom:1px solid var(--line)}.ins .irow:last-child{border-bottom:0}
+.ins .irow b{font-size:14px}.ins .irow p{margin:2px 0;font-size:13px}.ins .ev{font-size:12px;color:var(--mut)}
+.ins .ev code{background:var(--soft);padding:0 4px;border-radius:3px}.ins h3{margin:0;padding:8px 16px 0;font-size:12px;color:var(--mut)}
+.ins ul{margin:4px 0 8px 34px;padding:0;font-size:13px}.ins .conf{font-size:11px;margin-left:6px}
+.ins .note{padding:10px 16px;color:var(--mut);font-size:13px}.ins h2 a{margin-left:auto;font-size:12px;color:var(--acc)}
 @media (max-width:860px){.grid{grid-template-columns:1fr;padding:12px}header{padding:10px 12px;flex-wrap:wrap;gap:4px}
 .kv td:first-child{width:70px}}
 """
@@ -361,8 +367,53 @@ def render_recovery_summary(records: list[dict]) -> str:
     return (f'<div class="hrow meta"><span>final_safe_recovery: <b>{safe}</b> 안전 · <b>{unsafe}</b> 불안전</span></div>' + rows)
 
 
+CONF_KO = {"high": ("확신 높음", "ok"), "medium": ("확신 중간", "mut"), "low": ("확신 낮음", "mut")}
+
+
+def load_insights(out_dir: Path) -> dict | None:
+    """<results>/insights/insights.json (engine/insights.py, 09 explain.py) next to the screen folder."""
+    p = Path(out_dir).parent / "insights" / "insights.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def render_insights(ins: dict | None, out_dir: Path = Path(".")) -> str:
+    """Cosmos campaign insights (text-only analysis of SR-monitor numbers). Hypotheses, not verdicts."""
+    detail = Path(out_dir).parent / "insights" / "campaign.html"
+    link = (f'<a href="{_e(os.path.relpath(detail, out_dir).replace(os.sep, "/"))}">자세히 보기</a>'
+            if detail.is_file() else "")
+    head = f'<h2>Cosmos 캠페인 인사이트 (SR 모니터 수치 분석, 참고용){link}</h2>'
+    if not ins or ins.get("status") != "complete":
+        why = ("캠페인이 끝나면 생성됩니다." if not ins else
+               f"생성 실패: {ins.get('error') or ins.get('status')}")
+        return f'<div class="insw"><section class="col ins">{head}<div class="note">아직 인사이트가 없습니다. {_e(why)}</div></section></div>'
+    st = ins.get("statistics") or {}
+    rate = st.get("failure_rate")
+    stat = (f'<div class="note">SR 판정 분포 {_e(", ".join(f"{k} {v}" for k, v in (st.get("outcome_counts") or {}).items()))}'
+            f' · 실패율 {_f(rate * 100 if rate is not None else None, 1, "%")} (채점된 런 {_e(st.get("graded_triggered_runs"))}개)'
+            f' · 모델 {_e(ins.get("model"))} · {_e(ins.get("created"))}</div>')
+    rows = []
+    for it in ins.get("insights") or []:
+        label, cls = CONF_KO.get(it.get("confidence"), (it.get("confidence") or "–", "mut"))
+        ev = " · ".join(f'<code>{_e(e.get("run_id"))}</code> {_e(e.get("metric"))} = <b class="num">{_e(e.get("value"))}</b>'
+                        for e in it.get("evidence") or [])
+        rows.append(f'<div class="irow"><b>{_e(it.get("title"))}</b><span class="tag {cls} conf">{_e(label)}</span>'
+                    f'<p>관측: {_e(it.get("finding"))}</p><p class="mut">해석(가설): {_e(it.get("interpretation"))}</p>'
+                    f'<div class="ev">근거: {ev}</div></div>')
+    nxt = "".join(f'<li>{_e(x.get("proposal"))} <span class="mut">— {_e(x.get("rationale"))}'
+                  f'{(" (근거 " + _e(", ".join(x.get("run_ids") or [])) + ")") if x.get("run_ids") else ""}</span></li>'
+                  for x in ins.get("next_experiments") or [])
+    lim = "".join(f"<li>{_e(x)}</li>" for x in ins.get("limitations") or [])
+    return (f'<div class="insw"><section class="col ins">{head}<div class="isum">{_e(ins.get("summary"))}</div>{stat}'
+            f'{"".join(rows) or "<div class=note>근거가 있는 인사이트가 없습니다.</div>"}'
+            + (f"<h3>다음 실험 제안</h3><ul>{nxt}</ul>" if nxt else "")
+            + (f"<h3>한계</h3><ul>{lim}</ul>" if lim else "") + "</section></div>")
+
+
 def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None = None, spec: dict | None = None,
-                out_dir: Path = Path(".")) -> str:
+                out_dir: Path = Path("."), insights: dict | None = None) -> str:
     commentary = commentary or {}
     lim = _limits(spec)
     n = len(records)
@@ -396,6 +447,7 @@ def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None 
              if rows else '<div class="empty">아직 기록이 없습니다.</div>')
     body = f"""<header><h1>MPC → LQR 전환 안전성 검증</h1><span class="sp"></span>
 <span>라운드 {max(rounds) if rounds else "–"} · {n}회 실행 · {datetime.now().strftime("%H:%M:%S")} 갱신 · {refresh}초마다 자동 새로고침</span></header>
+{render_insights(insights, out_dir)}
 <div class="grid">
 <div class="stack">
 <section class="col"><h2><span id="lefttitle">방금 돌린 시나리오</span><button id="back" hidden>최신으로</button></h2>{left}</section>
@@ -434,7 +486,7 @@ def refresh(records_path, out_dir, refresh_s=REFRESH_S, explanations=None, spec=
         from .monitor import load_safety_spec
         spec = load_safety_spec(spec)
     target = out_dir / "campaign.html"
-    _write(target, render_page(records, refresh_s, commentary, spec, out_dir))
+    _write(target, render_page(records, refresh_s, commentary, spec, out_dir, insights=load_insights(out_dir)))
     return target
 
 

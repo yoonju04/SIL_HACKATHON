@@ -858,6 +858,12 @@ def main(argv: list[str] | None = None) -> int:
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on")
     m = loop.run()
     ins = campaign_insights(out, mode, loop.cfg) if args.insights == "on" else None
+    if ins:  # redraw the main screen so screen/campaign.html carries the insights section
+        try:
+            refresh_dashboard(out / "run_records.jsonl", out / "screen", explanations=out / "explanations.jsonl",
+                              spec=loop.cfg["safety_spec"])
+        except Exception as e:  # noqa: BLE001
+            log(f"screen redraw after insights failed: {type(e).__name__}: {e}")
     log(json.dumps({k: m[k] for k in ("n_runs", "n_switched", "n_final_safe_recovery", "n_failures", "both_sides_observed",
                                       "boundary_band_runs", "explanations", "explanations_accepted")}, ensure_ascii=False))
     log(f"outputs: {out}  (report.md, run_records.jsonl, screen/campaign.html" + (", explanations.jsonl, monitor_rule_candidates.yaml" if loop.video_on else "")
