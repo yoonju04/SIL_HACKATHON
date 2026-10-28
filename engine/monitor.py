@@ -15,8 +15,8 @@ The judgment rules are the pure functions in engine/judgment.py. Thresholds are 
 The monitor is the ONLY component that sets safety labels; 10_video_explainer never writes here.
 
 Entry point for the loop and the CLI: evaluate(run_dir, spec, baseline_dir=..., no_reaction_dir=...) -> run_record.
-It runs our recovery v2 (compute_run_record) and then the teammate's SR1/SR2/SR4/SR6 checks (engine/sr_checks.py,
-from junwoo/sim-eval a5242b2) and adds them as sr_* fields.
+It runs our recovery v2 (compute_run_record) and then the SR monitor v3.1 (pipeline/09_monitor/monitor.py through
+engine/sr_checks.py) and adds its SR1..SR6 result as sr_* fields.
 
 CLI (repository root; replaces both pipeline/09_monitor/monitor.py versions):
   python -m engine.monitor RUN_DIR --baseline BASELINE_DIR [--no-reaction NO_REACTION_DIR] [--spec safety_spec.yaml] [--out rr.jsonl]
@@ -440,9 +440,8 @@ SR_FIELDS = ("sr_outcome", "sr_failed_requirements", "sr_labels", "sr_scores", "
 
 def attach_sr_checks(record: dict[str, Any], run: RunData, baseline: RunData | None,
                      no_reaction: RunData | None, spec: dict | None) -> dict[str, Any]:
-    """Teammate's SR1/SR2/SR4/SR6 grading (engine.sr_checks) on the same run, added as extra run_record fields.
-
-    Our recovery v2 result (recovery_outcome / final_safe_recovery) is passed in and decides SR5 and F3.
+    """SR monitor v3.1 grading (pipeline/09_monitor/monitor.py via engine.sr_checks) on the same run, added as
+    extra run_record fields. Our recovery v2 result is recorded next to SR5 for comparison.
     SR results never change our labels, outcome_category or GP targets."""
     from . import sr_checks as SR
 

@@ -1,12 +1,8 @@
-"""engine/sr_checks.py: the teammate's SR1/SR2/SR4/SR6 grading (ported from junwoo/sim-eval a5242b2
-pipeline/09_monitor/test_monitor.py) + its wiring into engine.monitor.evaluate and engine.dashboard.
+"""engine/sr_checks.py: adapter from the engine to the SR monitor v3.1 (pipeline/09_monitor/monitor.py).
 
-Changes against the original tests (overlaps now follow OUR implementation):
-  * SR5 is derived from recovery v2 (recovery_outcome), so the old "SR5 advisory band" test checks the derived view.
-  * F3 is decided by final_safe_recovery when the recovery result is passed in (SR4-only fallback otherwise).
-  * The window follows our safety_spec evaluation_window (onset .. simulation end), not onset + 10 s.
-  * P-02 aux (0.5*mu*g) / team metrics / runner_skeleton schema / stage 2-3-6 feedback tests are dropped
-    (replaced by engine.judgment + engine.feedback, tested in test_engine_judgment / test_engine_monitor).
+The grading rules themselves are tested next to the monitor (pipeline/09_monitor/test_monitor.py, test_spec_v3.py).
+Here: the adapter's field mapping, the trace adapter on our run folders, and the wiring into engine.monitor.evaluate
+and engine.dashboard.
 """
 import json
 import math
@@ -16,257 +12,67 @@ import pytest
 
 from engine import sr_checks as SR
 from engine.config import load_yaml, PIPELINE_DIR
-from engine.sr_checks import SRConfig, Trace, footprint_lane_margin, lateral_acceleration, measure_ftti, noise_floor
 
 DT = 0.05
-CFG = SRConfig(dt=DT, lane_width_default_m=3.5, vehicle_half_width_m=0.95, vehicle_half_length_m=2.4,
-               max_steer_rad=math.radians(70))
+CFG = SR.MonitorConfig(dt=DT, lane_width_default_m=3.5, vehicle_half_width_m=0.95, vehicle_half_length_m=2.4,
+                       max_steer_rad=math.radians(70))
 ONSET = 10.0
 
 
-def trace(offset_fn=lambda x: 0.0, T=30.0, fault_at=None, switch_at=None, switch_back_at=None,
-          revision_at=None, vx=15.0, r=0.0, collide_at=None, steer_fn=lambda x: 0.0, effective=True):
+def trace(offset_fn=lambda x: 0.0, T=30.0, fault_at=None, switch_at=None, steer_fn=lambda x: 0.0, collide_at=None):
     t = np.round(np.arange(0.0, T, DT), 6)
-    off = np.array([offset_fn(x) for x in t])
-    ac = []
-    for x in t:
-        on_lqr = switch_at is not None and x >= switch_at and (switch_back_at is None or x < switch_back_at)
-        ac.append("lqr" if on_lqr else "mpc")
+    ac = ["lqr" if switch_at is not None and x >= switch_at else "mpc" for x in t]
     fa = np.zeros(len(t), bool) if fault_at is None else (t >= fault_at)
-    fe = fa.copy() if effective else np.zeros(len(t), bool)
-    rev = None if revision_at is None else (t >= revision_at).astype(int)
-    return Trace(t=t, vx=np.full(len(t), vx), vy=np.zeros(len(t)), yaw_rate=np.full(len(t), r),
-                 lane_offset_m=off, lane_heading_err=np.zeros(len(t)), active_controller=ac,
-                 steer_cmd_rad=np.array([steer_fn(x) for x in t]), fault_active=fa, fault_effective=fe,
-                 route_revision=rev, collisions_t=[] if collide_at is None else [collide_at])
+    return SR.Trace(t=t, vx=np.full(len(t), 15.0), vy=np.zeros(len(t)), yaw_rate=np.zeros(len(t)),
+                    lane_offset_m=np.array([offset_fn(x) for x in t]), lane_heading_err=np.zeros(len(t)),
+                    active_controller=ac, steer_cmd_rad=np.array([steer_fn(x) for x in t]), fault_active=fa,
+                    fault_effective=fa.copy(), collisions_t=[] if collide_at is None else [collide_at])
 
 
 def drift(rate, cap, start=ONSET):
     return lambda x: 0.0 if x < start else min(cap, rate * (x - start))
 
 
-def dangerous_no_reaction():
-    return trace(drift(1.0, 2.0), fault_at=ONSET)          # margin < 0 after ~0.8 s
-
-
-def harmless_no_reaction():
-    return trace(drift(0.2, 0.4), fault_at=ONSET)          # stays inside the lane
-
-
-def grade(*a, **k):
-    return SR.grade(*a, **k)
-
-
-def invalid_text(g):
-    return "; ".join(g["invalid_reasons"])
-
-
-# -------------------------------------------------------------- geometry
-def test_centered_margin_equals_lane_half_width_minus_half_width():
-    assert abs(footprint_lane_margin([0.0], [0.0], [3.5], 0.95, 2.4)[0] - 0.8) < 1e-12
-
-
-def test_heading_error_reduces_margin_through_the_corners():
-    m1 = footprint_lane_margin([0.0], [math.radians(5)], [3.5], 0.95, 2.4)[0]
-    expected = 1.75 - (2.4 * math.sin(math.radians(5)) + 0.95 * math.cos(math.radians(5)))
-    assert abs(m1 - expected) < 1e-12
-
-
-def test_lateral_acceleration_from_yaw_rate():
-    assert np.allclose(lateral_acceleration(trace(vx=15.0, r=0.2)), 3.0)
-
-
-def test_config_reads_our_safety_spec():
+def test_config_reads_the_v31_sections_of_our_safety_spec():
     spec = load_yaml(PIPELINE_DIR / "09_monitor" / "safety_spec.yaml")
-    cfg = SR.config_from_spec(spec, lane_width_default_m=3.5)
-    assert cfg.sr2_limit_dps == 60.0 and cfg.sr1_ftti_fraction == 0.5 and cfg.sr6_max_rate_dps == 90.0
-    assert cfg.window_s == 10.0 and cfg.min_window_s == 5.0     # teammate: onset + 10 s, min 5 s
-    assert cfg.sr1_fixed_limit_s == 0.5
-    assert cfg.gp_clip == (-2.0, 1.0) and cfg.lane_width_default_m == 3.5
+    cfg = SR.config_from_spec(spec, dt=DT)
+    assert cfg.sr2_limit_dps == spec["requirements"]["SR2"]["limit_dps"]
+    assert cfg.window_s == spec["evaluation_window"]["length_s"] and cfg.p02_paired
+    assert "sr_checks" not in spec          # old Monitor v2 numbers are gone
 
 
-# ------------------------------------------------------------------ FTTI
-def test_ftti_finite_when_no_reaction_leaves_lane():
-    f = measure_ftti(dangerous_no_reaction(), ONSET, CFG)
-    assert f["valid"] and abs(f["ftti_s"] - 0.8) < DT + 1e-9, f
+def test_pass_maps_to_sr_fields():
+    g = SR.grade(trace(drift(.3, .2), fault_at=ONSET, switch_at=10.2), trace(), ONSET, CFG)
+    assert g["valid"] and g["sr_outcome"] == "pass" and g["monitor"] == "sr_monitor_v3.1"
+    assert g["sr_labels"] == {"late_or_no_switch": False, "switch_transient": False, "footprint_departure": False,
+                              "actuator_limit_exceeded": False}
+    assert g["aux"]["P02_lat_acc"]["evaluation"] == "paired_baseline" and g["diagnostics"]["role"] == "report_only"
 
 
-def test_ftti_infinite_when_no_reaction_stays_in_lane():
-    assert math.isinf(measure_ftti(harmless_no_reaction(), ONSET, CFG)["ftti_s"])
+def test_no_switch_on_a_dangerous_fault_is_F1():
+    g = SR.grade(trace(drift(1.0, 2.0), fault_at=ONSET), trace(), ONSET, CFG)
+    assert g["sr_outcome"] == "F1_no_or_late_switch" and g["sr_labels"]["late_or_no_switch"]
+    assert g["sr_labels"]["footprint_departure"] and "SR4" in g["failed_requirements"]
 
 
-# -------------------------------------------------------------- outcomes
-def test_pass_quick_smooth_switch():
-    g = grade(trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=10.2), trace(), ONSET, CFG, dangerous_no_reaction())
-    assert g["sr_outcome"] == "pass", g
-    sr1 = g["sr"]["SR1"]
-    assert sr1["applies"] and abs(sr1["latency_s"] - 0.2) < 1e-9 and abs(sr1["limit_s"] - 0.4) < DT
-    assert abs(g["sr_measures"]["SR4_margin_delta_m"] + 0.2) < 1e-9
-    s = g["sr_scores"]
-    assert s["overall"] == min(s["SR1"], s["SR2"], s["SR4"])
-    assert abs(s["SR4"] - (0.8 - 0.2) / 0.8) < 1e-9 and s["SR2"] == 1.0
-    assert g["detection_latency_s"] == pytest.approx(0.2) and g["ftti_s"] == pytest.approx(0.8, abs=DT)
+def test_recovery_v2_is_recorded_next_to_sr5_without_changing_it():
+    g = SR.grade(trace(drift(.3, .2), fault_at=ONSET, switch_at=10.2), trace(), ONSET, CFG,
+                 recovery={"recovery_outcome": "unrecovered", "final_safe_recovery": False})
+    assert g["sr_outcome"] == "pass"
+    assert g["sr"]["SR5"]["recovery_v2"]["recovery_outcome"] == "unrecovered"
 
 
-def test_F1_no_switch_and_dangerous():
-    g = grade(trace(drift(1.0, 2.0), fault_at=ONSET), trace(), ONSET, CFG, dangerous_no_reaction())
-    assert g["sr_outcome"] == "F1_no_or_late_switch" and not g["sr"]["SR4"]["pass"], g
-    assert g["sr"]["SR1"]["robustness"] == -1.0 and "SR1" in g["failed_requirements"]
-    assert g["sr_labels"]["late_or_no_switch"] is True
-
-
-def test_F1_late_switch():
-    g = grade(trace(drift(0.3, 0.3), fault_at=ONSET, switch_at=11.0), trace(), ONSET, CFG, dangerous_no_reaction())
-    assert g["sr_outcome"] == "F1_no_or_late_switch" and g["sr"]["SR4"]["pass"], g
-    assert g["sr"]["SR1"]["robustness"] < 0
-
-
-def test_undetected_but_harmless_is_pass_with_note():
-    g = grade(trace(drift(0.2, 0.4), fault_at=ONSET), trace(), ONSET, CFG, harmless_no_reaction())
-    assert g["sr_outcome"] == "pass" and g["note"] == "undetected_harmless", g
-    assert g["sr"]["SR1"]["applies"] is False and g["ftti_s"] is None
-
-
-def test_fixed_limit_used_without_no_reaction_run():
-    g = grade(trace(drift(0.2, 0.4), fault_at=ONSET), trace(), ONSET, CFG)
-    assert g["sr_outcome"] == "F1_no_or_late_switch", g
-    assert g["sr"]["SR1"]["limit_source"] == "fixed_fallback"
-
-
-def test_F2_steer_jump_at_switch():
-    steer = lambda x: 0.0 if x < 10.2 else math.radians(10)  # 10 deg in one tick = 200 deg/s
-    g = grade(trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=10.2, steer_fn=steer), trace(), ONSET, CFG,
-              dangerous_no_reaction())
-    assert g["sr_outcome"] == "F2_switch_transient", g
-    assert g["sr"]["SR2"]["max_rate_dps"] > 60 and g["sr_scores"]["overall"] < 0
-    assert g["sr_labels"]["switch_transient"] is True
-
-
-def test_F3_leaves_lane_after_timely_switch_sr4_fallback():
-    g = grade(trace(drift(1.0, 1.2), fault_at=ONSET, switch_at=10.2), trace(), ONSET, CFG, dangerous_no_reaction())
-    assert g["sr_outcome"] == "F3_not_recovered" and not g["sr"]["SR4"]["pass"], g
-    assert g["sr_measures"]["SR4_margin_m"] < 0 and g["sr"]["SR4"]["first_violation_t"] > ONSET
-
-
-def test_F3_follows_our_recovery_v2():
-    """Inside the lane by SR4, but recovery v2 says unsettled / not final-safe -> F3 (ours wins over SR5 band)."""
-    fault = trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=10.2)
-    g = grade(fault, trace(), ONSET, CFG, dangerous_no_reaction(),
-              recovery={"recovery_outcome": "unsettled", "final_safe_recovery": False})
-    assert g["sr_outcome"] == "F3_not_recovered" and g["sr"]["SR4"]["pass"]
-    assert g["sr"]["SR5"] == {"applies": True, "derived_from": "engine.judgment recovery v2", "pass": False,
-                              "recovery_outcome": "unsettled", "final_safe_recovery": False}
-    ok = grade(fault, trace(), ONSET, CFG, dangerous_no_reaction(),
-               recovery={"recovery_outcome": "safe_recovery", "final_safe_recovery": True})
-    assert ok["sr_outcome"] == "pass" and ok["sr"]["SR5"]["pass"] is True
-
-
-def test_collision_sets_score_floor():
-    g = grade(trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=10.2, collide_at=12.0), trace(), ONSET, CFG,
-              dangerous_no_reaction())
-    assert g["sr_outcome"] == "F3_not_recovered" and g["sr_scores"]["overall"] == -2.0, g
-
-
-def test_switch_before_fault_is_invalid():
-    g = grade(trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=5.0), trace(), ONSET, CFG, dangerous_no_reaction())
-    assert g["sr_outcome"] == "invalid" and "V-10" in invalid_text(g), g
-
-
-def test_baseline_switch_is_only_recorded():
-    g = grade(trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=10.2), trace(switch_at=5.0), ONSET, CFG,
-              dangerous_no_reaction())
-    assert g["sr_outcome"] == "pass" and g["baseline_switch_count"] == 1, g
-
-
-def test_scores_measure_how_much_each_sr_broke():
-    steer = lambda x: 0.0 if x < 10.6 else math.radians(10)
-    g = grade(trace(drift(1.0, 1.2), fault_at=ONSET, switch_at=10.6, steer_fn=steer), trace(), ONSET, CFG,
-              dangerous_no_reaction())
-    s, m = g["sr_scores"], g["sr_measures"]
-    assert s["SR1"] < 0 and abs(m["SR1_latency_s"] - 0.6) < 1e-9
-    assert s["SR2"] == -2.0 and m["SR2_max_rate_dps"] > 190
-    assert s["SR4"] < 0 and m["SR4_margin_m"] < 0
-    assert s["overall"] == min(s["SR1"], s["SR2"], s["SR4"])
-    assert set(g["failed_requirements"]) >= {"SR1", "SR2", "SR4"}
-
-
-def test_not_applicable_sr_is_null_not_zero():
-    g = grade(trace(drift(0.2, 0.4), fault_at=ONSET), trace(), ONSET, CFG, harmless_no_reaction())
-    s = g["sr_scores"]
-    assert s["SR1"] is None and s["SR2"] is None and s["SR4"] is not None
-    assert g["sr"]["SR5"]["applies"] is False and g["sr_labels"]["switch_transient"] is None
-
-
-def test_no_trigger():
-    g = grade(trace(fault_at=ONSET, effective=False), trace(), ONSET, CFG)
-    assert g["sr_outcome"] == "no_trigger" and g["sr"]["SR1"]["applies"] is False, g
-
-
-def test_sr6_actuator_limit():
-    steer = lambda x: 0.0 if x < 10.2 else min(math.radians(80), math.radians(5) * (x - 10.2) / DT)
-    g = grade(trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=10.2, steer_fn=steer), trace(), ONSET, CFG,
-              dangerous_no_reaction())
-    assert g["sr"]["SR6"]["pass"] is False and g["sr_labels"]["actuator_limit_exceeded"] is True
-    assert "SR6" in g["failed_requirements"]
-
-
-def test_run_that_ends_in_a_crash_is_graded_not_invalid():
-    g = grade(trace(drift(1.0, 2.0), T=12.0, fault_at=ONSET, collide_at=11.9), trace(), ONSET, CFG,
-              dangerous_no_reaction())
-    assert g["valid"], invalid_text(g)
-    assert g["sr_scores"]["SR4"] == -2.0 and g["sr_measures"]["SR4_collision_t"] == 11.9
-
-
-def test_collision_without_time_is_invalid():
-    fault = trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=10.2)
-    fault.collisions_untimed = 1
-    g = grade(fault, trace(), ONSET, CFG)
-    assert g["sr_outcome"] == "invalid" and "V-11" in invalid_text(g)
-
-
-# -------------------------------------------------------------- validity
-def test_route_revision_in_window_is_invalid():
-    g = grade(trace(fault_at=ONSET, switch_at=10.2, revision_at=12.0), trace(), ONSET, CFG)
-    assert g["sr_outcome"] == "invalid" and "V-04" in invalid_text(g), g
-
-
-def test_unsafe_baseline_rejects_pair():
-    g = grade(trace(fault_at=ONSET, switch_at=10.2), trace(lambda x: 1.5), ONSET, CFG)
-    assert g["sr_outcome"] == "invalid" and "G-04" in invalid_text(g), g
-
-
-def test_missing_geometry_is_invalid():
-    g = grade(trace(fault_at=ONSET, switch_at=10.2), trace(), ONSET, SRConfig(dt=DT))
-    assert g["sr_outcome"] == "invalid" and "V-05" in invalid_text(g)
-
-
-def test_fault_in_baseline_is_invalid():
-    g = grade(trace(fault_at=ONSET, switch_at=10.2), trace(fault_at=3.0), ONSET, CFG)
-    assert "V-07" in invalid_text(g)
-
-
-def test_window_is_onset_plus_10s_for_fault_and_baseline():
-    """Teammate's original: both runs use [onset, onset + 10 s]; a longer baseline log is fine."""
-    g = grade(trace(drift(0.3, 0.2), T=25.0, fault_at=ONSET, switch_at=10.2), trace(T=60.0), ONSET, CFG,
-              dangerous_no_reaction())
-    assert g["valid"] and g["evaluation_window"][1] == pytest.approx(ONSET + 10.0), invalid_text(g)
-
-
-def test_fault_run_shorter_than_baseline_window_is_v08():
-    """Fault log ends 7 s after onset (>= 5 s min) but the baseline has the full 10 s -> V-08 (original)."""
-    g = grade(trace(drift(0.3, 0.2), T=17.0, fault_at=ONSET, switch_at=10.2), trace(T=60.0), ONSET, CFG,
-              dangerous_no_reaction())
-    assert g["sr_outcome"] == "invalid" and "V-08" in invalid_text(g), invalid_text(g)
-
-
-def test_no_baseline_is_not_graded():
-    g = grade(trace(fault_at=ONSET, switch_at=10.2), None, ONSET, CFG)
-    assert g["valid"] is False and "baseline" in invalid_text(g)
+def test_invalid_and_missing_baseline_are_not_graded():
+    g = SR.grade(trace(fault_at=ONSET, switch_at=5.0), trace(), ONSET, CFG)   # switched before the fault
+    assert not g["valid"] and g["sr_outcome"] == "invalid" and any("V-10" in r for r in g["invalid_reasons"])
+    g = SR.grade(trace(fault_at=ONSET), None, ONSET, CFG)
+    assert not g["valid"] and "no baseline" in g["invalid_reasons"][0]
 
 
 def test_noise_floor():
-    nf = noise_floor([0.80, 0.79, 0.81, 0.80, 0.80])
-    assert nf["n"] == 5 and nf["delta_min_m"] == 0.1
+    assert SR.noise_floor([0.8])["delta_min_m"] is None
+    r = SR.noise_floor([0.80, 0.82, 0.78, 0.81, 0.79])
+    assert r["delta_min_m"] == max(2 * r["noise_floor_m"], 0.1)
 
 
 # ============================================================ our run folders
@@ -304,9 +110,10 @@ def test_evaluate_adds_sr_fields_to_our_run_record(folders):
     assert rec["sr_checks"]["valid"], rec["sr_checks"]["invalid_reasons"]
     assert rec["sr_outcome"] in SR.SR_OUTCOMES
     assert rec["sr_checks"]["sr"]["SR1"]["limit_source"] == "ftti_measured" and rec["ftti_s"] is not None
-    assert rec["sr_checks"]["sr"]["SR5"]["recovery_outcome"] == rec["recovery_outcome"]
-    if rec["final_safe_recovery"] is False and rec["sr_outcome"] not in ("F1_no_or_late_switch", "F2_switch_transient"):
-        assert rec["sr_outcome"] == "F3_not_recovered"
+    sr5 = rec["sr_checks"]["sr"].get("SR5") or {}
+    if sr5.get("applies"):
+        assert sr5["recovery_v2"]["recovery_outcome"] == rec["recovery_outcome"]
+    assert rec["sr_checks"]["monitor"] == "sr_monitor_v3.1"
     # SR checks never change our labels
     from engine.monitor import compute_run_record, load_av_stack_run, thresholds_from_config
     from engine.config import load_stage_configs

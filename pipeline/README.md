@@ -58,8 +58,8 @@ flowchart TD
 | 09 Monitor | [`09_monitor/error_table.yaml`](09_monitor/error_table.yaml) | run record · failure table 스키마 |
 | ↳ Safety spec | [`09_monitor/safety_spec.yaml`](09_monitor/safety_spec.yaml) | P-01~04 (P-02 횡가속도·P-04 저크는 라벨), 결과 5분류 ↔ recovery_outcome 매핑 |
 | ↳ monitor | [`engine/monitor.py`](../engine/monitor.py) | `evaluate(run_dir, spec, baseline_dir=, no_reaction_dir=)` → run_record (CLI: `python -m engine.monitor RUN_DIR --baseline BASE_DIR [--no-reaction DIR]`) |
-| ↳ SR 검사 · 화면 | [`engine/sr_checks.py`](../engine/sr_checks.py) · [`engine/dashboard.py`](../engine/dashboard.py) | 팀원 Monitor v2의 SR1(FTTI)·SR2·SR4(차체)·SR6 → run_record `sr_*` 필드, 진행 화면 HTML |
-| ↳ SR monitor v3.1 | [`09_monitor/monitor.py`](09_monitor/monitor.py) · [`09_monitor/README.md`](09_monitor/README.md) | integration2 브랜치: junwoo/sim-eval의 SR1~SR6 모니터 v3.1(기준 실행 대비 P-02, R79 방식 횡가속도·jerk). 예외적으로 실행 코드가 이 폴더에 있음 |
+| ↳ SR 검사 · 화면 | [`engine/sr_checks.py`](../engine/sr_checks.py) · [`engine/dashboard.py`](../engine/dashboard.py) | SR 모니터 v3.1 호출 어댑터 → run_record `sr_*` 필드, 진행 화면 HTML |
+| ↳ SR monitor v3.1 | [`09_monitor/monitor.py`](09_monitor/monitor.py) · [`09_monitor/README.md`](09_monitor/README.md) | SR1~SR6 채점 본체(기준 실행 대비 P-02, R79 방식 횡가속도·jerk). 예외적으로 실행 코드가 이 폴더에 있음 |
 | 10 Video explainer | [`10_video_explainer/video_explainer.yaml`](10_video_explainer/video_explainer.yaml) | 해설할 런 선택, 클립 4 fps, 검증 ±0.5 s, 메커니즘 태그, 피드백 |
 | LLM 모델 | [`llm_models.yaml`](llm_models.yaml) | A Lightning · A_refine · B Ultra x3 · C Cosmos(Dedicated) / Super-VL |
 | 실행 엔진 | [`engine/`](../engine/) · [`run.py`](../run.py) (저장소 루트) | judgment, monitor, scenarios, surrogate(sklearn GP + straddle), llm, nemotron, carla_runner, video, explainer, feedback, fixtures(SYNTHETIC) |

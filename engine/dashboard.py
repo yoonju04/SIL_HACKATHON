@@ -200,10 +200,10 @@ def _write(path: Path, text: str):
 
 
 def _limits(spec: dict | None) -> dict:
-    sc = (spec or {}).get("sr_checks") or {}
+    rq = (spec or {}).get("requirements") or {}   # SR monitor v3.1 sections (engine/sr_checks.py grades with them)
     ss = (spec or {}).get("safety_specification") or {}
     p02 = next((p for p in ss.get("properties") or [] if p.get("id") == "P-02"), {})
-    return {"sr2": (sc.get("SR2") or {}).get("limit_dps", 60.0), "sr6": (sc.get("SR6") or {}).get("max_rate_dps", 90.0),
+    return {"sr2": (rq.get("SR2") or {}).get("limit_dps", 60.0), "sr6": (rq.get("SR6") or {}).get("max_rate_dps", 90.0),
             "acc": p02.get("lateral_acc_threshold_mps2", 4.41), "win": ss.get("after_switch_window_s", 3.0),
             "rj": ss.get("recovery_judgment") or {}}
 

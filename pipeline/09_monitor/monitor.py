@@ -96,6 +96,11 @@ def load_spec(path: str | Path, **overrides) -> MonitorConfig:
 
     with open(path, encoding="utf-8") as fh:
         s = yaml.safe_load(fh)
+    return config_from_spec(s, hashlib.sha256(Path(path).read_bytes()).hexdigest(), **overrides)
+
+
+def config_from_spec(s: dict, sha256: str | None = None, **overrides) -> MonitorConfig:
+    """MonitorConfig from an already-loaded safety_spec dict (engine/sr_checks.py passes the engine's copy)."""
     r = s["requirements"]
     w = s["evaluation_window"]
     g = s.get("gp_target", {})
@@ -133,7 +138,7 @@ def load_spec(path: str | Path, **overrides) -> MonitorConfig:
     cfg.sr6_enforce = bool(r["SR6"].get("enforce", True))
     cfg.spec_provenance = {"schema_version": s.get("meta", {}).get("schema_version"),
                            "status": s.get("meta", {}).get("status"),
-                           "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+                           "sha256": sha256}
     for k, v in overrides.items():
         if v is not None:
             setattr(cfg, k, v)

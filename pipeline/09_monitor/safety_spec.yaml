@@ -1,7 +1,7 @@
 # safety_spec.yaml — 안전 명세 P-01~03 (라벨 정의). 09 Monitor의 측면 입력
 
 meta:
-  schema_version: '3.1'      # merged: engine sections (1.0) + SR monitor v3.1 sections below
+  schema_version: '3.1'      # engine safety_specification + SR monitor v3.1 sections below
   profile_id: sp-code-aware-mpc-lqr
   status: template_unverified
 
@@ -63,42 +63,12 @@ safety_specification:
   infraction_reference: "CARLA Leaderboard 2.1 (02 references E-03): 충돌 → collisions.json / evaluation_events.json, 경로 이탈 → evaluation_events.json"
   simulation_invalid_is_not_safe: true
 
-# 2026-10-27 integration: 팀원 Monitor v2(junwoo/sim-eval a5242b2 safety_spec.yaml requirements)의 SR1/SR2/SR4/SR6
-# 수치를 팀원 원본 그대로 둔다 (engine/sr_checks.py). 결과는 run_record 의 sr_* 참고 필드로만 남고 final_safe_recovery 는 바꾸지 않는다.
-# SR5 는 위 recovery_judgment (팀원 band/within/hold 와 같은 값) 로 정한 우리 recovery_outcome 에서 파생한다.
-sr_checks:
-  evaluation_window:         # 팀원 원본: 계획 고장 시각부터 10 s, 5 s 보다 짧으면 invalid (안전 정지·충돌 예외)
-    start: planned_fault_onset_time
-    length_s: 10.0
-    min_length_s: 5.0
-    align_baseline_to_fault_run: true   # baseline 도 같은 시각부터 같은 길이 (다르면 V-08)
-  SR1:   # 고장이 실제로 MPC 출력을 바꾼 시각 → LQR 전환까지 지연 <= ftti_fraction * FTTI
-    ftti_fraction: 0.5
-    fixed_fallback_s: 0.5            # no-reaction 런이 없을 때 쓰는 고정 한계
-    no_reaction_controller: mpc_unprotected   # FTTI 측정 런 (08 paired_runs.yaml no_reaction_run)
-  SR2:   # 전환 순간 조향 명령 변화율
-    limit_dps: 60.0
-    window_after_switch_s: 0.5
-  SR4:   # 차체 사각형(방향각 포함) 기준 차선 여유 + 충돌. G-04: baseline 이 SR4 위반이면 쌍 거절
-    footprint: rectangle_with_heading
-  SR5:   # 참고: 팀원 원본 값. 판정은 recovery_judgment 가 한다
-    band_m: 0.3
-    within_s: 3.0
-    hold_s: 1.0
-    enforce: false
-  SR6:   # 조향각 <= 차량 max_steer, 조향 변화율 <= max_rate_dps (평가 창 전체)
-    max_rate_dps: 90.0
-  validity:
-    tick_tolerance: 0.25             # |dt_i - dt| <= 0.25 dt
-    onset_tolerance_s: 0.051         # 계획 vs 실제 고장 시작
-  gp_score:                          # sr_scores (참고값, GP 학습에는 안 씀): 1 = 여유, 0 = 한계, <0 = 위반
-    clip: [-2.0, 1.0]
-    collision_value: -2.0
-
+# SR 검사 결과는 run_record 의 sr_* 참고 필드로만 남고 final_safe_recovery 는 바꾸지 않는다 (예전 sr_checks 섹션 = Monitor v2
+# 수치는 삭제, 아래 SR monitor v3.1 섹션이 대신한다).
 # ---------------------------------------------------------------------------------------------
 # SR monitor v3.1 (pipeline/09_monitor/monitor.py, from junwoo/sim-eval 3b97fb5).
-# engine/ reads safety_specification and sr_checks above; the SR monitor reads the sections below
-# plus safety_specification.properties P-02.
+# engine/judgment reads safety_specification above; the SR monitor (engine/sr_checks.py -> monitor.py) reads
+# the sections below plus safety_specification.properties P-02.
 # ---------------------------------------------------------------------------------------------
 references:
   LATERAL_COMPARE_2024:
