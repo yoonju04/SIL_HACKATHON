@@ -2,6 +2,11 @@
 # vulnerability_patterns.yaml(틀) + safety_profile.yaml(값) → 이 파일
 # 아래 값은 "코드 A: 고정 gain LQR, 설계 속도 15 m/s, 복귀 로직 있음"을 가정한 형식 예시다.
 # 실제 코드가 들어오면 생성기가 이 파일 전체를 다시 쓴다.
+# fault_types는 04 scenario_space.yaml(av_stack 고장 목록 F-01~07) 번호를 쓴다. 이전 템플릿 번호에서 바꿈:
+#   템플릿 F-01 solver 실행 지연      -> F-03 output_delay (늦은 명령)
+#   템플릿 F-02 solver 상태 위조(실패) -> F-01 solver_fail
+#   템플릿 F-03 solver 지연 진동      -> F-07 intermittent_bias (같은 고장 아님: 가장 가까운 "켜졌다 꺼졌다" 고장,
+#                                      감독기 타이머 리셋 경계를 노림. 지연 진동은 주입기에 없음)
 
 meta:
   schema_version: '1.0'
@@ -39,12 +44,12 @@ hypotheses:
     condition:
       speed_offset_mps: "abs(speed_mps - 15.0) > 5.0"
       curvature_offset: "road_curvature_per_m - 0.0 > 0.01"
-      fault_types: [F-01, F-02]
+      fault_types: [F-03, F-01]
       onset_event: [curve_entry, curve_apex]
     control:
       speed_offset_mps: "abs(speed_mps - 15.0) <= 2.0"
       curvature_offset: "road_curvature_per_m - 0.0 <= 0.005"
-      fault_types: [F-01, F-02]
+      fault_types: [F-03, F-01]
       onset_event: [curve_entry, curve_apex]
     prediction: {metric: margin_delta_m, direction: negative}
     decision_rule: default
@@ -60,10 +65,10 @@ hypotheses:
       command_during_detection_delay: hold_last
     condition:
       expected_switch_after_curve_entry: "onset_time + 0.02 > curve_entry_time"
-      fault_types: [F-01]
+      fault_types: [F-03]
     control:
       expected_switch_after_curve_entry: "onset_time + 0.02 <= curve_entry_time"
-      fault_types: [F-01]
+      fault_types: [F-03]
     prediction: {metric: margin_delta_m, direction: negative}
     secondary_prediction:
       - {metric: pre_switch_max_lateral_error_m, direction: positive}
@@ -79,11 +84,11 @@ hypotheses:
       minimum_dwell_s: 0.2
       steering_blending: none
     condition:
-      fault_types: [F-03]
-      fault_params: {center_ms: "near(20, 3)"}
+      fault_types: [F-07]
+      fault_params: {off_s: "near(0.2, 0.05)"}   # minimum_dwell_s 0.2 근처
     control:
-      fault_types: [F-01]
-      fault_params: {delay_ms: "near(20, 3)"}
+      fault_types: [F-03]
+      fault_params: {delay_ticks: 1}
     prediction: {metric: switch_count, direction: positive}
     secondary_prediction:
       - {metric: max_steering_rate_dps, direction: positive}

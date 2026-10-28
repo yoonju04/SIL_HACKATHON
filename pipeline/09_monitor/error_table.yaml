@@ -1,23 +1,101 @@
-# error_table.yaml — Monitor → Error table (robustness, 결과 5분류)
-# 입력: 08 짝 실행 시계열 + safety_spec.yaml
-# 출력(피드백 3종):
-#   run_record    → 06 GP 재학습 (all_valid_paired_results)
-#   failure_table → 03 Nemotron A 실패 few-shot (verified_failures_top_k)
-#   run_record    → 02 hypotheses.yaml tracking (가설 상태 갱신)
+# error_table.yaml — Monitor 출력 형식 (v3: SR1~SR6 기준, 결과 F1~F3)
+# 채점: monitor.py evaluate_pair() → run_record (짝 하나당 1줄)
+# 피드백: feedback.py → 2·3·6단계 파일
+#   run_records.jsonl        모든 짝의 채점 결과 (아래 세 파일의 원본)
+#   hypothesis_tracking.json → 02 가설: 가설이 맞았나 (supported / refuted / inconclusive / testing)
+#   failure_table.json       → 03 Nemotron A (+ 05b B): 재현된 실패 top-5 = 환경 + 고장 계획 + 어떤 SR이 얼마나 깨졌나
+#   gp_training.jsonl        → 06 GP: x = 시나리오 값, y = gp_target (숫자 하나)
 
 meta:
-  schema_version: '1.0'
+  schema_version: '3.0'
   profile_id: sp-code-aware-mpc-lqr
-  status: template_unverified
-  linked_files: [safety_spec.yaml]
+  status: draft_definitions
+  linked_files: [safety_spec.yaml, monitor.py, feedback.py, av_stack_probe.py]
 
-results_schema:
-  run_record: [run_id, scenario_id, seed_scenario_id, round, selector, profile_id,
-               source_commit, feature_schema_version, hypothesis_ids, parameters,
-               planned_fault_onset, actual_fault_onset, trigger_time, switch_time,
-               switch_count, outcome_category, P01, P02, P03, margin_delta_m,
-               gp_mean, gp_std, sim_status, invalid_reason]
-  failure_table: [scenario_id, violated_property, originating_evidence_ids,
-                  hypothesis_ids, environment, fault, onset_event,
-                  observed_switch_behavior, robustness, reproduction_count]
+inputs:
+  per_graded_pair:
+    fault_run: "고장 있음 + Supervisor 있음 (시험 대상)"
+    baseline_run: "같은 시나리오, 고장 없음"
+    no_reaction_run: "같은 고장, Supervisor 없음 (선택, PR #1 --controller mpc_unprotected) → FTTI 측정 → SR1 한계"
+  per_run_files:
+    steps.jsonl: "t, vx, vy, yaw_rate, e_y_lane, e_psi, steer_rad ..."
+    behavior.jsonl: "steer_rad (실제 송신값), active_controller / steer_source, fault_injected, route_revision"
+    monitor_probe.jsonl: "lane_offset_m (의도된 차선), lane_heading_err_rad, lane_width_m, ay_mps2, bbox, fault_effective"
+    collisions.json: "충돌 이벤트 (t 필요)"
+    summary.json: "meta.vehicle_params.max_steer_rad, supervisor.safe_stop"
+  run_info:          # orchestrator가 넘기는 json (monitor.py --run-info)
+    from_nemotron_a: environment          # 경로, ODD
+    from_nemotron_b: fault_plan           # fault_type, magnitude, duration_s, onset_event, onset_time
+    from_orchestrator: [run_id, scenario_id, round, selector, hypothesis_ids, hypothesis_arms, parameters,
+                        reason_items, gp_mean, gp_std, stress_test, source_commit, feature_schema_version]
+  information_boundary:
+    monitor_may_read: [ground_truth, injector_truth, sut_switch_events]
+    supervisor_never_reads: [injector_truth, monitor_outputs]
+
+run_record:   # legacy junwoo/sim-eval monitor.evaluate_pair(): 28 fields; current runner bridge below
+  fields: [run_id, scenario_id, seed_scenario_id, round, selector, profile_id, source_commit,
+           feature_schema_version, hypothesis_ids, parameters, planned_fault_onset, actual_fault_onset,
+           trigger_time, switch_time, switch_count, outcome_category, P01, P02, P03, margin_delta_m,
+           switch_state_label, metrics, baseline_metrics, gp_targets, gp_mean, gp_std, sim_status, invalid_reason]
+  outcome_category: [no_trigger, triggered_no_switch, switched_safe, switched_unsafe, simulation_invalid]
+  P03: "true = 충돌 없음"
+  parameters: "run_info.parameters + environment (A) + fault_plan (B) + arm (condition/control)"
+  metrics: [recovery_success, recovery_robustness, pre_switch_max_lateral_error_m, switch_count,
+            lateral_error_rmse_m, deadline_miss_rate, mpc_constraint_violation_rate,
+            post_switch_saturation_ratio, command_jump_rad, max_steering_rate_dps, margin_delta_m]
+  metrics_null_rule: "계산 불가는 null (0 대체 금지). 02 outcome_definitions 정의를 따름"
+  gp_targets: "runner_skeleton.gp_targets와 같은 식: y by metric_rules[*].gp.form, z = sign * y / scale"
+  switch_state_label: "null (오라클 산출물 없음). 상태는 metrics.monitor.switch_state"
+  metrics.monitor:   # 우리 SR1~SR6 판정 (monitor.grade_pair)
+    failure_type: "invalid | no_trigger | F1_no_or_late_switch | F2_switch_transient | F3_not_recovered | pass"
+    note: "undetected_harmless"
+    unsafe: "SR4 또는 enforced SR6 위반"
+    failed_requirements: "[SR1, SR2, SR4, ...]"
+    sr: "SR1~SR6 각각 {applies, pass, robustness, + 근거값}"
+    sr_scores: "{SR1, SR2, SR4, SR5, SR6, overall} 같은 눈금 [-2, 1], 적용 안 되면 null"
+    sr_overall: "min(적용 가능한 SR1, SR2, SR4, enforced SR6, 선택 enforced SR5)"
+    sr_measures: "점수 뒤 원래 값 (지연 s, 조향속도, 차선 여유, 충돌 시각·상대 ...)"
+    other: [aux, detection_latency_s, pre_switch_max_lateral_error_m, evaluation_window, switch_state, run_dirs]
+  read_with: "monitor.view(record): 러너 필드 + metrics.monitor를 펼친 보기 (feedback.py, dashboard.py가 사용)"
   timeseries_store: results/timeseries/
+
+stage2_hypothesis_tracking:   # feedback.hypothesis_tracking — 규칙: vulnerability_patterns.yaml default_decision_rule
+  runs_used: "parameters.arm + hypothesis_ids로 condition/control이 표시된 전용 런만 (GP 탐색 런 제외)"
+  metric: "가설의 prediction.metric을 run_record.metrics에서 읽음 (H-01 recovery_success, H-03 switch_count ...)"
+  statistic: "d = mean(condition) - mean(control), bootstrap 99% CI, 5000회, seed 고정"
+  delta_min: "metric_rules[*].minimum_effect (--patterns). non_inferior는 prediction.margin"
+  checkpoints: [10, 20, 30]     # 팔(arm)마다 런 수. 판정 나면 거기서 멈춤
+  guards:
+    P-DELAYED-SWITCH: "보조 지표가 반대 방향이면 supported 대신 inconclusive"
+    P-CHATTERING: "조건군에서 switch_count >= 3이 한 번도 없으면 refuted 대신 inconclusive"
+  output_per_hypothesis: [status, d_estimate, ci, runs_condition, runs_control, excluded_runs,
+                          status_history, next_checkpoint]
+
+stage3_failure_table:   # feedback.failure_table
+  candidate_rows: "유효 런 중 F1/F2/F3 (invalid·stress_test 제외)"
+  group_by: scenario_id     # 같은 시나리오 재실행 = 재현
+  verified_if: "reproduction_count >= 2"
+  rank_by: "gp_target 중앙값 오름차순 (가장 나쁜 것부터)"
+  diversity: "(fault_type, onset_event) 조합당 1개"
+  k: 5
+  row: [scenario_id, outcome_category, violated_requirements, how_much, unsafe, environment, fault_plan,
+        onset_event, observed_switch_behavior, gp_target, gp_target_median, reproduction_count, runs_total,
+        run_ids, hypothesis_ids, reason_items, summary]
+  candidates: "1번만 실패한 것 (재실행해서 확인할 후보)"
+
+stage6_gp_training:   # feedback.gp_training_rows — 06 surrogate.yaml feedback_in: [features, metrics, baseline_metrics, gp_targets]
+  x: "env.* (A) + fault.* (B) + param.* + reason.* (평탄화)"
+  y: "run_record.gp_targets (지표별 z). 값 없는 지표는 빠짐"
+  also: [metrics, baseline_metrics, sr_scores, outcome_category, failure_type, stress_test, gp_mean_before, gp_std_before]
+  excluded: "simulation_invalid, gp_targets가 빈 런"
+
+runner_adapter:
+  tested_commit: d743fac6ec11b5f8c1ba53033dc2523483db59d1
+  source: pipeline/engine/judgment.py#RUN_RECORD_FIELDS
+  field_count: 37
+  preserves: [outcome_category, recovery_outcome, recovery_labels, final_safe_recovery,
+              lane_recovery_robustness, lat_acc_excess_mps2, switch_state, handover_saturation,
+              trigger_source, trigger_attribution, metrics, baseline_metrics, gp_targets]
+  adds_only: metrics.monitor
+  entrypoint: runner_adapter.py
+  integration: explicit_postprocess_entrypoint_not_automatic_pipeline_run_replacement

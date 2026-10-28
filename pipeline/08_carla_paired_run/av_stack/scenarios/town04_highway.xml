@@ -1,0 +1,59 @@
+<!-- av_stack: Town04 highway loop section, no traffic lights (generated from Town04.xodr;
+     second lane from the right, junction branches that stay on the highway). -->
+<routes>
+   <route id="0" town="Town04">
+      <waypoints>
+         <position x="-511.7" y="240.9" z="0.0"/>
+         <position x="-504.2" y="293.7" z="0.0"/>
+         <position x="-482.6" y="342.3" z="0.0"/>
+         <position x="-448.4" y="383.1" z="0.0"/>
+         <position x="-404.3" y="412.9" z="0.0"/>
+         <position x="-353.7" y="429.5" z="0.0"/>
+         <position x="-301.6" y="432.4" z="0.0"/>
+         <position x="-251.6" y="432.3" z="0.0"/>
+         <position x="-201.6" y="432.1" z="0.0"/>
+         <position x="-149.3" y="426.3" z="0.0"/>
+         <position x="-99.7" y="407.7" z="0.0"/>
+         <position x="-56.3" y="377.4" z="0.0"/>
+         <position x="-21.9" y="337.2" z="0.0"/>
+         <position x="1.5" y="289.7" z="0.0"/>
+         <position x="12.3" y="237.9" z="0.0"/>
+         <position x="12.9" y="186.9" z="0.0"/>
+         <position x="12.6" y="136.9" z="0.0"/>
+         <position x="12.4" y="86.9" z="0.0"/>
+         <position x="12.1" y="36.9" z="0.0"/>
+         <position x="11.9" y="-13.1" z="0.0"/>
+         <position x="11.7" y="-63.1" z="0.0"/>
+         <position x="11.5" y="-113.1" z="0.0"/>
+         <position x="11.3" y="-163.1" z="0.0"/>
+         <position x="11.1" y="-213.1" z="0.0"/>
+         <position x="16.3" y="-259.3" z="0.0"/>
+         <position x="35.3" y="-301.2" z="0.0"/>
+         <position x="66.1" y="-335.3" z="0.0"/>
+         <position x="106.0" y="-358.3" z="0.0"/>
+         <position x="150.9" y="-367.9" z="0.0"/>
+         <position x="200.2" y="-367.8" z="0.0"/>
+         <position x="250.3" y="-367.7" z="0.0"/>
+         <position x="295.4" y="-360.3" z="0.0"/>
+         <position x="335.3" y="-338.3" z="0.0"/>
+         <position x="365.7" y="-304.2" z="0.0"/>
+         <position x="382.9" y="-262.0" z="0.0"/>
+         <position x="386.0" y="-215.1" z="0.0"/>
+         <position x="385.4" y="-165.1" z="0.0"/>
+         <position x="384.9" y="-115.1" z="0.0"/>
+         <position x="384.4" y="-65.0" z="0.0"/>
+         <position x="383.0" y="-17.9" z="0.0"/>
+         <position x="359.1" y="10.7" z="0.0"/>
+         <position x="314.8" y="13.7" z="0.0"/>
+         <position x="264.8" y="12.8" z="0.0"/>
+         <position x="214.8" y="12.0" z="0.0"/>
+         <position x="164.8" y="11.1" z="0.0"/>
+         <position x="164.8" y="11.1" z="0.0"/>
+      </waypoints>
+      <scenarios>
+         <scenario name="HardBreakRoute_1" type="HardBreakRoute">
+            <trigger_point x="11.3" y="-163.1" z="0.0" yaw="-450.2"/>
+         </scenario>
+      </scenarios>
+   </route>
+</routes>
