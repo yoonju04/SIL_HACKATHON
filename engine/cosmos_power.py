@@ -24,6 +24,10 @@ import requests
 CONTROL_PLANE_URL = "https://api.tokenfactory.nebius.com"
 DEFAULT_TIMEOUT_S = 15 * 60.0
 DEFAULT_POLL_S = 10.0
+DATA_PLANE_URL = "https://api.tokenfactory.nebius.com/v1"
+# BUG-014: right after readiness=ready (status=updating) chat/completions still answered HTTP 404 for the routing key.
+# These codes mean "not routed / not serving yet"; anything else (200, 400 ...) means the model answers.
+NOT_SERVING_CODES = (404, 429, 500, 502, 503, 504)
 
 
 def _default_log(msg: str) -> None:
@@ -58,8 +62,9 @@ class CosmosPower:
                  timeout_s: float = DEFAULT_TIMEOUT_S, poll_s: float = DEFAULT_POLL_S,
                  log: Callable[[str], None] = _default_log, session: Any = None,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-                 http_timeout_s: float = 30.0) -> None:
+                 http_timeout_s: float = 30.0, data_url: str | None = None) -> None:
         self.routing_key = routing_key
+        self.data_url = data_url.rstrip("/") if data_url else None   # None: no data-plane probe (unit tests)
         self._key = api_key
         self.control_url = control_url.rstrip("/")
         self.timeout_s, self.poll_s, self.http_timeout_s = float(timeout_s), float(poll_s), float(http_timeout_s)
@@ -80,6 +85,7 @@ class CosmosPower:
         if not model.startswith("dedicated/") or not key:
             return None
         url = os.environ.get("NEBIUS_CONTROL_PLANE_URL") or CONTROL_PLANE_URL
+        kw.setdefault("data_url", os.environ.get("COSMOS_BASE_URL") or DATA_PLANE_URL)
         return cls(model, key, control_url=url, **kw)
 
     # ------------------------------------------------------------------ HTTP
@@ -99,6 +105,40 @@ class CosmosPower:
                                headers=self._headers(), json={"enabled": enabled}, timeout=self.http_timeout_s)
         if r.status_code not in (200, 202):
             raise RuntimeError(f"PATCH enabled={enabled} -> HTTP {r.status_code}: {str(r.text)[:200]}")
+
+    def _probe(self) -> int | None:
+        """One tiny chat call to the data plane. Status code, or None on a network error."""
+        try:
+            r = self.session.post(f"{self.data_url}/chat/completions", headers=self._headers(),
+                                  json={"model": self.routing_key, "max_tokens": 1,
+                                        "messages": [{"role": "user", "content": "ping"}]},
+                                  timeout=self.http_timeout_s)
+            return r.status_code
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _wait_data_plane(self, t0: float, limit: float, reason: str) -> bool:
+        """BUG-014: the control plane says ready before the routing key answers. Wait until a chat call is routed."""
+        if not self.data_url:
+            return True
+        last = "unset"
+        while True:
+            code = self._probe()
+            elapsed = self.clock() - t0
+            if code is not None and code not in NOT_SERVING_CODES:
+                if last != "unset":
+                    self.log(f"[cosmos-power] data plane answers after {elapsed:.0f}s (probe HTTP {code})")
+                self._event("data_plane_ready", reason=reason, at_s=round(elapsed, 1), code=code)
+                return code < 400 or code in (400, 422)
+            if elapsed >= limit:
+                self.log(f"[cosmos-power] data plane still HTTP {code} after {elapsed:.0f}s (limit {limit:.0f}s)"
+                         " - falling back")
+                self._event("data_plane_timeout", reason=reason, waited_s=round(elapsed, 1), code=code)
+                return False
+            if code != last:
+                self.log(f"[cosmos-power]   control plane ready but chat/completions -> HTTP {code} ({elapsed:.0f}s); waiting")
+                last = code
+            self.sleep(self.poll_s)
 
     def state(self) -> dict:
         eps = self._list()
@@ -137,7 +177,7 @@ class CosmosPower:
             if is_serving(st):
                 self.log(f"[cosmos-power] already on ({reason or 'use'}): {_fmt(st)}")
                 self._event("already_on", reason=reason)
-                return True
+                return self._wait_data_plane(t0, limit, reason)
             if not st["enabled"]:
                 self.log(f"[cosmos-power] starting Cosmos endpoint ({reason or 'use'}); billing starts when ready")
                 self._patch_enabled(True)
@@ -151,7 +191,7 @@ class CosmosPower:
                     self.log(f"[cosmos-power] Cosmos ready after {elapsed:.0f}s ({_fmt(st)})")
                     self.on_seconds_requested.append(elapsed)
                     self._event("ready", reason=reason, startup_s=round(elapsed, 1))
-                    return True
+                    return self._wait_data_plane(t0, limit, reason)
                 if elapsed >= limit:
                     self.log(f"[cosmos-power] Cosmos NOT ready after {elapsed:.0f}s (limit {limit:.0f}s): {_fmt(st)}"
                              " - falling back")

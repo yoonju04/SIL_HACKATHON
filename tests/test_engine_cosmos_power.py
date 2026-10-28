@@ -174,3 +174,48 @@ def test_campaign_insights_skipped_when_cosmos_not_ready(tmp_path):
     with g.session("stage_10 round 1") as ok:      # later uses skip instead of waiting again
         assert ok is False
     assert len(spy.calls) == 2
+
+
+class ProbePlane(FakePlane):
+    """Control plane says ready at once; chat/completions answers 404 for the first `n404` probes (BUG-014)."""
+
+    def __init__(self, n404=2, final=200, **kw):
+        super().__init__(**kw)
+        self.n404, self.final, self.posts = n404, final, []
+
+    def post(self, url, headers=None, json=None, timeout=None):
+        assert url == "https://dp.example/v1/chat/completions" and json["model"] == RK and json["max_tokens"] == 1
+        self.posts.append(url)
+        return Resp(404 if len(self.posts) <= self.n404 else self.final, {})
+
+
+def make_probe(plane, timeout_s=100.0):
+    t = {"now": 0.0}
+    logs = []
+    p = CP.CosmosPower(RK, "k", session=plane, timeout_s=timeout_s, poll_s=10.0, log=logs.append,
+                       sleep=lambda s: t.__setitem__("now", t["now"] + s), clock=lambda: t["now"],
+                       data_url="https://dp.example/v1/")
+    return p, logs
+
+
+def test_ensure_on_waits_for_data_plane_after_ready():
+    plane = ProbePlane(n404=2, enabled=False, start_states=[("updating", "ready")])
+    p, logs = make_probe(plane)
+    assert p.ensure_on("stage_10") is True
+    assert len(plane.posts) == 3
+    ev = [e for e in p.events if e["event"] == "data_plane_ready"][0]
+    assert ev["code"] == 200 and ev["at_s"] == 30.0
+    assert any("HTTP 404" in m for m in logs) and any("data plane answers" in m for m in logs)
+
+
+def test_ensure_on_data_plane_never_routes_returns_false():
+    plane = ProbePlane(n404=999, enabled=True)
+    p, logs = make_probe(plane, timeout_s=50.0)
+    assert p.ensure_on("insights") is False
+    assert p.events[-1]["event"] == "data_plane_timeout"
+
+
+def test_from_env_sets_data_url(monkeypatch):
+    monkeypatch.setenv("COSMOS_API_KEY", "k")
+    monkeypatch.setenv("COSMOS_BASE_URL", "https://dp.example/v1/")
+    assert CP.CosmosPower.from_env(RK).data_url == "https://dp.example/v1"
