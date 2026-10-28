@@ -148,6 +148,18 @@ def test_collision_sets_gp_target_floor():
     assert rec["outcome_category"] == "F3_not_recovered" and rec["sr_overall"] == -2.0, rec
 
 
+def test_route_end_a_few_ticks_apart_is_aligned_not_invalid():
+    """BUG-016: both logs end inside the 10 s window (route completed) 0.1 s apart -> cut both at the earlier end."""
+    fault = trace(drift(0.3, 0.2), T=17.0, fault_at=ONSET, switch_at=10.2)
+    base = trace(T=17.1)
+    rec = evaluate_pair(fault, base, ONSET, CFG, dangerous_no_reaction())
+    assert rec["sim_status"] == "valid" and rec["outcome_category"] == "pass", rec
+    assert abs(rec["evaluation_window"][1] - 16.95) < 1e-9
+    assert any("V-08 aligned" in n for n in rec.get("notes") or [])
+    short = evaluate_pair(trace(drift(0.3, 0.2), T=14.8, fault_at=ONSET, switch_at=10.2), trace(T=17.1), ONSET, CFG)
+    assert short["sim_status"] == "invalid" and "V-03" in short["invalid_reason"]   # minimum window still enforced
+
+
 def test_switch_before_fault_is_invalid():
     fault = trace(drift(0.3, 0.2), fault_at=ONSET, switch_at=5.0)
     rec = evaluate_pair(fault, trace(), ONSET, CFG, dangerous_no_reaction())

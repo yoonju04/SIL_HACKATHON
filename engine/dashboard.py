@@ -37,7 +37,8 @@ OUTCOME = {
     "F1_no_or_late_switch": ("F1 전환 실패·지연", "bad", "위험한 고장인데 LQR로 전환을 못 했거나 너무 늦게 함"),
     "F2_switch_transient": ("F2 전환 순간 불안정", "bad", "전환은 했지만 그 순간 조향이 크게 튐"),
     "F3_not_recovered": ("F3 전환 후 불안정", "bad", "전환은 했지만 recovery v2 기준으로 안전하게 회복하지 못함"),
-    "invalid": ("무효", "mut", "시뮬레이션 기록에 문제가 있어 채점하지 않음"),
+    "invalid": ("판정 불가 (무효, 실패 아님)", "mut",
+                "기록이나 비교 조건(평가 구간 길이 등)이 맞지 않아 SR 채점을 하지 않음. 안전 실패로 세지 않음"),
 }
 RECOVERY_KO = {"safe_recovery": "안전 회복", "recovered_after_departure": "이탈 후 복귀", "unsettled": "안정 안 됨",
                "unrecovered": "회복 실패", "no_switch": "전환 없음", "simulation_invalid": "무효"}

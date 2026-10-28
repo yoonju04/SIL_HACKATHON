@@ -248,8 +248,9 @@ class RunCheck:
     nominal_margin: float | None = None
 
 
-def check_run(tr: Trace, onset: float, cfg: MonitorConfig, kind: str) -> RunCheck:
-    """Validity (V-01..V-09) and the SR4 margin series. kind: fault | baseline | no_reaction."""
+def check_run(tr: Trace, onset: float, cfg: MonitorConfig, kind: str, end_s: float | None = None) -> RunCheck:
+    """Validity (V-01..V-09) and the SR4 margin series. kind: fault | baseline | no_reaction.
+    end_s: cut the window here as well (paired_checks aligns fault and baseline to a common end)."""
     t = np.asarray(tr.t, float)
     reasons: list[str] = []
     chans = [tr.vx, tr.vy, tr.yaw_rate, tr.lane_offset_m]
@@ -265,6 +266,8 @@ def check_run(tr: Trace, onset: float, cfg: MonitorConfig, kind: str) -> RunChec
     if np.any(np.abs(np.diff(t) - cfg.dt) > cfg.tick_tolerance * cfg.dt):
         reasons.append(f"{kind}: V-02 irregular ticks")
     end = min(onset + cfg.window_s, float(t[-1]))
+    if end_s is not None:
+        end = min(end, float(end_s))
     ended_by_crash = any(onset - 1e-9 <= c <= end + cfg.dt for c in tr.collisions_t)
     if tr.collisions_untimed:
         reasons.append(f"{kind}: V-11 collision logged without time (cannot place it in the window)")
@@ -314,14 +317,34 @@ def measure_ftti(no_reaction: Trace, onset: float, cfg: MonitorConfig) -> dict:
     return {"ftti_s": ftti, "valid": True, "reasons": []}
 
 
+def paired_checks(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig) -> tuple[RunCheck, RunCheck, str | None]:
+    """check_run for the fault and baseline runs on the SAME window (V-08).
+
+    Both windows start at the planned onset and end at onset + window_s or at the end of the log. When a log ends
+    inside the window because the route was completed, the fault run usually finishes a few ticks earlier or later
+    than the baseline (the fault changes the progress along the route). Spec: evaluation_window ends at
+    simulation_end and the baseline is aligned to the fault run. So both are cut at the earlier end; V-03 (minimum
+    window) is then checked on that common window. Crash / safe-stop runs keep their own window (as before)."""
+    fc = check_run(fault, onset, cfg, "fault")
+    bc = check_run(baseline, onset, cfg, "baseline")
+    note = None
+    if fc.valid and bc.valid and abs((fc.window[1] - fc.window[0]) - (bc.window[1] - bc.window[0])) > cfg.dt \
+            and not fault.safe_stop and not fault.collisions_t:
+        common = min(fc.window[1], bc.window[1])
+        note = (f"V-08 aligned: fault window ends {fc.window[1]:.2f} s, baseline {bc.window[1]:.2f} s "
+                f"(log end inside the window); both cut at {common:.2f} s")
+        fc = check_run(fault, onset, cfg, "fault", end_s=common)
+        bc = check_run(baseline, onset, cfg, "baseline", end_s=common)
+    return fc, bc, note
+
+
 # ------------------------------------------------------------- SR checks
 def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig | None = None,
                   no_reaction: Trace | None = None, run_info: dict | None = None) -> dict:
     """SR1..SR6 verdict for one pair (fault vs baseline [+ no-reaction]). Kept inside run_record.metrics["monitor"]."""
     cfg = cfg or MonitorConfig()
     info = dict(run_info or {})
-    fc = check_run(fault, onset, cfg, "fault")
-    bc = check_run(baseline, onset, cfg, "baseline")
+    fc, bc, v08_note = paired_checks(fault, baseline, onset, cfg)
     reasons = fc.reasons + bc.reasons
     t = np.asarray(fault.t, float)
 
@@ -335,7 +358,7 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
         trigger = _first(np.asarray(eff, bool), t)
     if fc.valid and bc.valid and abs((fc.window[1] - fc.window[0]) - (bc.window[1] - bc.window[0])) > cfg.dt \
             and not fault.safe_stop and not fault.collisions_t:
-        reasons.append("V-08 fault and baseline windows differ")
+        reasons.append("V-08 fault and baseline windows differ")   # guard; paired_checks normally aligns them
 
     if bc.valid and (np.min(bc.margin[bc.win]) < 0 or
                      any(bc.window[0] <= c <= bc.window[1] for c in baseline.collisions_t)):
@@ -355,6 +378,8 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
         rec.update(sim_status="invalid", invalid_reason="; ".join(reasons), failure_type="invalid",
                    unsafe=False, sr={}, sr_overall=None, sr_scores=None, failed_requirements=[])
         return rec
+    if v08_note:
+        rec.setdefault("notes", []).append(v08_note)
 
     # ---- switches (SUT behaviour)
     f_sw = _switch_times(fault)
@@ -691,8 +716,7 @@ def evaluate_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfi
     if d["sim_status"] != "valid":
         rec.update(metrics={"monitor": d}, baseline_metrics=None, gp_targets={})
         return rec
-    fc = check_run(fault, onset, cfg, "fault")
-    bc = check_run(baseline, onset, cfg, "baseline")
+    fc, bc, _ = paired_checks(fault, baseline, onset, cfg)
     act = d.get("actual_fault_onset")
     m = run_metrics(fault, fc, cfg, onset if act is None else act, d["switch_time"], d.get("trigger_time") is not None,
                     True, d["aux"]["P02_lat_acc"]["effective_limit_mps2"])
