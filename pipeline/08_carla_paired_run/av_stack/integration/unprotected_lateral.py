@@ -29,6 +29,7 @@ class UnprotectedMPC:
         self.active = 'mpc'
         self.primary_status = 'not_run'
         self.t = 0.0
+        self.fault_effective = False
 
     def set_reference(self, trajectory: Trajectory, speed_cap: float,
                       lqr_trajectory: Trajectory | None = None) -> None:
@@ -39,7 +40,9 @@ class UnprotectedMPC:
         self.t = t
         previous = self.active
         try:
+            self.fault_effective = False
             output = self.injector.apply(self.mpc.compute(x, y, yaw, vx, vy, yaw_rate, t), t)
+            self.fault_effective = self.injector.effective
             usable = bool(output.ok and output.steer is not None and math.isfinite(output.steer))
             self.active = 'mpc' if usable else 'none'
             self.primary_status = output.status

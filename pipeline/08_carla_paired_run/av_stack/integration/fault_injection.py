@@ -64,6 +64,7 @@ class MPCFaultInjector:
         self.max_steer = max_steer
         self.previous: MPCOutput | None = None
         self.history: deque[MPCOutput] = deque(maxlen=MAX_DELAY_TICKS + 1)
+        self.effective = False  # did the last apply() change what the MPC handed on (fault_effective)
 
     @staticmethod
     def _shift(output: MPCOutput, offset: float) -> MPCOutput:
@@ -89,6 +90,7 @@ class MPCFaultInjector:
 
     def apply(self, output: MPCOutput, t: float) -> MPCOutput:
         self.history.append(output)
+        self.effective = False
         if not self.config.active(t):
             self.previous = output
             return output
@@ -101,4 +103,7 @@ class MPCFaultInjector:
             'saturate': self._saturate,
             'output_delay': self._delayed,
         }
-        return faults[self.config.mode](output)
+        result = faults[self.config.mode](output)
+        self.effective = result is not output and (result.ok != output.ok or result.steer != output.steer
+                                                   or result.seq != output.seq)
+        return result

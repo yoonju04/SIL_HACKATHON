@@ -181,15 +181,22 @@ def compute_events(run: RunData, th: dict[str, float] | None = None) -> dict[str
     # trigger / switch: behavior.jsonl active_controller leaves 'mpc' on the switch tick (same-tick switch,
     # supervised_lateral.py:113-117); agent_controls switched_at_s is the supervisor's own stamp.
     sw_row = next((r for r in ticks if r.get("active_controller") not in (None, "mpc")), None)
-    trig_row = next((r for r in ticks if r.get("supervisor_reason")), None)
+    detect_row = next((r for r in ticks if r.get("supervisor_reason")), None)
+    # trigger = the fault first changed the MPC output (runner contract: no_trigger = fault had no effect).
+    # av_stack logs fault_effective per tick (BUG-002); older logs without it fall back to the injection onset.
+    if any(r.get("fault_effective") is not None for r in ticks):
+        trig_t = next((r["t"] for r in ticks if r.get("fault_effective")), None)
+    else:
+        trig_t = actual
     switched_at = None
     for r in ticks:
         if _finite(r.get("ctrl_switched_at_s")):
             switched_at = float(r["ctrl_switched_at_s"])
             break
     ev["switch_time"] = _key(switched_at) if switched_at is not None else (sw_row["t"] if sw_row else None)
-    ev["trigger_time"] = trig_row["t"] if trig_row else None
-    ev["trigger_source"] = trig_row.get("supervisor_reason") if trig_row else None
+    ev["trigger_time"] = trig_t
+    ev["detection_time"] = detect_row["t"] if detect_row else None   # supervisor first flagged the MPC
+    ev["trigger_source"] = detect_row.get("supervisor_reason") if detect_row else None
     counts = [int(r["ctrl_switch_count"]) for r in ticks if _finite(r.get("ctrl_switch_count"))]
     ev["switch_count"] = max(counts) if counts else (1 if sw_row else 0)
     stop_row = next((r for r in ticks if r.get("active_controller") == "safe_stop"), None)
@@ -422,7 +429,8 @@ def monitor_timeline(run: RunData, record: dict, th: dict[str, float] | None = N
     return {
         "fault_mode": ev["fault"]["mode"], "fault_magnitude": ev["fault"]["magnitude"],
         "planned_fault_onset_s": ev["planned_fault_onset"], "actual_fault_onset_s": ev["actual_fault_onset"],
-        "trigger_time_s": ev["trigger_time"], "trigger_source": ev["trigger_source"],
+        "trigger_time_s": ev["trigger_time"], "detection_time_s": ev.get("detection_time"),
+        "trigger_source": ev["trigger_source"],
         "switch_time_s": ev["switch_time"], "lane_departure_intervals_s": ev["departure_intervals"],
         "first_departure_after_switch_s": ev["first_departure_after_switch"],
         "collision_times_s": ev["collision_times"], "safe_stop_time_s": ev["safe_stop_time"],

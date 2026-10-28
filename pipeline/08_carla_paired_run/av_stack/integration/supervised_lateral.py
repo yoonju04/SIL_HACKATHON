@@ -84,6 +84,7 @@ class SupervisedLateral:
         self.elapsed_ms: float | None = None
         self.last = LateralResult(0.0, 0.0, 0.0, 0.0, 0.0, True, 'initial', None, None)
         self.t = 0.0
+        self.fault_effective = False
 
     def set_reference(self, trajectory: Trajectory, speed_cap: float,
                       lqr_trajectory: Trajectory | None = None) -> None:
@@ -94,11 +95,13 @@ class SupervisedLateral:
              vx: float, vy: float, yaw_rate: float) -> LateralResult:
         self.t = t
         result = None
+        self.fault_effective = False  # only an MPC call in this tick can carry the fault
         if self.active == 'mpc':
             started = time.perf_counter()
             try:
                 output = self.mpc.compute(x, y, yaw, vx, vy, yaw_rate, t)
                 output = self.injector.apply(output, t)
+                self.fault_effective = self.injector.effective
                 self.elapsed_ms = (time.perf_counter() - started) * 1000
                 self.primary_status = output.status
                 self.reason = self.monitor.inspect(output, t, self.elapsed_ms)

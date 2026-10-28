@@ -115,14 +115,16 @@ class MonitorLogs:
         self.sensor.listen(lambda event: self.collisions.append(
             dict(t=round(self.t, 4), other=event.other_actor.type_id)))
 
-    def record(self, t, vx, vy, yaw_rate, e_y, e_psi, active, reason, fault_injected, safe_stop):
+    def record(self, t, vx, vy, yaw_rate, e_y, e_psi, active, reason, fault_injected, safe_stop,
+               fault_effective=None):
         self.t = t
         key = round(float(t), 4)
         self.steps.write(json.dumps(dict(t=key, vx=vx, vy=vy, yaw_rate=yaw_rate,
                                          e_y_lane=e_y, e_psi=e_psi)) + '\n')
         self.behavior.write(json.dumps(dict(t=key, active_controller=active, supervisor_reason=reason,
-                                            fault_injected=bool(fault_injected))) + '\n')
-        self.probe.record(t)
+                                            fault_injected=bool(fault_injected),
+                                            fault_effective=fault_effective)) + '\n')
+        self.probe.record(t, fault_effective)
         self.safe_stop = self.safe_stop or bool(safe_stop)
 
     def close(self):

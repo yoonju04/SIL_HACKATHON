@@ -301,7 +301,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             _, _, _, vx, vy, yaw_rate = read_state(self._vehicle)
             self.monitor_logs.record(self.elapsed, vx, vy, yaw_rate, float(result.e_y), float(result.e_psi),
                                      active, getattr(self.lateral, 'reason', None),
-                                     self.fault.active(self.elapsed), safe_stop)
+                                     self.fault.active(self.elapsed), safe_stop,
+                                     getattr(self.lateral, 'fault_effective', None))
         stop_after = self.options.get('stop_after_fault')
         self.stop_requested = bool(stop_after is not None and self.fault.config_active_since(self.elapsed, stop_after))
         return control

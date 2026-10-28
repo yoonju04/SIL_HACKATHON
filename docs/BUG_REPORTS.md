@@ -18,3 +18,27 @@
 - **수정:** `_run`에서 `out = Path(out).resolve()`로 절대경로를 넘깁니다.
 - **확인:** 2026-10-27 23:49 같은 명령 재실행(bbb808f). 기준 실행 2개, 고장 실행 2개, Cosmos 해설 1개까지 끝까지 완료
   (`results/real_smoke_1028`, 실행 1회 약 35~45 s).
+
+## BUG-002: 감독기가 못 잡은 고장이 `no_trigger`(고장 효과 없음)로 기록됨
+
+- **발견:** 2026-10-27 23:49, `results/real_smoke_1028` 런 `R00-0001-output_delay` (integration2 bbb808f)
+- **증상:** 출력 지연 4틱 고장이 13.8 s부터 끝까지(약 3 s, 60틱) 주입됐는데 결과가 `outcome_category = no_trigger`,
+  `trigger_time = None`. 감독기가 전환하지 않은 경우인데 "고장이 아무 영향도 주지 않음"으로 분류됨.
+- **원인:**
+  - 러너 계약(`scripts/runner_skeleton.py` `classify_outcome`)에서 `triggered`는 "고장이 MPC 출력을 실제로 바꿨나"이고,
+    전환 여부는 `switched`로 따로 본다. `no_trigger` = 고장이 효과 없음, `triggered_no_switch` = 효과는 있었는데 전환 못 함.
+  - `engine/monitor.py compute_events`는 `trigger_time`을 **감독기가 이상을 감지한 시각**(`supervisor_reason`이 처음 찍힌 틱)으로
+    잡는다. 그래서 감지 실패 = 전환 없음 = trigger 없음 = `no_trigger`가 된다.
+  - av_stack은 "이번 틱에 고장이 출력을 바꿨나"(`fault_effective`)를 기록하지 않는다 (`monitor_probe.jsonl`에 항상 null).
+- **영향:** 감지를 피하는 고장(bias, drift, 간헐 bias, 출력 지연)이 전환에 실패해도 `triggered_no_switch`가 아니라 `no_trigger`로
+  기록된다. 이 프로젝트가 찾으려는 "전환 실패"가 결과표에서 사라지고, GP·가설 판정에도 잘못 들어간다.
+- **수정:**
+  1. av_stack: `MPCFaultInjector`가 틱마다 출력을 실제로 바꿨는지(`effective`)를 남기고, `SupervisedLateral` /
+     `UnprotectedMPC`가 그 틱의 값을 `fault_effective`로 내보내며, `monitor_logs`가 `behavior.jsonl`·`monitor_probe.jsonl`에 기록한다.
+  2. engine: `trigger_time` = 첫 `fault_effective` 틱. `fault_effective`가 없는 옛 로그는 실제 주입 시각(`fault_injected`)으로 대신한다.
+     감독기 감지 시각은 `detection_time`, 이유는 지금처럼 `trigger_source`에 남긴다.
+- **확인:**
+  - 단위 테스트: `test_supervisor.py`(주입기 `effective`: bias, drift 시작 틱, 간헐 bias 꺼짐 구간), `test_monitor_logs.py`(두 파일 기록),
+    `tests/test_engine_monitor.py::test_bug002_undetected_fault_is_triggered_not_no_trigger`(기록 있음 / 효과 없음 / 옛 로그).
+  - `real_smoke_1028` 재채점: `R00-0001-output_delay` `no_trigger` → **`triggered_no_switch`** (trigger 13.8 s, 전환 없음),
+    `R00-0000-saturate`는 `switched_unsafe` 그대로 (trigger 11.8 s, 감지·전환 12.45 s).

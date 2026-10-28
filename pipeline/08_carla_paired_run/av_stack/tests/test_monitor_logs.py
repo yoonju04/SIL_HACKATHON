@@ -81,7 +81,7 @@ def test_offset_sign_and_files():
             t = .05 * k
             vehicle.x, vehicle.y = 10. + .5 * k, 1.2  # CARLA +y = right of the route
             logs.record(t, 10., 0., 0., -1.2, 0., 'mpc' if k < 20 else 'lqr',
-                        None if k < 20 else 'tracking_divergence', k >= 5, False)
+                        None if k < 20 else 'tracking_divergence', k >= 5, False, 5 <= k < 20)
         world.sensor.callback(NS(other_actor=NS(type_id='vehicle.tesla.model3')))
         logs.close()
         probe = _rows(Path(tmp, 'monitor_probe.jsonl'))
@@ -93,6 +93,9 @@ def test_offset_sign_and_files():
         assert probe[0]['lane_width_m'] == 3.5 and probe[0]['bbox_half_width_m'] == 1.0
         assert {'vx', 'vy', 'yaw_rate', 'e_y_lane', 'e_psi'} <= set(steps[0])
         assert behavior[25]['active_controller'] == 'lqr' and behavior[4]['fault_injected'] is False
+        # BUG-002: whether the fault changed the MPC output is logged per tick in both files
+        assert [r['fault_effective'] for r in probe] == [5 <= k < 20 for k in range(40)]
+        assert behavior[10]['fault_effective'] is True and behavior[30]['fault_effective'] is False
         collisions = json.loads(Path(tmp, 'collisions.json').read_text())
         assert collisions == [dict(t=1.95, other='vehicle.tesla.model3')]
         summary = json.loads(Path(tmp, 'summary.json').read_text())

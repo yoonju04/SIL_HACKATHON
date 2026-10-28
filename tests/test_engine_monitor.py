@@ -61,3 +61,24 @@ def test_missing_files_is_invalid(tmp_path):
     (tmp_path / "steps.jsonl").write_text(json.dumps({"t": 0.0}) + "\n")
     rec = compute_run_record(load_av_stack_run(tmp_path))
     assert rec["recovery_outcome"] == "simulation_invalid" and rec["sim_status"] == "invalid"
+
+
+def _events_run(effective):
+    """Tiny RunData: fault injected from t=1.0 s, never detected, fault_effective as given (None = not logged)."""
+    from pathlib import Path
+    from engine.monitor import RunData
+    ticks = [dict(t=round(0.05 * k, 4), vx=8.0, active_controller="mpc", supervisor_reason=None,
+                  fault_injected=k >= 20, fault_effective=None if effective is None else (k >= 22 and effective))
+             for k in range(80)]
+    return RunData(Path("."), ticks, [], {}, {"mpc_fault": "output_delay", "fault_start": 1.0, "fault_duration": 500},
+                   {}, [])
+
+
+def test_bug002_undetected_fault_is_triggered_not_no_trigger():
+    from engine.monitor import compute_events
+    ev = compute_events(_events_run(True))
+    assert ev["trigger_time"] == 1.1 and ev["switch_time"] is None and ev["detection_time"] is None
+    ev = compute_events(_events_run(False))            # logged, but the fault never changed the output
+    assert ev["trigger_time"] is None
+    ev = compute_events(_events_run(None))             # old logs without fault_effective: injection onset
+    assert ev["trigger_time"] == 1.0

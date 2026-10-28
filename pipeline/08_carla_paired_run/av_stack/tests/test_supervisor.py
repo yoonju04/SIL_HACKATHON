@@ -82,6 +82,21 @@ def test_output_delay_sends_an_old_command_under_a_fresh_header() -> None:
         assert supervisor.inspect(sent, t, 2.0) is None
 
 
+def test_injector_reports_whether_the_fault_changed_the_output() -> None:
+    bias = MPCFaultInjector(FaultConfig('bias', 1.0, 1.0, 0.05))
+    assert not bias.apply(output(), 0.9) is None and not bias.effective        # before the window
+    bias.apply(output(), 1.0)
+    assert bias.effective
+    drift = MPCFaultInjector(FaultConfig('drift', 1.0, 1.0, 0.05))
+    drift.apply(output(), 1.0)
+    assert not drift.effective                                                 # zero offset at the onset tick
+    drift.apply(replace(output(), seq=2), 1.5)
+    assert drift.effective
+    off = MPCFaultInjector(FaultConfig('intermittent_bias', 1.0, 10.0, 0.08, on_s=0.2, off_s=0.1))
+    off.apply(output(), 1.25)
+    assert not off.effective                                                   # off phase
+
+
 def test_real_mpc_to_lqr_switch_latches_after_temporary_failure() -> None:
     params = asdict(PlantParams())
     params.pop('max_steer_rate_rad_s')

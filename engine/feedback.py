@@ -89,7 +89,7 @@ RULE_TEMPLATES = {
     "oscillation_after_switch": "label oscillation_after_switch: number of sign changes of lane_offset_m with |offset|>0.2 m in [t_sw, t_sw+window] >= 3",
     "post_switch_weave": "same signal as oscillation_after_switch (novel tag) - check whether it duplicates it",
     "overshoot_after_switch": "label overshoot_after_switch: after the first zero crossing of lane_offset_m post-switch, max |offset| on the opposite side > 0.3 m",
-    "late_detection": "label late_detection: trigger_time - actual_fault_onset > T_detect (T_detect to be chosen from data)",
+    "late_detection": "label late_detection: switch_time - trigger_time > T_detect (T_detect to be chosen from data)",
     "curve_entry_during_handover": "label handover_in_curve: |kappa(t_sw)| > kappa_on (needs logging L-3 kappa)",
     "steering_rate_limit": "existing field handover_saturation.rate_saturation_ratio; candidate label rate_limited_handover if > 0.2",
     "steering_angle_saturation": "existing field handover_saturation.angle_saturation_ratio; candidate label if > 0.3",
