@@ -44,7 +44,7 @@ from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
 from engine.monitor import compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline, thresholds_from_config
 from engine.surrogate import MetricGPs, acquisition_score, select_batch_scored
 from engine.dashboard import refresh as refresh_dashboard
-from engine.video import extract_clip, ffmpeg_exe
+from engine.video import cover_times, extract_clip, ffmpeg_exe, key_times
 from engine.prior_tools.prior_tools import make_nemotron_payload
 from engine.cosmos_power import CosmosPower
 
@@ -565,7 +565,10 @@ class Loop:
                                     front_frames=run.front_frames, tick_times=[t["t"] for t in run.ticks], dt=run.dt,
                                     before_s=float(clip_cfg["before_switch_s"]), after_s=float(clip_cfg["after_switch_s"]),
                                     fps=float(clip_cfg["fps"]), max_height=int(clip_cfg["max_height_px"]),
-                                    prefer=tuple(clip_cfg["source_preference"]), sheet_cfg=clip_cfg.get("contact_sheet"))
+                                    prefer=tuple(clip_cfg["source_preference"]), sheet_cfg=clip_cfg.get("contact_sheet"),
+                                    dense_times=key_times(timeline), dense_fps=clip_cfg.get("dense_fps"),
+                                    dense_window_s=float(clip_cfg.get("dense_window_s", 1.0)),
+                                    cover=cover_times(timeline) if clip_cfg.get("cover_events", True) else None)
                 c = self.candidates[r["scenario_id"]]
                 entry = {"run_id": r["run_id"], "scenario_id": r["scenario_id"], "round": round_index, "route_id": c["route_id"],
                          "onset_event": c["onset_event"], "fault_mode": c["fault"]["mode"], "timeline": timeline,
@@ -586,7 +589,8 @@ class Loop:
                             result = {**explain(fb, self.c_fallback, clip, timeline, self.taxonomy, tag="C_fallback", visible_keys=vis or None),
                                       "primary_errors": result["errors"]}
                     entry.update(result)
-                    entry["verification"] = verify(entry.get("explanation"), timeline, clip, self.taxonomy, tol)
+                    entry["verification"] = verify(entry.get("explanation"), timeline, clip, self.taxonomy, tol,
+                                                   float(self.vcfg["verification"].get("visible_departure_margin_m", 0.0)))
                 assert entry["monitor_labels_snapshot"]["recovery_outcome"] == r["recovery_outcome"]  # explainer never edits labels
                 self.explanations[r["run_id"]] = entry
                 append_jsonl(self.out / "explanations.jsonl", entry)

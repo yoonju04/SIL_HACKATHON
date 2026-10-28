@@ -19,12 +19,16 @@ clip:
   after_switch_s: 6.0
   no_switch_anchor: first_departure_or_fault_onset   # 전환이 없는 실패 런의 기준 시각
   fps: 4                                # Cosmos 학습 설정과 같은 4 FPS
+  dense_fps: 10                         # BUG-020: 고장 시작·전환·차선 이탈 시작·충돌 앞뒤 dense_window_s 동안은 10 FPS (20 Hz 원본과 딱 맞음)
+  dense_window_s: 1.0
+  cover_events: true                    # 첫 차선 이탈·충돌이 기록에 있으면 클립 구간을 넓혀 반드시 포함 (앞뒤 1 s)
   max_height_px: 720
   timestamp_overlay: bottom             # 프레임 하단에 시뮬레이션 시각 t=..s (Cosmos가 하단 타임스탬프를 읽음)
   contact_sheet: {fps: 2, columns: 4, tile_width_px: 320}   # 요청당 이미지 1장 제한 대비 (Super-VL 서버 예시 설정)
 
 verification:
   time_tolerance_s: 0.5                 # 주장한 사건 시각과 모니터 로그 차이 허용치 (configurable)
+  visible_departure_margin_m: 0.10      # BUG-020: 차선 밖으로 0.10 m 이상 나간 프레임만 "보이는 이탈"로 요구 (그보다 얕으면 null도 정답)
   check: [switch_time_s, departure_time_s, evidence_frames_s_in_clip, tags_in_taxonomy]
   accept_rule: all_checkable_claims_pass
   hallucination_metric: rejected / explained

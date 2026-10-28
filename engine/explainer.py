@@ -17,8 +17,22 @@ from typing import Any
 from .llm import LLMError, extract_json
 from .video import Clip, data_url
 
-ANSWER_FIELDS = ("switch_time_s", "departure_time_s", "collision_seen", "mechanism", "mechanism_tags", "novel_tags",
-                 "evidence_frames_s", "counterfactual", "uncertainty")
+ANSWER_FIELDS = ("switch_time_s", "frames_outside_lane_s", "departure_time_s", "collision_seen", "mechanism",
+                 "mechanism_tags", "novel_tags", "evidence_frames_s", "counterfactual", "uncertainty")
+
+# What each taxonomy tag means (BUG-020: the bare list was ignored and tags were invented). Unknown tags get no text.
+TAG_HELP = {
+    "pre_switch_lateral_drift": "the car was already sliding to one side before the switch",
+    "departed_before_switch": "the car was already over the lane line at the switch",
+    "curve_entry_during_handover": "the switch happened while entering or driving through a curve",
+    "steering_angle_saturation": "steering held at its angle limit",
+    "steering_rate_limit": "steering could not turn fast enough to follow",
+    "overshoot_after_switch": "after the switch the car came back and crossed to the other side",
+    "oscillation_after_switch": "after the switch the car weaved left and right",
+    "late_detection": "the fault went unnoticed for a long time",
+    "collision_after_departure": "the car hit something after leaving the lane",
+    "stable_recovery": "the car returned to the lane without problems",
+}
 
 SYSTEM = """You are a vehicle-dynamics incident analyst for a CARLA simulation of an MPC->LQR steering handover. \
 The safety label of this run was ALREADY decided by a deterministic monitor; do NOT change, judge or restate it as your \
@@ -37,10 +51,14 @@ THINK_FORMAT = "Answer the question in the following format: <think>\nyour reaso
 def answer_spec(taxonomy: list[str]) -> dict:
     return {
         "switch_time_s": "number or null - time the steering owner changed to the LQR fallback, read from the overlay",
-        "departure_time_s": "number or null - t of the FIRST frame (from the frame list) where a wheel/body is outside the lane lines; null if no frame shows it",
-        "collision_seen": "true or false - does the ego car hit anything in the clip",
+        "frames_outside_lane_s": "array of frame times (copied from the frame list) where a wheel or the body is visibly "
+                                 "over the lane line or road edge in THAT frame; [] if no frame shows it",
+        "departure_time_s": "number or null - the first time in frames_outside_lane_s; null if that list is empty. Decide "
+                            "it from the pixels only: it is usually NOT the fault onset, trigger or switch time from the context",
+        "collision_seen": "true or false - true ONLY if a frame shows the ego car touching another vehicle, person or "
+                          "object; a car passing close or parked nearby is not a collision",
         "mechanism": "one or two sentences: cause and sequence",
-        "mechanism_tags": f"array, ONLY tags from this list: {taxonomy} (anything else goes to novel_tags)",
+        "mechanism_tags": "array of tags copied exactly from the allowed tag list below; never invent a tag here",
         "novel_tags": "array of short snake_case tags for patterns not in the list (may be empty)",
         "evidence_frames_s": "array of frame times copied from the frame list (only times inside this clip) that show the key events",
         "counterfactual": "null or {parameter: one of [onset_offset_s, max_speed_kmh, fault_magnitude, fault_duration_s], "
@@ -62,7 +80,11 @@ def build_messages(clip: Clip, timeline: dict, taxonomy: list[str], media: str, 
             content.append({"type": "image_url", "image_url": {"url": data_url(p, "image/png")}})
     else:
         raise ValueError(f"media {media} not available for this clip")
-    media_note = {"video": f"a {len(clip.frame_paths)}-frame clip at 4 fps",
+    gaps = sorted({round(b - a, 3) for a, b in zip(clip.frame_times, clip.frame_times[1:])})
+    rate = (f"{1 / gaps[-1]:g} fps, {1 / gaps[0]:g} fps around key moments" if len(gaps) > 1 and gaps[0] > 0
+            else "4 fps")
+    media_note = {"video": f"a {len(clip.frame_paths)}-frame clip ({rate}; spacing is not uniform, use the frame list)"
+                  if len(gaps) > 1 else f"a {len(clip.frame_paths)}-frame clip at {rate}",
                   "contact_sheet": "one contact-sheet image; tiles are in time order left-to-right, top-to-bottom",
                   "frames": "individual frames in time order"}[media]
     times = ", ".join(f"{t:.2f}" for t in clip.frame_times)
@@ -71,7 +93,9 @@ def build_messages(clip: Clip, timeline: dict, taxonomy: list[str], media: str, 
             "report must be one of these frame times; times in the context below may lie before the clip and are not "
             "frames.\n"
             f"Known context from the logs (deterministic):\n{json.dumps(shown, default=str)}\n"
-            "Lane departure, collision and offsets are NOT given: read them from the frames.\n\n"
+            "Lane departure, collision and offsets are NOT given: read them from the frames.\n"
+            "Allowed mechanism_tags (use only these exact strings; anything else goes to novel_tags):\n"
+            + "\n".join(f"- {t}: {TAG_HELP.get(t, '')}".rstrip(": ") for t in taxonomy) + "\n\n"
             "Questions: Did the steering owner switch, and when? Was the car already displaced at the switch? "
             "Did any part of the car leave the lane, and when? Was the car in a curve? Did steering look saturated or "
             "rate-limited? Return in <answer> ONLY a JSON object with these keys:\n"
@@ -120,20 +144,30 @@ def monitor_departure_in_clip(timeline: dict, start: float, end: float) -> float
     return None
 
 
-def visible_departure(timeline: dict, frame_times: list[float], eps: float = 1e-6) -> tuple[float | None, list]:
+def visible_departure(timeline: dict, frame_times: list[float], eps: float = 1e-6,
+                      margin_m: float = 0.0) -> tuple[float | None, list]:
     """BUG-017: (first clip FRAME inside a monitor departure interval, intervals that overlap the clip).
-    The model only sees the 4 fps frames; a 0.15 s departure between two frames cannot be seen at all."""
+    The model only sees the frames; a 0.15 s departure between two frames cannot be seen at all.
+    BUG-020: with margin_m > 0 and the per-tick depth in the timeline, a frame counts only if the car is at least
+    margin_m outside the lane there (a wheel 2 cm over a painted line is not visible on camera)."""
     ts = sorted(frame_times or [])
     if not ts:
         return None, []
     over = [(a, b) for a, b in (timeline.get("lane_departure_intervals_s") or []) if b >= ts[0] and a <= ts[-1]]
+    depth = timeline.get("lane_departure_depth_m") or []
+    def deep_enough(t):
+        if margin_m <= 0 or not depth:
+            return True
+        near = [d for u, d in depth if abs(u - t) <= 0.026]
+        return bool(near) and max(near) >= margin_m - 1e-9
     for t in ts:
-        if any(a - eps <= t <= b + eps for a, b in over):
+        if any(a - eps <= t <= b + eps for a, b in over) and deep_enough(t):
             return t, over
     return None, over
 
 
-def verify(expl: dict | None, timeline: dict, clip: Clip, taxonomy: list[str], tol: float = 0.5) -> dict:
+def verify(expl: dict | None, timeline: dict, clip: Clip, taxonomy: list[str], tol: float = 0.5,
+           visible_margin_m: float = 0.0) -> dict:
     """Compare claimed times with the monitor log. accepted = every checkable claim passes."""
     if expl is None:
         return {"accepted": False, "checks": {}, "reason": "no_parseable_explanation"}
@@ -146,11 +180,11 @@ def verify(expl: dict | None, timeline: dict, clip: Clip, taxonomy: list[str], t
                                    "claimed": sw_c, "error_s": None if sw_c is None else round(sw_c - sw_m, 3)}
     dep_c = _num(expl.get("departure_time_s"))
     if clip.frame_times:
-        dep_m, over = visible_departure(timeline, clip.frame_times)
+        dep_m, over = visible_departure(timeline, clip.frame_times, margin_m=visible_margin_m)
     else:   # no frame list (old clips): interval start clipped to the clip
         dep_m, over = monitor_departure_in_clip(timeline, clip.start_s, clip.end_s), []
     if dep_m is None and over:
-        # departure happened only BETWEEN frames: not visible. null is right; a claim must sit on that interval.
+        # departure only BETWEEN frames or too shallow to see: null is right; a claim must sit on that interval.
         checks["departure_time_s"] = {"pass": dep_c is None or any(a - tol <= dep_c <= b + tol for a, b in over),
                                       "monitor": None, "claimed": dep_c, "not_visible_intervals": over}
     elif dep_m is None:
@@ -169,7 +203,8 @@ def verify(expl: dict | None, timeline: dict, clip: Clip, taxonomy: list[str], t
     tags = expl.get("mechanism_tags") or []
     checks["tags_in_taxonomy"] = {"pass": isinstance(tags, list) and all(t in taxonomy for t in tags),
                                   "unknown": [t for t in tags if t not in taxonomy] if isinstance(tags, list) else tags}
-    return {"accepted": all(c["pass"] for c in checks.values()), "checks": checks, "tolerance_s": tol}
+    return {"accepted": all(c["pass"] for c in checks.values()), "checks": checks, "tolerance_s": tol,
+            "visible_margin_m": visible_margin_m}
 
 
 def stub_explanation(timeline: dict, clip: Clip, rng: random.Random, hallucinate_p: float = 0.25) -> dict:

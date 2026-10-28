@@ -214,6 +214,8 @@ def compute_events(run: RunData, th: dict[str, float] | None = None) -> dict[str
     if start is not None:
         intervals.append([start, ticks[-1]["t"]])
     ev["departure_intervals"] = intervals
+    # how far outside the lane (m) at each departed tick: lets the video check ask only for VISIBLE departures (BUG-020)
+    ev["departure_depth"] = [[r["t"], round(-m, 3)] for r, m in zip(ticks, margins) if m < 0]
     t_ref = ev["switch_time"] if ev["switch_time"] is not None else (ev["planned_fault_onset"] or 0.0)
     after = [iv for iv in intervals if iv[1] >= t_ref - 1e-9]
     # if the car is already outside the lane at t_ref the "departure after switch" is t_ref itself
@@ -432,6 +434,7 @@ def monitor_timeline(run: RunData, record: dict, th: dict[str, float] | None = N
         "trigger_time_s": ev["trigger_time"], "detection_time_s": ev.get("detection_time"),
         "trigger_source": ev["trigger_source"],
         "switch_time_s": ev["switch_time"], "lane_departure_intervals_s": ev["departure_intervals"],
+        "lane_departure_depth_m": ev.get("departure_depth") or [],
         "first_departure_after_switch_s": ev["first_departure_after_switch"],
         "collision_times_s": ev["collision_times"], "safe_stop_time_s": ev["safe_stop_time"],
         "max_abs_lane_offset_m": ev.get("max_abs_lane_offset_m"), "max_abs_lane_offset_t_s": ev.get("max_abs_lane_offset_t"),

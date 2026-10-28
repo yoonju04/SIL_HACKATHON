@@ -1,4 +1,5 @@
-"""10 clip extraction: front.mp4 (or view.mp4) -> [anchor-2 s, anchor+6 s] at 4 fps, <=720p, timestamp overlay.
+"""10 clip extraction: front.mp4 (or view.mp4) -> [anchor-2 s, anchor+6 s] at 4 fps (8 fps near key events), <=720p,
+timestamp overlay.
 
 * front.mp4 frame k <-> front_frames.jsonl line k (sim time t), written once per sensor frame
   (sim-eval integration/benchmark_recording.py). Exact.
@@ -74,6 +75,21 @@ def frame_timeline(run_dir: Path, source: Path, front_frames: list[dict], tick_t
     return [t_end - (n - 1 - i) * dt for i in range(n)], "approx_end_aligned"
 
 
+def key_times(timeline: dict) -> list[float]:
+    """Moments worth denser frames (BUG-020): fault onset, switch, start of each lane departure, each collision."""
+    ts = [timeline.get("actual_fault_onset_s"), timeline.get("switch_time_s")]
+    ts += [iv[0] for iv in timeline.get("lane_departure_intervals_s") or []]
+    ts += list(timeline.get("collision_times_s") or [])
+    return sorted({round(float(t), 3) for t in ts if isinstance(t, (int, float)) and not isinstance(t, bool)})
+
+
+def cover_times(timeline: dict) -> list[float]:
+    """Events the clip window must contain if the log has them: first lane departure and every collision."""
+    ivs = timeline.get("lane_departure_intervals_s") or []
+    ts = ([ivs[0][0]] if ivs else []) + list(timeline.get("collision_times_s") or [])
+    return [float(t) for t in ts if isinstance(t, (int, float)) and not isinstance(t, bool)]
+
+
 def pick_indices(times: list[float], start: float, end: float, fps: float) -> list[int]:
     out, t = [], start
     step = 1.0 / fps
@@ -130,8 +146,12 @@ def _contact_sheet(paths: list[Path], times: list[float], out: Path, fps_src: fl
         from PIL import Image
     except Exception:
         return None
-    step = max(1, int(round(fps_src / fps_sheet)))
-    sel = paths[::step]
+    # time-based (frames may be denser near events): one tile per 1/fps_sheet seconds
+    sel, last = [], None
+    for p, t in zip(paths, times):
+        if last is None or t - last >= 1.0 / fps_sheet - 1e-6:
+            sel.append(p)
+            last = t
     if not sel:
         return None
     first = Image.open(sel[0])
@@ -147,7 +167,11 @@ def _contact_sheet(paths: list[Path], times: list[float], out: Path, fps_src: fl
 
 def extract_clip(run_dir: Path, out_dir: Path, *, anchor_s: float, front_frames: list[dict], tick_times: list[float],
                  dt: float = 0.05, before_s: float = 2.0, after_s: float = 6.0, fps: float = 4.0, max_height: int = 720,
-                 prefer: tuple[str, ...] = ("front.mp4", "view.mp4"), sheet_cfg: dict | None = None) -> Clip | None:
+                 prefer: tuple[str, ...] = ("front.mp4", "view.mp4"), sheet_cfg: dict | None = None,
+                 dense_times: list[float] | None = None, dense_fps: float | None = None, dense_window_s: float = 1.0,
+                 cover: list[float] | None = None, cover_margin_s: float = 1.0) -> Clip | None:
+    """dense_times: frames at dense_fps within +-dense_window_s of each time (on top of the fps grid).
+    cover: times the window is widened to include (+-cover_margin_s, never beyond the log)."""
     exe = ffmpeg_exe()
     src = next((run_dir / n for n in prefer if (run_dir / n).is_file()), None)
     if exe is None or src is None:
@@ -155,8 +179,22 @@ def extract_clip(run_dir: Path, out_dir: Path, *, anchor_s: float, front_frames:
     times, alignment = frame_timeline(run_dir, src, front_frames, tick_times, dt, exe)
     if not times:
         return None
-    start, end = max(times[0], anchor_s - before_s), min(times[-1], anchor_s + after_s)
-    idx = pick_indices(times, start, end, fps)
+    start, end = anchor_s - before_s, anchor_s + after_s
+    notes = []
+    for t in cover or []:
+        if t < start or t > end:
+            notes.append(f"window widened to show event at {t:.2f} s")
+        start, end = min(start, t - cover_margin_s), max(end, t + cover_margin_s)
+    start, end = max(times[0], start), min(times[-1], end)
+    idx = set(pick_indices(times, start, end, fps))
+    dense = bool(dense_times and dense_fps and dense_fps > fps)
+    if dense:
+        for t in dense_times:
+            a, b = max(start, t - dense_window_s), min(end, t + dense_window_s)
+            if a <= b:
+                idx.update(pick_indices(times, a, b, dense_fps))
+        notes.append(f"{dense_fps:g} fps within {dense_window_s:g} s of {', '.join(f'{t:.2f}' for t in dense_times)}")
+    idx = sorted(idx)
     if not idx:
         return None
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -166,20 +204,21 @@ def extract_clip(run_dir: Path, out_dir: Path, *, anchor_s: float, front_frames:
                     str(tmp / "f_%04d.png")], check=True)
     frames = sorted(tmp.glob("f_*.png"))
     ftimes = [round(times[i], 3) for i in idx][: len(frames)]
-    notes = []
     overlay = _overlay(frames, ftimes, max_height)
     if not overlay:
         notes.append("Pillow missing: no timestamp overlay")
+    for old in out_dir.glob("frame_*.png"):          # a re-extraction may have fewer frames than the old clip
+        old.unlink()
     final_frames = []
     for k, (p, t) in enumerate(zip(frames, ftimes)):
         q = out_dir / f"frame_{k:03d}.png"
         p.replace(q)
         final_frames.append(q)
     shutil.rmtree(tmp, ignore_errors=True)
-    video = out_dir / "clip_4fps.mp4"
+    video = out_dir / ("clip.mp4" if dense else "clip_4fps.mp4")
     (out_dir / "frames.json").write_text(json.dumps({"frame_times_s": ftimes, "source": src.name,
                                                      "alignment": alignment}), encoding="utf-8")
-    subprocess.run([exe, "-y", "-loglevel", "error", "-framerate", str(fps), "-i",
+    subprocess.run([exe, "-y", "-loglevel", "error", "-framerate", str(dense_fps if dense else fps), "-i",
                     str(out_dir / "frame_%03d.png"), "-vf", f"scale=-2:'min({max_height},ih)'", "-c:v", "libx264",
                     "-pix_fmt", "yuv420p", str(video)], check=True)
     sc = sheet_cfg or {}
