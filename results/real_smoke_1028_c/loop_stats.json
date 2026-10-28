@@ -1,0 +1,62 @@
+{
+  "a_calls": [
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 200,
+        "prompt_tokens": 8935,
+        "total_tokens": 9135,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 6288
+        },
+        "prompt_cache_hit_tokens": 6288,
+        "prompt_cache_miss_tokens": 2647
+      },
+      "schema_error_examples": [],
+      "items_returned": 1,
+      "items_valid": 1,
+      "round": 0,
+      "requested": 1
+    }
+  ],
+  "rejected": [
+    {
+      "scenario_id": "SC-fe83d850ec",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.75 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-89c3565f27",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-17cb173424",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    }
+  ],
+  "llm_errors": []
+}

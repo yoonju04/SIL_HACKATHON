@@ -1,0 +1,199 @@
+[
+  {
+    "scenario_id": "SC-fe83d850ec",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.2,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "PK-002",
+      "PK-003",
+      "S1"
+    ],
+    "expected_mechanism": "LQR saturation prevents recovery; error state exceeds linear model validity at switch, and sustained saturation drives state divergence.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-89c3565f27",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 4
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.186,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-17cb173424",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0836,
+        "on_s": 0.9217,
+        "off_s": 0.9683
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.624,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-454cf90d75",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1003,
+        "on_s": 0.9244,
+        "off_s": 0.1386
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.982,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-d6f692dece",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.4967
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.893,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ebb8057e76",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6561,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.106,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-e5a869b178",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1183,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.298,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-c7acdfa451",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0377
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.63,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  }
+]

@@ -1,0 +1,134 @@
+[
+  {
+    "criterion": "RouteCompletionTest",
+    "frame": 0,
+    "event_type": "ROUTE_COMPLETION",
+    "message": "Agent has completed 100 of the route"
+  },
+  {
+    "criterion": "CollisionTest",
+    "frame": 60347,
+    "event_type": "COLLISION_VEHICLE",
+    "message": "Agent collided against object with type=vehicle.mini.cooper_s_2021 and id=223 at (x=13.771, y=-4.221, z=-0.003)"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60115,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 91.28% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60128,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 154.94% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60139,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 480.13% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60149,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 444.52% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60285,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 28.35% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60300,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 447.64% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60309,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 514.91% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60318,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 595.58% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60327,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 565.23% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60336,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 633.02% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60344,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 675.36% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60353,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 2165.5% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60361,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 1410.38% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60369,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 817.1% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60378,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 653.7% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60387,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 607.71% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60395,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 523.03% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60404,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 388.36% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60407,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 356.51% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 60407,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 356.51% of the surrounding traffic's one"
+  }
+]

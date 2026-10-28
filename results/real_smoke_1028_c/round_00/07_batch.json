@@ -1,0 +1,16 @@
+[
+  {
+    "scenario_id": "SC-fe83d850ec",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-89c3565f27",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  }
+]
