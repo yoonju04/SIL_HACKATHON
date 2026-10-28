@@ -13,6 +13,8 @@ Outputs go to outputs/<mode>_<timestamp>/ (git-ignored). Thresholds are PROVISIO
 from __future__ import annotations
 
 import argparse
+import atexit
+import contextlib
 import json
 import math
 import os
@@ -43,6 +45,7 @@ from engine.surrogate import MetricGPs, acquisition_score, select_batch_scored
 from engine.dashboard import refresh as refresh_dashboard
 from engine.video import extract_clip, ffmpeg_exe
 from engine.prior_tools.prior_tools import make_nemotron_payload
+from engine.cosmos_power import CosmosPower
 
 ABLATIONS = {
     "X-1": dict(name="random_space_filling", use_a=False, use_gp=False, use_df=False, use_b=False),
@@ -81,6 +84,49 @@ def append_jsonl(path: Path, obj: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(obj, ensure_ascii=False, default=str) + "\n")
+
+
+class CosmosGuard:
+    """--cosmos-power auto: the Cosmos dedicated endpoint is on only while a stage uses it.
+
+    session(reason): ensure_on before, ensure_off after (unless keep_on). Yields True when Cosmos is usable.
+    shutdown(): final off (try/finally + atexit in main). power None (manual mode / mock / not dedicated):
+    no API calls, Cosmos assumed usable as before. After one failed start, later sessions skip Cosmos
+    instead of waiting for the timeout again."""
+
+    def __init__(self, power: Any = None, log=None) -> None:
+        self.power = power
+        self.log = log or (lambda m: None)
+        self.failed = False
+        self._shut = False
+
+    @contextlib.contextmanager
+    def session(self, reason: str, keep_on: bool = False):
+        if self.power is None:
+            yield True
+            return
+        if self.failed:
+            self.log(f"[cosmos-power] skip start for {reason}: endpoint did not become ready earlier in this run")
+            yield False
+            return
+        ok = self.power.ensure_on(reason)
+        if not ok:
+            self.failed = True
+        try:
+            yield ok
+        finally:
+            if not keep_on or not ok:
+                self.power.ensure_off(reason)
+
+    def shutdown(self, reason: str = "end of run") -> None:
+        if self.power is None or self._shut:
+            return
+        self._shut = True
+        init = getattr(self.power, "initial_state", None) or {}
+        if init.get("enabled"):
+            self.log("[cosmos-power] endpoint was already on when this run first checked it (manual start); "
+                     "turning it off now (--cosmos-power auto)")
+        self.power.ensure_off(reason)
 
 
 class Loop:
@@ -126,6 +172,8 @@ class Loop:
         self.events_cache: dict[str, dict] = {}
         self.cf_queue: list[dict] = []
         self.stats: dict[str, Any] = {"a_calls": [], "rejected": [], "llm_errors": []}
+        self.cosmos = CosmosGuard()       # main() swaps in the auto guard for --real --cosmos-power auto
+        self.insights_next = False        # campaign insights follow the last round -> keep Cosmos on
         self._setup_clients()
         self._setup_runner()
 
@@ -472,43 +520,51 @@ class Loop:
         picks = [r for _, r in sorted(picks, key=lambda p: p[0])][: int(sel["max_per_round"])]
         clip_cfg = self.vcfg["clip"]
         tol = float(self.vcfg["verification"]["time_tolerance_s"])
-        for r in picks:
-            run = load_av_stack_run(self.out / "runs" / r["run_id"])
-            timeline = monitor_timeline(run, r, self.th)
-            anchor = r.get("switch_time")
-            if anchor is None:
-                anchor = (timeline.get("lane_departure_intervals_s") or [[r.get("planned_fault_onset") or 0.0]])[0][0]
-            clip = extract_clip(run.run_dir, self.out / "clips" / r["run_id"], anchor_s=float(anchor),
-                                front_frames=run.front_frames, tick_times=[t["t"] for t in run.ticks], dt=run.dt,
-                                before_s=float(clip_cfg["before_switch_s"]), after_s=float(clip_cfg["after_switch_s"]),
-                                fps=float(clip_cfg["fps"]), max_height=int(clip_cfg["max_height_px"]),
-                                prefer=tuple(clip_cfg["source_preference"]), sheet_cfg=clip_cfg.get("contact_sheet"))
-            c = self.candidates[r["scenario_id"]]
-            entry = {"run_id": r["run_id"], "scenario_id": r["scenario_id"], "round": round_index, "route_id": c["route_id"],
-                     "onset_event": c["onset_event"], "fault_mode": c["fault"]["mode"], "timeline": timeline,
-                     "monitor_labels_snapshot": {k: r[k] for k in ("recovery_outcome", "recovery_labels", "final_safe_recovery")}}
-            if clip is None:
-                entry.update(explanation=None, verification={"accepted": False, "reason": "no_video_or_ffmpeg"}, clip=None)
-            else:
-                entry["clip"] = clip.as_dict()
-                if self.mode == "mock":
-                    expl = stub_explanation(timeline, clip, self.rng)
-                    result = {"explanation": expl, "media_used": "video", "model": "stub/explainer (SYNTHETIC)", "errors": []}
+        use_cosmos = self.mode != "mock" and bool(picks) and self.c_settings is not self.c_fallback
+        keep_on = round_index >= self.rounds and self.insights_next   # insights call Cosmos right after
+        ctx = self.cosmos.session(f"stage_10 round {round_index}", keep_on=keep_on) if use_cosmos \
+            else contextlib.nullcontext(True)
+        with ctx as cosmos_ok:
+            if not cosmos_ok:
+                self.say("  [10] Cosmos endpoint not ready -> Super-VL fallback for this round")
+            for r in picks:
+                run = load_av_stack_run(self.out / "runs" / r["run_id"])
+                timeline = monitor_timeline(run, r, self.th)
+                anchor = r.get("switch_time")
+                if anchor is None:
+                    anchor = (timeline.get("lane_departure_intervals_s") or [[r.get("planned_fault_onset") or 0.0]])[0][0]
+                clip = extract_clip(run.run_dir, self.out / "clips" / r["run_id"], anchor_s=float(anchor),
+                                    front_frames=run.front_frames, tick_times=[t["t"] for t in run.ticks], dt=run.dt,
+                                    before_s=float(clip_cfg["before_switch_s"]), after_s=float(clip_cfg["after_switch_s"]),
+                                    fps=float(clip_cfg["fps"]), max_height=int(clip_cfg["max_height_px"]),
+                                    prefer=tuple(clip_cfg["source_preference"]), sheet_cfg=clip_cfg.get("contact_sheet"))
+                c = self.candidates[r["scenario_id"]]
+                entry = {"run_id": r["run_id"], "scenario_id": r["scenario_id"], "round": round_index, "route_id": c["route_id"],
+                         "onset_event": c["onset_event"], "fault_mode": c["fault"]["mode"], "timeline": timeline,
+                         "monitor_labels_snapshot": {k: r[k] for k in ("recovery_outcome", "recovery_labels", "final_safe_recovery")}}
+                if clip is None:
+                    entry.update(explanation=None, verification={"accepted": False, "reason": "no_video_or_ffmpeg"}, clip=None)
                 else:
-                    vis = tuple((self.vcfg.get("prompt") or {}).get("visible_timeline_keys") or ())
-                    result = explain(self.client_c, self.c_settings, clip, timeline, self.taxonomy, tag="C", visible_keys=vis or None)
-                    if result["explanation"] is None and self.c_settings is not self.c_fallback:
-                        fb = TokenFactoryClient.from_config(self.cfg["llm"], self.llm_log)
-                        result = {**explain(fb, self.c_fallback, clip, timeline, self.taxonomy, tag="C_fallback", visible_keys=vis or None),
-                                  "primary_errors": result["errors"]}
-                entry.update(result)
-                entry["verification"] = verify(entry.get("explanation"), timeline, clip, self.taxonomy, tol)
-            assert entry["monitor_labels_snapshot"]["recovery_outcome"] == r["recovery_outcome"]  # explainer never edits labels
-            self.explanations[r["run_id"]] = entry
-            append_jsonl(self.out / "explanations.jsonl", entry)
-            v = entry["verification"]
-            self.say(f"  [10] {r['run_id']} explained via {entry.get('media_used')} -> "
-                     f"{'ACCEPTED' if v.get('accepted') else 'rejected'} {[k for k, x in (v.get('checks') or {}).items() if not x['pass']]}")
+                    entry["clip"] = clip.as_dict()
+                    if self.mode == "mock":
+                        expl = stub_explanation(timeline, clip, self.rng)
+                        result = {"explanation": expl, "media_used": "video", "model": "stub/explainer (SYNTHETIC)", "errors": []}
+                    else:
+                        vis = tuple((self.vcfg.get("prompt") or {}).get("visible_timeline_keys") or ())
+                        result = explain(self.client_c, self.c_settings, clip, timeline, self.taxonomy, tag="C", visible_keys=vis or None) \
+                            if cosmos_ok else {"explanation": None, "errors": ["cosmos endpoint not ready (--cosmos-power auto)"]}
+                        if result["explanation"] is None and self.c_settings is not self.c_fallback:
+                            fb = TokenFactoryClient.from_config(self.cfg["llm"], self.llm_log)
+                            result = {**explain(fb, self.c_fallback, clip, timeline, self.taxonomy, tag="C_fallback", visible_keys=vis or None),
+                                      "primary_errors": result["errors"]}
+                    entry.update(result)
+                    entry["verification"] = verify(entry.get("explanation"), timeline, clip, self.taxonomy, tol)
+                assert entry["monitor_labels_snapshot"]["recovery_outcome"] == r["recovery_outcome"]  # explainer never edits labels
+                self.explanations[r["run_id"]] = entry
+                append_jsonl(self.out / "explanations.jsonl", entry)
+                v = entry["verification"]
+                self.say(f"  [10] {r['run_id']} explained via {entry.get('media_used')} -> "
+                         f"{'ACCEPTED' if v.get('accepted') else 'rejected'} {[k for k, x in (v.get('checks') or {}).items() if not x['pass']]}")
         fb = self.vcfg["feedback"]
         if fb["counterfactual_queue"]["enabled"]:
             self.cf_queue += counterfactual_candidates(self.explanations, self.candidates, self.space, round_index + 1,
@@ -790,9 +846,16 @@ def load_dotenv(path: Path = REPO_ROOT / ".env") -> None:
             os.environ[k] = v
 
 
-def campaign_insights(out: Path, mode: str, cfg: dict) -> dict | None:
+def campaign_insights(out: Path, mode: str, cfg: dict, cosmos: CosmosGuard | None = None) -> dict | None:
     """09 monitor Cosmos campaign insights (pipeline/09_monitor/explain.py) after the loop -> out/insights/.
     Text-only (monitor numbers, no video). mock: no network. Never fails the run."""
+    if mode != "mock" and cosmos is not None and cosmos.power is not None:
+        with cosmos.session("campaign insights") as ok:
+            if not ok:
+                log("campaign insights skipped: Cosmos endpoint not ready (--cosmos-power auto); "
+                    "later: python -m engine.insights " + str(out))
+                return None
+            return campaign_insights(out, mode, cfg, None)
     try:
         from engine.insights import run_insights
         res = run_insights(out, mode=mode, llm_cfg=cfg["llm"])
@@ -824,6 +887,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--video-explainer", choices=("on", "off"), default="on")
     ap.add_argument("--insights", choices=("on", "off"), default="on",
                     help="09 monitor Cosmos campaign insights after the loop -> OUT/insights/ (mock: no network)")
+    ap.add_argument("--cosmos-power", choices=("auto", "manual"), default="auto",
+                    help="auto: start the Cosmos dedicated endpoint only for stage 10 / insights and stop it after "
+                         "(and at exit); manual: never touch it (Nebius console). mock: no API calls")
+    ap.add_argument("--cosmos-start-timeout", type=float, default=15.0, help="minutes to wait for Cosmos ready (auto)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--cold-start", type=int)
     ap.add_argument("--batch-size", type=int)
@@ -856,8 +923,21 @@ def main(argv: list[str] | None = None) -> int:
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on")
-    m = loop.run()
-    ins = campaign_insights(out, mode, loop.cfg) if args.insights == "on" else None
+    loop.insights_next = args.insights == "on"
+    if args.real and args.cosmos_power == "auto":
+        power = CosmosPower.from_env(role_settings(loop.cfg["llm"], "C_cosmos").get("model"), log=log,
+                                     timeout_s=args.cosmos_start_timeout * 60)
+        loop.cosmos = CosmosGuard(power, log=log)
+        if power is None:
+            log("[cosmos-power] auto: Cosmos model is not a dedicated endpoint (or no key) -> nothing to switch")
+        else:
+            atexit.register(loop.cosmos.shutdown, "process exit")
+            log(f"[cosmos-power] auto: endpoint {power.routing_key} is started only for stage 10 / insights")
+    try:
+        m = loop.run()
+        ins = campaign_insights(out, mode, loop.cfg, loop.cosmos) if args.insights == "on" else None
+    finally:  # also on Ctrl+C / crash: never leave the paid endpoint running
+        loop.cosmos.shutdown("end of run")
     if ins:  # redraw the main screen so screen/campaign.html carries the insights section
         try:
             refresh_dashboard(out / "run_records.jsonl", out / "screen", explanations=out / "explanations.jsonl",
