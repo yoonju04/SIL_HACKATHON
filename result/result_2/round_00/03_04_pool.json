@@ -1,0 +1,304 @@
+[
+  {
+    "scenario_id": "SC-6f73c3a04f",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.5,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "O-017",
+      "O-018",
+      "PK-002"
+    ],
+    "expected_mechanism": "Steering saturates at max angle; first LQR commands are clipped, reducing effective corrective capability.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-0db9d9f489",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.5,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "O-017",
+      "O-018",
+      "PK-002"
+    ],
+    "expected_mechanism": "Steering saturates at max angle opposite direction; first LQR commands are clipped, reducing effective corrective capability.",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-3730574f60",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.3,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "O-017",
+      "O-018",
+      "PK-002"
+    ],
+    "expected_mechanism": "Steering saturates at max angle; first LQR commands are clipped, but high speed may allow larger lateral error before saturation dominates, potentially allowing recovery if error state is small.",
+    "expected_side": "recover"
+  },
+  {
+    "scenario_id": "SC-091c12a692",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0331
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.092,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b8e72c790e",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.4521,
+        "side": "negative"
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.764,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f9ff8e9067",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.5174
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.294,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b9c460d010",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 0.689
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.926,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-874c1da051",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3568,
+        "side": "negative"
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.503,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f9884143a0",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 2.7809
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.22,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-cd0e680f19",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1707,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.899,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b1fdf112f7",
+    "source": "space_filling",
+    "route_id": "bench2drive:26956",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.043
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.419,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-5b8f1f9b61",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1258,
+        "on_s": 0.3341,
+        "off_s": 0.1156
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.563,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  }
+]

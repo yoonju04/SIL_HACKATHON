@@ -1,0 +1,66 @@
+{
+  "n_runs": 12,
+  "n_valid": 12,
+  "n_switched": 8,
+  "n_final_safe_recovery": 2,
+  "n_failures": 8,
+  "both_sides_observed": true,
+  "boundary_band_runs": 0,
+  "boundary_band": 0.2,
+  "failures_per_simulation": 0.6666666666666666,
+  "simulations_to_first_failure": 1,
+  "unique_failure_conditions": 5,
+  "outcome_counts": {
+    "unrecovered": 3,
+    "no_switch": 4,
+    "safe_recovery": 2,
+    "recovered_after_departure": 3
+  },
+  "trigger_counts": {
+    "tracking_divergence": 6,
+    "None": 4,
+    "stale_sequence": 2
+  },
+  "sr_outcome_counts": {
+    "F1_no_or_late_switch": 10,
+    "pass": 2
+  },
+  "explanations": 8,
+  "explanations_accepted": 1,
+  "explanation_acceptance_rate": 0.125,
+  "hallucination_rate": 0.875,
+  "gp_boundary_sign_accuracy": {
+    "n": 8,
+    "accuracy": 1.0,
+    "truth": "leave-one-out on observed runs"
+  },
+  "a_schema_valid_items": 19,
+  "a_items_returned": 19,
+  "rejected_candidates": 10,
+  "llm_usage": {
+    "A": {
+      "calls": 2,
+      "prompt_tokens": 20024,
+      "completion_tokens": 2869,
+      "stub": false
+    },
+    "B": {
+      "calls": 75,
+      "prompt_tokens": 1126926,
+      "completion_tokens": 325507,
+      "stub": false
+    },
+    "C": {
+      "calls": 8,
+      "prompt_tokens": 50608,
+      "completion_tokens": 5266,
+      "stub": false
+    },
+    "A_refine": {
+      "calls": 1,
+      "prompt_tokens": 6908,
+      "completion_tokens": 10713,
+      "stub": false
+    }
+  }
+}

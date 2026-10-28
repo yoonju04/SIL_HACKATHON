@@ -1,0 +1,79 @@
+
+[1m========= Preparing RouteScenario_0 (repetition 0) =========[0m
+[1m> Loading the world[0m
+[1m> Setting up the agent[0m
+[av_stack] PDM-Lite + supervised steering | max speed 35 km/h | comfort pedals on | traffic lights green for the ego
+[1m> Running the route[0m
+C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack\third_party\carla_garage\team_code\kinematic_bicycle_model.py:47: RuntimeWarning: invalid value encountered in cast
+  steers, throttles, brakes = actions[:, 0], actions[:, 1], actions[:, 2].astype(np.uint8)
+Sparse Waypoints: 18
+Dense Waypoints: 556
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+WARNING: Cannot spawn actor vehicle.* at position Location(x=0.403862, y=28.185158, z=0.200000)
+[1m> Stopping the route[0m
+
+[1m========= Results of RouteScenario_0 (repetition 0) ------ [91mFAILURE[0m [1m=========[0m
+
+╒═══════════════════════╤═════════════════════╕
+│ Start Time            │ 2026-10-28 01:19:27 │
+├───────────────────────┼─────────────────────┤
+│ End Time              │ 2026-10-28 01:21:24 │
+├───────────────────────┼─────────────────────┤
+│ System Time           │ 117.3s              │
+├───────────────────────┼─────────────────────┤
+│ Game Time             │ 121.05s             │
+├───────────────────────┼─────────────────────┤
+│ Ratio (Game / System) │ 1.032               │
+╘═══════════════════════╧═════════════════════╛
+
+╒═══════════════════════╤═════════╤═════════╕
+│ Criterion             │ Result  │ Value   │
+├───────────────────────┼─────────┼─────────┤
+│ RouteCompletionTest   │ [92mSUCCESS[0m │ 100 %   │
+├───────────────────────┼─────────┼─────────┤
+│ OutsideRouteLanesTest │ [92mSUCCESS[0m │ 0 %     │
+├───────────────────────┼─────────┼─────────┤
+│ CollisionTest         │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ RunningRedLightTest   │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ RunningStopTest       │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ MinSpeedTest          │ [91mFAILURE[0m │ 233.9 % │
+├───────────────────────┼─────────┼─────────┤
+│ InRouteTest           │ [92mSUCCESS[0m │         │
+├───────────────────────┼─────────┼─────────┤
+│ AgentBlockedTest      │ [92mSUCCESS[0m │         │
+├───────────────────────┼─────────┼─────────┤
+│ ScenarioTimeoutTest   │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ Timeout               │ [92mSUCCESS[0m │         │
+╘═══════════════════════╧═════════╧═════════╛
+
+[1m> Registering the route statistics[0m
+INFO:  Found the required file in cache!  Carla/Maps/Nav/Town05.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town05.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town10HD_Opt.bin 

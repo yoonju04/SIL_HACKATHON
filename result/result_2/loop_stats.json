@@ -1,0 +1,180 @@
+{
+  "a_calls": [
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 564,
+        "prompt_tokens": 8935,
+        "total_tokens": 9499,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 8935
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 0,
+      "requested": 3
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2305,
+        "prompt_tokens": 11089,
+        "total_tokens": 13394,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 11089
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 1,
+      "requested": 15
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 10713,
+        "prompt_tokens": 6908,
+        "total_tokens": 17621,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 10251,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 6908
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 1,
+      "requested": 3,
+      "refine": true
+    }
+  ],
+  "rejected": [
+    {
+      "scenario_id": "SC-6f73c3a04f",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.75 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-0db9d9f489",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-091c12a692",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-f9ff8e9067",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-f9884143a0",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 15.85 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-b1fdf112f7",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.75 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-0ef48010a3",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.75 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-59e8cca5f5",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 15.85 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-31df12d92b",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "G-04 baseline collides at 13.25 s in the evaluation window"
+      ]
+    },
+    {
+      "scenario_id": "SC-642941d0a8",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    }
+  ],
+  "llm_errors": [],
+  "gp_train_counts": [
+    {
+      "round": 1,
+      "recovery_success": 4,
+      "switched_indicator": 6
+    }
+  ]
+}

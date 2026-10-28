@@ -1,0 +1,12 @@
+meta:
+  generated_by: engine/feedback.py taxonomy_proposals
+  auto_apply: false
+  note: Candidates only. A human must define/approve a rule before 09 monitor uses
+    it.
+  accepted_explanations: 1
+already_covered_by_monitor:
+  pre_switch_lateral_drift: metrics.pre_switch_max_lateral_error_m
+  departed_before_switch: recovery_labels.departed_at_switch
+  collision_after_departure: P-03 / unrecovered
+rule_candidates: []
+text_clusters: []

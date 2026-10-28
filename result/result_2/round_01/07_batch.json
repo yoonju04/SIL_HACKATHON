@@ -1,0 +1,80 @@
+[
+  {
+    "scenario_id": "SC-6012ca15f2",
+    "source": "perturbation",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 1.2754598533568497,
+      "switched_indicator": 0.5792155774369702
+    },
+    "gp_std": {
+      "recovery_success": 9.499230874940123,
+      "switched_indicator": 0.8069594633324383
+    }
+  },
+  {
+    "scenario_id": "SC-0ef48010a3",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": -5.8126214561791345,
+      "switched_indicator": -0.07712664443175887
+    },
+    "gp_std": {
+      "recovery_success": 11.047494396116562,
+      "switched_indicator": 0.7934257751017562
+    }
+  },
+  {
+    "scenario_id": "SC-59e8cca5f5",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": -8.22252415081272,
+      "switched_indicator": 0.6842671799850883
+    },
+    "gp_std": {
+      "recovery_success": 11.150521581232638,
+      "switched_indicator": 0.7693011216057926
+    }
+  },
+  {
+    "scenario_id": "SC-8d8a1a4534",
+    "source": "perturbation",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": -8.24699605839731,
+      "switched_indicator": 0.6827287598711548
+    },
+    "gp_std": {
+      "recovery_success": 11.151493801723678,
+      "switched_indicator": 0.770365894084807
+    }
+  },
+  {
+    "scenario_id": "SC-bcc1d59d18",
+    "source": "perturbation",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": -8.246996120520997,
+      "switched_indicator": 0.6827262314217066
+    },
+    "gp_std": {
+      "recovery_success": 11.151493803856292,
+      "switched_indicator": 0.7703677028891437
+    }
+  },
+  {
+    "scenario_id": "SC-0aae935d6b",
+    "source": "perturbation",
+    "selected_by": "random_space_filling",
+    "gp_mean": {
+      "recovery_success": -20.000177575877238,
+      "switched_indicator": 0.6207244163009005
+    },
+    "gp_std": {
+      "recovery_success": 0.17410744252374313,
+      "switched_indicator": 0.8161297307356191
+    }
+  }
+]
