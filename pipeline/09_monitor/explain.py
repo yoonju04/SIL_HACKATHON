@@ -44,7 +44,11 @@ summary.facts(런 수, 시나리오·경로·고장 종류의 개수와 이름)�
 시나리오)을 쓰지 마라. title·finding·summary에 쓰는 소수 수치는 해당 인사이트 evidence 값이나 summary 통계 값을
 그대로(반올림만 허용) 써라. 범위를 쓰면 양 끝 값이 모두 evidence에 있어야 한다. 고장 유형별 평균은 직접 계산하지 말고
 summary.by_fault_type 값을 finding 문장에 인용해라. evidence에는 records의 실제 run_id와 그 레코드의 지표 값만 넣고,
-평균값이나 그룹 이름을 넣지 마라.
+평균값이나 그룹 이름을 넣지 마라. 특정 런의 수치(예: 어떤 런의 전환 시각)를 문장에 쓰려면 그 런을 그 인사이트의
+evidence에 반드시 넣어라.
+고장 시점(onset_event)별 결과는 summary.by_onset_event, 실패 런의 시점 분포는 summary.facts.failure_onset_events를
+그대로 인용해라. "모든/전부/모두" 같은 전체 주장은 이 개수와 맞을 때만 써라(예: 실패 런이 여러 시점에 있으면
+"모든 실패가 커브 진입"이라고 쓰지 마라).
 next_experiments는 시나리오·고장·속도·경로·제어기 파라미터를 바꾸는 실험만 제안해라. 안전 요구사항(SR1~SR6)이나
 판정 임계값을 완화하는 제안은 금지다.
 한국어 JSON 객체 하나로만 답해라. 최대 6개 인사이트와 5개 다음 실험을 제시해라.
@@ -196,9 +200,22 @@ def _facts(rows):
     scenarios = names(r.get("scenario_id") for r in rows)
     routes = names(route(r) for r in rows)
     faults = names((r.get("fault_plan") or {}).get("fault_type") for r in rows)
+    fail_onsets = Counter(str((r.get("fault_plan") or {}).get("onset_event") or "unknown") for r in rows
+                          if r.get("monitor_outcome") in FAILURES)
     return {"n_runs": len(rows), "n_scenarios": len(scenarios), "n_routes": len(routes), "routes": routes,
             "n_fault_types": len(faults), "fault_types": faults,
-            "onset_events": names((r.get("fault_plan") or {}).get("onset_event") for r in rows)}
+            "onset_events": names((r.get("fault_plan") or {}).get("onset_event") for r in rows),
+            "failure_onset_events": dict(sorted(fail_onsets.items()))}
+
+
+def _by_onset_event(rows):
+    """Per onset phase: runs and outcome counts (so 'all failures at X' style claims can be checked by the model)."""
+    out = {}
+    for ev in sorted({str((r.get("fault_plan") or {}).get("onset_event") or "unknown") for r in rows}):
+        sel = [r for r in rows if str((r.get("fault_plan") or {}).get("onset_event") or "unknown") == ev]
+        out[ev] = {"runs": len(sel), "outcome_counts": dict(Counter(r.get("monitor_outcome") or "unknown" for r in sel)),
+                   "failures": sum(r.get("monitor_outcome") in FAILURES for r in sel)}
+    return out
 
 
 def _by_fault_type(rows):
@@ -238,6 +255,7 @@ def summarize(rows):
             "metrics": {k: {"n": len(v), "missing": len(graded) - len(v), "min": min(v),
                             "max": max(v), "mean": mean(v), "median": median(v)} for k, v in sorted(metrics.items())},
             "by_fault_type": _by_fault_type(rows),
+            "by_onset_event": _by_onset_event(rows),
             "groups": [{"fault_type": k[0], "onset_event": k[1], "total_runs": len(v),
                         "outcome_counts": dict(Counter(r.get("monitor_outcome") or "unknown" for r in v))}
                        for k, v in sorted(groups.items())]}
@@ -274,6 +292,12 @@ SAFETY = re.compile(r"SR\s?\d|기준|임계|threshold|요구\s?사항|요건|사
 SAME = re.compile(r"(동일한|같은|단일|하나의|한\s?개의|1개의)\s*(시나리오|경로|route|scenario)", re.I)
 IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_.:\-]*")    # run ids, labels, metric paths: digits inside are not claims
 DECIMAL = re.compile(r"\d+\.\d+")
+ALL = re.compile(r"모든|전부|모두|전체|예외\s?없이|all\b", re.I)
+FAILWORD = re.compile(r"실패|F1|F2|F3|fail", re.I)
+ONSET_NAMES = {"curve_entry": ("curve_entry", "커브 진입", "곡선 진입", "커브 입구"),
+               "curve_apex": ("curve_apex", "커브 정점", "곡선 정점", "커브 중간"),
+               "curve_exit": ("curve_exit", "커브 출구", "커브 탈출", "곡선 출구", "곡선 탈출"),
+               "straight": ("straight", "직선")}
 
 
 def _numbers(value, out):
@@ -312,9 +336,40 @@ def _strings(value):
             yield from _strings(v)
 
 
+def _where(n, records):
+    """Where a stated decimal really occurs in the records (for a re-ask message that tells the model how to fix it)."""
+    hits = []
+    def walk(v, path, rid):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                walk(x, f"{path}.{k}" if path else k, rid)
+        elif isinstance(v, (int, float)) and not isinstance(v, bool) and _matches(n, {v}):
+            hits.append(f"{rid} {path}")
+    for r in records:
+        walk(r, "", r.get("run_id"))
+    return hits[:4]
+
+
+def _check_all_claims(texts, summary):
+    """'모든 실패는 curve_entry' style claims against summary.facts.failure_onset_events."""
+    fo = ((summary or {}).get("facts") or {}).get("failure_onset_events")
+    if not fo:
+        return
+    for text in texts:
+        for sent in re.split(r"[.\n!?]|다\.", text):
+            if not (ALL.search(sent) and FAILWORD.search(sent)):
+                continue
+            for ev, names in ONSET_NAMES.items():
+                if any(nm in sent for nm in names) and set(fo) != {ev}:
+                    raise ValueError(f"'{sent.strip()[:50]}'라고 했지만 실패 런의 고장 시점은 {fo}입니다 "
+                                     f"(summary.facts.failure_onset_events). 전체 주장은 이 개수와 맞게 고치세요.")
+
+
 def check_quality(obj, records, summary=None):
     """Reject answers a reader would catch: non-Korean script, numbers not in the evidence/statistics,
-    'same scenario' claims against the dataset facts, and proposals to relax safety requirements."""
+    'same scenario' claims against the dataset facts, and proposals to relax safety requirements.
+    A decimal in title/finding is grounded by: that insight's evidence values, the summary statistics, or any
+    value of a record that the insight cites in its evidence (BUG-018)."""
     for text in _strings(obj):
         hit = CJK.search(text)
         if hit:
@@ -323,17 +378,22 @@ def check_quality(obj, records, summary=None):
     for x in _numbers(summary or {}, set()):
         stats.update((abs(x), abs(x) * 100))
 
+    index = {r.get("run_id"): r for r in records or []}
     every = set(stats)
     for item in obj["insights"]:
         allowed = set(stats)
         for e in item["evidence"]:
             allowed |= _numbers(e.get("value"), set())
+            allowed |= _numbers(index.get(e.get("run_id")) or {}, set())   # values of the cited run itself
         every |= allowed
         for field in ("title", "finding"):
             for n in _stated(item[field]):
                 if not _matches(n, allowed):
+                    where = _where(n, records or [])
+                    hint = (f" 이 값은 {', '.join(where)}에 있습니다. 그 런을 이 인사이트의 evidence에 넣으세요." if where
+                            else " 이 값은 records와 summary 어디에도 없습니다. 지어낸 수치는 빼세요.")
                     raise ValueError(f"인사이트 '{item['title'][:30]}'의 {field}에 쓴 수치 {n}이(가) 그 인사이트의 evidence "
-                                     f"값이나 통계 값에 없습니다. evidence에 있는 값만 쓰거나 해당 근거를 추가하세요.")
+                                     f"값이나 통계 값에 없습니다.{hint}")
     for n in _stated(obj["summary"]):
         if not _matches(n, every):
             raise ValueError(f"summary에 쓴 수치 {n}이(가) evidence 값이나 통계 값에 없습니다.")
@@ -342,6 +402,7 @@ def check_quality(obj, records, summary=None):
         if RELAX.search(text) and SAFETY.search(text):
             raise ValueError(f"다음 실험 '{item['proposal'][:40]}'이(가) 안전 기준/임계값 완화를 제안합니다. "
                              "안전 기준은 바꾸지 말고 시나리오·고장·제어기 파라미터를 바꾸는 실험을 제안하세요.")
+    _check_all_claims([obj["summary"], *[i[k] for i in obj["insights"] for k in ("title", "finding")]], summary)
     facts = (summary or {}).get("facts") or {}
     if (facts.get("n_scenarios") or 0) > 1 or (facts.get("n_routes") or 0) > 1:
         claims = [obj["summary"], *obj["limitations"]]
@@ -424,7 +485,7 @@ def _batches(items, context, key, batch_runs, max_chars):
         yield batch
 
 
-def _ask(client, msgs, records, summary, max_tokens, retries, rejected=None):
+def _ask(client, msgs, records, summary, max_tokens, retries, rejected=None, rejected_raw=None):
     """One model answer that passes parse_insights; a rejected answer is re-asked with the reason."""
     for attempt in range(retries + 1):
         text = client.chat(msgs, max_tokens=max_tokens)
@@ -433,6 +494,8 @@ def _ask(client, msgs, records, summary, max_tokens, retries, rejected=None):
         except ValueError as e:
             if rejected is not None:
                 rejected.append(str(e))
+            if rejected_raw is not None:
+                rejected_raw.append({"reason": str(e), "answer": text.rsplit("</think>", 1)[-1].strip()[:6000]})
             if attempt == retries:
                 raise
             msgs = [*msgs, {"role": "assistant", "content": text.rsplit("</think>", 1)[-1].strip()[:20000]},
@@ -440,12 +503,14 @@ def _ask(client, msgs, records, summary, max_tokens, retries, rejected=None):
                                                 "이 문제를 고친 JSON 객체 하나로만 다시 답해라. 다른 규칙도 모두 지켜라."}]
 
 
-def analyze(dataset, client, batch_runs=40, max_chars=MAX_INPUT_CHARS, max_tokens=4000, retries=3, rejected=None):
+def analyze(dataset, client, batch_runs=40, max_chars=MAX_INPUT_CHARS, max_tokens=4000, retries=3, rejected=None,
+            rejected_raw=None):
     context = {k: v for k, v in dataset.items() if k != "records"}
     summary = dataset.get("summary")
     reports, calls = [], 0
     for batch in _batches(dataset["records"], context, "records", batch_runs, max_chars):
-        reports.append(_ask(client, messages({**context, "records": batch}), batch, summary, max_tokens, retries, rejected))
+        reports.append(_ask(client, messages({**context, "records": batch}), batch, summary, max_tokens, retries, rejected,
+                            rejected_raw))
         calls += 1
     while len(reports) > 1:
         reduced = []
@@ -456,7 +521,8 @@ def analyze(dataset, client, batch_runs=40, max_chars=MAX_INPUT_CHARS, max_token
             refs = {e["run_id"] for report in group for item in report["insights"] for e in item["evidence"]}
             refs.update(r for report in group for item in report["next_experiments"] for r in item["run_ids"])
             reduced.append(_ask(client, messages({**context, "reports": group}, synthesis=True),
-                                [r for r in dataset["records"] if r["run_id"] in refs], summary, max_tokens, retries, rejected))
+                                [r for r in dataset["records"] if r["run_id"] in refs], summary, max_tokens, retries, rejected,
+                                rejected_raw))
             calls += 1
         reports = reduced
     return reports[0], calls
@@ -494,7 +560,7 @@ def process(records_path, screen, client=None, failures_only=False, hypotheses=N
            "created": datetime.now(timezone.utc).isoformat(timespec="seconds"), "selection": dataset["selection"],
            "statistics": dataset["summary"], "selected_runs": dataset["selected_runs"], "model_calls": 0,
            "summary": None, "insights": [], "next_experiments": [], "limitations": [], "error": None,
-           "rejected_answers": []}
+           "rejected_answers": [], "rejected_raw": []}
     if not dataset["records"]:
         row["status"] = "empty"
         row["limitations"] = ["분석 대상으로 선택된 레코드가 없습니다."]
@@ -505,7 +571,7 @@ def process(records_path, screen, client=None, failures_only=False, hypotheses=N
         calls_before = client.calls
         try:
             report, calls = analyze(dataset, client, batch_runs, max_chars, max_tokens,
-                                    rejected=row["rejected_answers"])
+                                    rejected=row["rejected_answers"], rejected_raw=row["rejected_raw"])
             row.update(report, status="complete", model_calls=calls)
         except (ValueError, RuntimeError, KeyError, IndexError, TypeError) as e:
             row.update(status="error", error=str(e))

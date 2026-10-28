@@ -352,5 +352,48 @@ class QualityTests(unittest.TestCase):
         explain.parse_insights(json.dumps(r, ensure_ascii=False), self.ds["records"])  # no facts -> not checked
 
 
+class GroundingTests(unittest.TestCase):
+    """BUG-018: a decimal that is a real value of a cited run is grounded; 'all failures at X' is checked."""
+
+    def setUp(self):
+        self.ds = explain.build_dataset(records())
+        self.report = answer(self.ds)
+
+    def check(self, report):
+        return explain.parse_insights(json.dumps(report, ensure_ascii=False), self.ds["records"], self.ds["summary"])
+
+    def test_value_of_cited_run_is_grounded_and_hint_names_the_run(self):
+        row = self.ds["records"][0]
+        onset = row["fault_plan"].get("onset_s") or row.get("planned_fault_onset")
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["evidence"] = [e for e in r["insights"][0]["evidence"] if e["run_id"] == row["run_id"]] or \
+            r["insights"][0]["evidence"]
+        r["insights"][0]["finding"] = f"고장이 {float(onset):.2f}s에 들어갔다."
+        if r["insights"][0]["evidence"][0]["run_id"] == row["run_id"]:
+            self.check(r)
+        other = [x for x in self.ds["records"] if x["run_id"] != row["run_id"]]
+        if other:
+            r2 = copy.deepcopy(self.report)
+            r2["insights"][0]["finding"] = "차선 여유가 777.123m였다."
+            with self.assertRaises(ValueError) as caught:
+                self.check(r2)
+            self.assertIn("어디에도 없습니다", str(caught.exception))
+
+    def test_summary_has_onset_breakdown(self):
+        s = self.ds["summary"]
+        self.assertIn("by_onset_event", s)
+        self.assertIn("failure_onset_events", s["facts"])
+
+    def test_all_failures_at_one_onset_is_checked(self):
+        s = copy.deepcopy(self.ds["summary"])
+        s["facts"]["failure_onset_events"] = {"curve_entry": 2, "curve_exit": 1}
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["finding"] = "모든 실패 런은 curve_entry에서 고장이 났다."
+        with self.assertRaises(ValueError):
+            explain.parse_insights(json.dumps(r, ensure_ascii=False), self.ds["records"], s)
+        s["facts"]["failure_onset_events"] = {"curve_entry": 3}
+        explain.parse_insights(json.dumps(r, ensure_ascii=False), self.ds["records"], s)
+
+
 if __name__ == "__main__":
     unittest.main()
