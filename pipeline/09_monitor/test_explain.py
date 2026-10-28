@@ -268,6 +268,15 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(explain.process(self.rr, self.screen, self.client, redo_errors=True), 1)
         self.assertEqual(self.report()["status"], "complete")
 
+    def test_payload_has_no_nulls_and_lists_evidence_paths(self):
+        self.raw[0]["metrics"]["unmeasured_x"] = None
+        self.write_records()
+        explain.process(self.rr, self.screen, self.client)
+        payload = json.loads(FakeAPI.calls[0]["body"]["messages"][1]["content"].split("\n", 1)[1])
+        self.assertIn("metrics.margin_delta_m", payload["evidence_paths"])
+        self.assertNotIn("unmeasured_x", json.dumps(payload["records"]))
+        self.assertNotIn(": null", json.dumps(payload["records"]))
+
     def test_rejected_answer_is_reasked_with_reason(self):
         FakeAPI.mode = "cjk_once"
         self.assertEqual(explain.process(self.rr, self.screen, self.client), 2)
@@ -393,6 +402,127 @@ class GroundingTests(unittest.TestCase):
             explain.parse_insights(json.dumps(r, ensure_ascii=False), self.ds["records"], s)
         s["facts"]["failure_onset_events"] = {"curve_entry": 3}
         explain.parse_insights(json.dumps(r, ensure_ascii=False), self.ds["records"], s)
+
+
+class EvidencePathTests(unittest.TestCase):
+    """BUG-019: unmeasured values are not sent, paths come from a list, all problems are reported, last try salvages."""
+
+    def setUp(self):
+        self.ds = explain.build_dataset(records())
+        self.ds["records"][0]["metrics"]["unmeasured_x"] = None
+        self.recs = [explain.prune(r) for r in self.ds["records"]]
+        self.report = answer({"records": self.recs})
+        self.row = self.recs[0]
+
+    def check(self, report, salvage=False, summary=None):
+        return explain.parse_insights(json.dumps(report, ensure_ascii=False), self.recs,
+                                      summary or self.ds["summary"], salvage=salvage)
+
+    def test_null_values_are_pruned_and_listed_paths_are_full(self):
+        self.assertNotIn("unmeasured_x", self.row["metrics"])
+        self.assertNotIn("null", explain.dumps(self.recs))
+        paths = explain.evidence_paths(self.recs)
+        self.assertIn("metrics.margin_delta_m", paths)
+        self.assertNotIn("metrics.unmeasured_x", paths)
+
+    def test_unmeasured_metric_is_rejected_with_plain_reason(self):
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["evidence"][0].update(metric="metrics.unmeasured_x", value=0.0)
+        with self.assertRaises(ValueError) as c:
+            self.check(r)
+        self.assertIn("측정되지 않았습니다", str(c.exception))
+
+    def test_abbreviated_path_is_fixed_only_when_value_makes_it_unique(self):
+        v = self.row["metrics"]["margin_delta_m"]
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["evidence"][0].update(metric="margin_delta_m_typo", value=v)
+        with self.assertRaises(ValueError):
+            self.check(r)
+        name = "lateral_error_rmse_m" if "lateral_error_rmse_m" in self.row["metrics"] else "margin_delta_m"
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["evidence"][0].update(metric=name, value=self.row["metrics"][name])
+        cands = [p for p, x in explain._leaves(self.row).items()
+                 if p.split(".")[-1] == name and x == self.row["metrics"][name]]
+        if len(cands) == 1:
+            out = self.check(r)
+            self.assertEqual(out["insights"][0]["evidence"][0]["metric"], "metrics." + name)
+        r["insights"][0]["evidence"][0].update(metric=name, value=123456.0)
+        with self.assertRaises(ValueError) as c:
+            self.check(r)
+        self.assertIn("metrics." + name, str(c.exception))   # the real full path is named in the re-ask
+
+    def test_failed_runs_mean_must_be_the_failed_runs_mean(self):
+        s = copy.deepcopy(self.ds["summary"])
+        mu = s["by_outcome"]["failure"]["metric_means"]["margin_delta_m"]
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["finding"] = f"실패 런의 평균 margin_delta_m은 {mu}m였다."
+        self.check(r, summary=s)
+        s["by_fault_type"]["bias"]["metric_means"]["margin_delta_m"] = 9.876   # a group mean, not the failure mean
+        r["insights"][0]["finding"] = "실패 런의 평균 margin_delta_m은 9.876m였다."
+        with self.assertRaises(ValueError) as c:
+            self.check(r, summary=s)
+        self.assertIn("평균은", str(c.exception))
+
+    def test_group_mean_follows_the_fault_type_of_the_sentence_before(self):
+        fail = [r for r in self.recs if r["monitor_outcome"] in explain.FAILURES][0]
+        mu = round(fail["metrics"]["margin_delta_m"], 3)
+        r = copy.deepcopy(self.report)
+        r["insights"][0]["evidence"] = [{"run_id": fail["run_id"], "metric": "metrics.margin_delta_m",
+                                         "value": fail["metrics"]["margin_delta_m"]}]
+        r["insights"][0]["finding"] = f"bias 고장 런이 있다. 실패 런은 평균 margin_delta_m이 {mu}m였다."
+        self.check(r)
+        r["insights"][0]["finding"] = "bias 고장 런이 있다. 실패 런은 평균 margin_delta_m이 9.876m였다."
+        s = copy.deepcopy(self.ds["summary"])
+        s["metrics"]["margin_delta_m"]["max"] = 9.876          # the number exists somewhere, but not as this mean
+        with self.assertRaises(ValueError) as c:
+            self.check(r, summary=s)
+        self.assertIn("bias", str(c.exception))
+
+    def test_majority_and_all_different_claims_are_checked(self):
+        r = copy.deepcopy(self.report)
+        r["limitations"] = ["실패 런의 대부분은 curve_exit에서 발생했다."]       # the only failure is at curve_entry
+        with self.assertRaises(ValueError):
+            self.check(r)
+        r["limitations"] = ["실패 런의 대부분은 curve_entry에서 발생했다."]
+        self.check(r)
+        r["summary"] = "시나리오와 경로는 모두 다르다."                         # 2 runs, 1 route
+        with self.assertRaises(ValueError):
+            self.check(r)
+
+    def test_last_try_keeps_the_good_summary_sentences(self):
+        r = {**copy.deepcopy(self.report), "summary": "런 2개를 분석했다. 시나리오와 경로는 모두 다르다."}
+        out = self.check(r, salvage=True)
+        self.assertEqual(out["summary"], "런 2개를 분석했다.")
+        self.assertEqual(out["dropped_insights"][0]["part"], "summary")
+
+    def test_changing_a_judgement_threshold_is_rejected(self):
+        r = copy.deepcopy(self.report)
+        r["next_experiments"][0]["proposal"] = "margin_delta_m 임계값을 조정하여 안전 마진을 확보"
+        with self.assertRaises(ValueError):
+            self.check(r)
+
+    def test_every_bad_insight_is_reported_and_last_try_keeps_the_good_ones(self):
+        good = copy.deepcopy(self.report["insights"][0])
+        bad1 = {**copy.deepcopy(good), "title": "가짜 근거", "evidence": [{**good["evidence"][0], "value": 999.0}]}
+        bad2 = {**copy.deepcopy(good), "title": "지어낸 수치", "finding": "차선 여유가 777.123m였다."}
+        r = {**copy.deepcopy(self.report), "insights": [bad1, good, bad2]}
+        with self.assertRaises(ValueError) as c:
+            self.check(r)
+        self.assertIn("가짜 근거", str(c.exception))
+        self.assertIn("지어낸 수치", str(c.exception))
+        out = self.check(r, salvage=True)
+        self.assertEqual([i["title"] for i in out["insights"]], [good["title"]])
+        self.assertEqual(len(out["dropped_insights"]), 2)
+        with self.assertRaises(ValueError):
+            self.check({**r, "insights": [bad1, bad2]}, salvage=True)   # nothing valid -> still rejected
+
+    def test_bad_summary_on_last_try_is_replaced_by_code_facts(self):
+        r = {**copy.deepcopy(self.report), "summary": "평균 98.765m 감소"}
+        with self.assertRaises(ValueError):
+            self.check(r)
+        out = self.check(r, salvage=True)
+        self.assertIn("코드가 계산한 사실", out["summary"])
+        self.assertIsNone(explain.CJK.search(out["summary"]))
 
 
 if __name__ == "__main__":

@@ -139,18 +139,23 @@ def run_insights(out: Path, *, mode: str = "real", llm_cfg: dict | None = None, 
         client, role = cosmos_client(llm_cfg)
     else:
         role = "custom"
-    calls, errors = 0, []
+    calls, errors, history = 0, [], []
     for attempt in range(max(1, attempts)):
-        # explain.py rejects the whole answer if one evidence value/path is wrong; sampling again usually fixes it.
+        # explain.py re-asks with every problem listed and, on its last try, keeps the insights that pass.
         calls += ex.process(rec_path, dst, client, force=force or attempt > 0, max_tokens=max_tokens) or 0
         row = json.loads((dst / "insights.json").read_text(encoding="utf-8"))
         errors.extend(row.get("rejected_answers") or [])     # answers explain.py rejected and re-asked
+        history.extend({"attempt": attempt + 1, **x} for x in (row.get("rejected_raw") or []))
         if row.get("status") != "error" or not client.ready:
             break
+    if attempts > 1 and history:
+        # process() rewrites insights.json each attempt; keep every rejected answer of every attempt (BUG-019).
+        row["rejected_history"] = history
+        ex._write_json(dst / "insights.json", row)
     row["model_calls"] = calls if calls else row.get("model_calls")
     result.update(status=row.get("status"), error=row.get("error"), model_calls=row.get("model_calls"),
                   n_insights=len(row.get("insights") or []), model=row.get("model"), role=role,
-                  rejected_attempts=errors)
+                  rejected_attempts=errors, dropped_insights=row.get("dropped_insights") or [])
     return result
 
 
