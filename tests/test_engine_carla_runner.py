@@ -48,3 +48,15 @@ def test_flags_exist_in_run_benchmark(tmp_path):
     for cmd in (r.command(c, tmp_path / "b", None), r.command(c, tmp_path / "f", r.fault_args(c, 31.0))):
         used = {a for a in cmd if a.startswith("--")}
         assert used <= declared, used - declared
+
+
+def test_failed_baseline_is_not_rerun(tmp_path):
+    """BUG-013: a baseline that finished with rc != 0 (results.json, no .complete) must not be rerun into the same --out."""
+    r, c = make(tmp_path, tmp_path / "av")
+    d = r.baseline_dir(c)
+    d.mkdir(parents=True)
+    (d / "results.json").write_text("{}")
+    calls = []
+    r._run = lambda *a, **k: calls.append(a)
+    out, cached = r.ensure_baseline(c)
+    assert out == d and not calls and not (d / ".complete").exists()

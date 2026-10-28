@@ -67,6 +67,10 @@ class BaseRunner:
         d = self.baseline_dir(c)
         if (d / "steps.jsonl").is_file() and (d / ".complete").is_file():
             return d, True
+        if (d / "results.json").is_file():
+            # BUG-013: this baseline already ran and failed (no .complete). Same seed/route/speed -> same result;
+            # rerunning would also hit _run's fresh --out check and crash the campaign. Caller rejects it.
+            return d, True
         res = self._run(c, d, fault_args=None)
         if res.returncode == 0:
             (d / ".complete").write_text(json.dumps(baseline_key(c, self.routes[c["route_id"]], self.seed)))
@@ -81,6 +85,8 @@ class BaseRunner:
         """SR1 FTTI run: same route/env/fault/onset, no supervisor (`--controller mpc_unprotected`). Cached."""
         d = self.no_reaction_dir(c, onset_s)
         if (d / "steps.jsonl").is_file() and (d / ".complete").is_file():
+            return d, True
+        if (d / "results.json").is_file():   # BUG-013: failed earlier, do not rerun into the same --out
             return d, True
         res = self.run_no_reaction(c, d, onset_s)
         if res.returncode == 0:
