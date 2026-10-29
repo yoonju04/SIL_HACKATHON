@@ -38,12 +38,12 @@ from engine.carla_runner import CarlaRunner, MockRunner, carla_reachable
 from engine.config import (REPO_ROOT, load_stage_configs, load_yaml, resolve_av_stack,
                                     resolve_scenario_space)
 from engine.explainer import explain, stub_explanation, verify
-from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure,
+from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure, outcome_examples, tried_view,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
 from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
 from engine.monitor import (compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline,
                             scale_thresholds_for_friction, thresholds_from_config)
-from engine.surrogate import MetricGPs, acquisition_score, boundary_score, select_batch_scored
+from engine.surrogate import MetricGPs, acquisition_score, boundary_score, boundary_score_parts, select_batch_scored
 from engine.dashboard import refresh as refresh_dashboard
 from engine.video import cover_times, extract_clip, ffmpeg_exe, key_times
 from engine.prior_tools.prior_tools import make_nemotron_payload
@@ -316,6 +316,117 @@ class Loop:
             return ev
         return None
 
+    # ------------------------------------------------------------------ integration3 #7: what A needs to judge the boundary
+    def judgment_criteria(self) -> dict:
+        """The recovery judgment with the configured values (engine.monitor.thresholds_from_config + safety_spec P-02)."""
+        th = self.th
+        props = {q.get("id"): q for q in ((self.cfg["safety_spec"].get("safety_specification") or {}).get("properties") or [])
+                 if isinstance(q, dict)}
+        f = (props.get("P-02") or {}).get("lateral_acc_formula") or {"mu": 0.9, "g_mps2": 9.81, "factor": 0.5}
+        lat = th["lat_acc_threshold_mps2"]
+        return {
+            "recovered": (f"final_safe_recovery: within {th['window_s']:g} s after the switch, |e_y| <= {th['e_settle_m']:g} m and "
+                          f"|e_psi| <= {th['psi_settle_rad']:g} rad with lane margin >= 0 held for {th['settle_hold_s']:g} s, "
+                          f"no lane departure, no collision, and neither lat_acc_excess nor lat_jerk_excess"),
+            "lat_acc_limit": (f"lat_acc_excess: post-switch lateral acceleration (relative to the same-route baseline) > "
+                              f"{lat:g} * tire_friction_scale m/s^2 = {f['factor']:g} * {f['mu']:g} * tire_friction_scale * "
+                              f"{f['g_mps2']:g} (P-02); lat_jerk_excess: > {th['lat_jerk_threshold_mps3']:g} m/s^3 (P-04)"),
+            "not_a_failure": ("a run with no switch is not a failed recovery (LQR never acted): it says the fault was too "
+                              "mild / short or started too late for the supervisor to fire"),
+            "gp_target": ("lane_recovery_robustness = min over the window of lane margin / (lane_width/2 - vehicle half "
+                          f"width), dimensionless: 1 = centred, 0 = body at the lane edge (the boundary), < 0 departed, "
+                          f"clipped to [{th['robustness_clip_min']:g}, {th['robustness_clip_max']:g}], collision <= "
+                          f"{th['collision_penalty']:g}"),
+            "evaluation_window": (f"P-01 lane margin is measured over onset .. onset + {th['eval_window_s']:g} s; an onset "
+                                  f"less than {float(self.cfg['safety_spec']['evaluation_window']['min_length_s']):g} s "
+                                  f"before the route end is rejected (V-03)"),
+        }
+
+    def _geom_candidate(self, rid: str, kmh: float, fr: float) -> dict:
+        return {"route_id": rid, "environment": {"max_speed_kmh": kmh, "tire_friction_scale": fr},
+                "fault": {"fault_id": self.fault_pool[0], "params": {}}, "onset_event": "curve_apex", "onset_offset_s": 0.0}
+
+    def route_geometry(self) -> dict:
+        """integration3 #7: per route and onset_event the baseline time, curvature, speed, v^2*kappa and the latest
+        onset_offset_s that still passes V-03, from cached no-fault baselines (route_events). mock probes baselines at
+        route_geometry.probe_speeds_kmh (synthetic fixture); real mode only reports baselines that already exist."""
+        gcfg = self.cfg["nemotron_a"].get("route_geometry") or {}
+        mw = float(self.cfg["safety_spec"]["evaluation_window"]["min_length_s"])
+        if (gcfg.get("probe_baselines") or {}).get(self.mode, False) and not getattr(self, "_geom_probed", False):
+            self._geom_probed = True
+            for rid in self.route_ids:
+                for kmh in gcfg.get("probe_speeds_kmh") or []:
+                    self.runner.ensure_baseline(self._geom_candidate(rid, float(kmh), 1.0))
+        found: dict[str, list[tuple[float, float, Path]]] = {}
+        for comp in sorted((self.runner.out_root / "baselines").glob("*/.complete")):
+            try:
+                key = json.loads(comp.read_text())
+            except (OSError, ValueError):
+                continue
+            if key.get("route_id") in self.route_ids and key.get("max_speed_kmh") is not None:
+                found.setdefault(key["route_id"], []).append(
+                    (float(key["max_speed_kmh"]), float(key.get("tire_friction_scale") or 1.0), comp.parent))
+        events = [e for e in self.space["fault_timing"]["onset_event"]["values"]]
+        olo = min(float(((f.get("handover_axes") or {}).get("offset_s") or {}).get("range", self.space["fault_timing"]["offset_s"]["range"])[0])
+                  for f in self.space.get("faults", []))
+        lat = self.th["lat_acc_threshold_mps2"]
+        nmax = int(gcfg.get("max_baselines_per_route", 3))
+        routes = {}
+        for rid in self.route_ids:
+            rows = sorted(set(found.get(rid, [])), key=lambda t: (abs(t[1] - 1.0), t[0]))
+            nominal = [t for t in rows if abs(t[1] - 1.0) < 1e-9] or rows
+            nominal.sort(key=lambda t: t[0])
+            if len(nominal) > nmax:
+                idx = sorted({round(i * (len(nominal) - 1) / (nmax - 1)) for i in range(nmax)}) if nmax > 1 else [0]
+                nominal = [nominal[i] for i in idx]
+            out_b, grad = [], {e: [] for e in events}
+            rows_by_ev: dict[str, list] = {e: [] for e in events}
+            ends = {}
+            for kmh, fr, d in nominal:
+                ev = self.route_events(self._geom_candidate(rid, kmh, fr))
+                if ev is None:
+                    continue
+                t_end = ev.get("t_end")
+                evs = {}
+                for e in events:
+                    t = ev.get(e)
+                    if t is None:
+                        evs[e] = None
+                        continue
+                    k = (ev.get("kappa_at") or {}).get(e)
+                    v = min(kmh / 3.6, (ev.get("speed_at") or {}).get(e, 1e9))
+                    latest = None if t_end is None else t_end - mw - float(t)
+                    evs[e] = {"t_s": round(float(t), 2), "kappa_per_m": None if k is None else round(float(k), 4),
+                              "speed_mps": round(v, 2),
+                              "v2kappa_mps2": None if k is None else round(v * v * abs(float(k)), 2),
+                              "latest_onset_offset_s_for_V03": None if latest is None else round(latest, 2)}
+                    if latest is not None and latest >= olo:
+                        grad[e].append(kmh)
+                for e in events:
+                    x = evs[e]
+                    rows_by_ev[e].append([kmh] + ([None] * 5 if x is None else
+                                                  [x["t_s"], x["kappa_per_m"], x["speed_mps"], x["v2kappa_mps2"],
+                                                   x["latest_onset_offset_s_for_V03"]]))
+                ends[f"{kmh:g}"] = None if t_end is None else round(float(t_end), 2)
+                out_b.append(kmh)
+            fr_used = sorted({t[1] for t in nominal})
+            routes[rid] = {"town": next((r.get("town") for r in self.routes if r.get("route_id") == rid), None),
+                           "baseline_tire_friction_scale": fr_used[0] if len(fr_used) == 1 else fr_used,
+                           "route_end_s_by_kmh": ends, "events": rows_by_ev,
+                           "events_gradable_at_kmh": grad,
+                           **({} if out_b else {"note": "no completed baseline yet: geometry unknown, V-03 decided after the baseline run"})}
+        return {"columns": ["max_speed_kmh", "t_s", "kappa_per_m", "speed_mps", "v2kappa_mps2", "latest_onset_offset_s_for_V03"],
+                "rules": {
+            "V03": f"onset = max(0.5, t_s + onset_offset_s); rejected when route_end_s - onset < {mw:g} s, i.e. "
+                   f"onset_offset_s must be <= latest_onset_offset_s_for_V03 (null row = event not detected on that baseline = rejected); events_gradable_at_kmh lists the probed speeds with room for some allowed offset",
+            "friction_demand": (f"v2kappa_mps2 = speed^2 * |kappa| is the nominal lateral demand; the P-02 limit is "
+                                f"{lat:g} * tire_friction_scale m/s^2. DF-06 friction_utilization = v2kappa / "
+                                f"(0.9 * tire_friction_scale * 9.81): near 1 the tyres are close to the grip limit and LQR "
+                                f"has little margin left to recover; v2kappa above the P-02 limit only tags stress_test"),
+            "speed": "speed_mps is the baseline speed at the event (the car may be slower than max_speed_kmh in curves); "
+                     "it scales roughly with max_speed_kmh, the event times shift with speed"},
+            "routes": routes}
+
     def features(self, c: dict, *, train_round: int | None = None) -> tuple[list[float], list[str]]:
         x, names = SC.numeric_features(c, self.space, self.route_ids, self.fault_pool)
         if self.flags["use_df"]:
@@ -352,16 +463,29 @@ class Loop:
         evidence = NM.evidence_enum(self.cfg["safety_profile"], self.cfg["prior_knowledge"], self.space, self.objectives)
         schema = NM.candidate_schema(self.space, self.route_ids, self.fault_pool, self.objectives, evidence, n)
         table = failure_table(self.records, self.candidates)
+        acfg = self.cfg["nemotron_a"]
+        s1 = self.cfg["S1"]
+        # integration3 #7: judgment criteria with the configured values, route geometry (V-03 / v^2 kappa), per-mode
+        # recovered/failed pairs and outcomes of already-tried scenarios: the material A needs to place a boundary
+        geom = self.route_geometry()
+        dump(self.out / f"round_{round_index:02d}" / "03_route_geometry.json", geom)
+        by_sid = {r.get("scenario_id"): r for r in self.records}
+        tried = [tried_view(c, by_sid.get(c.get("scenario_id")))
+                 for c in list(self.candidates.values())[-int((acfg.get("already_tried") or {}).get("max_items", 40)):]]
+        oe_cfg = acfg.get("outcome_examples") or {}
+        examples = (outcome_examples(self.records, self.candidates, self.space, self.route_ids, self.fault_pool,
+                                     int(oe_cfg.get("max_modes", 8))) if oe_cfg.get("enabled", True) else [])
         ctx = NM.a_context(profile=self.cfg["safety_profile"], prior=self.cfg["prior_knowledge"], space=self.space,
-                           objective_cfg={"id": "S1", **self.cfg["S1"]["objective"],
-                                          "natural_switch_bound": self.cfg["S1"]["switch_state_control"]["natural_switch_bound"]},
-                           routes=[{k: r.get(k) for k in ("route_id", "town", "note")} for r in self.routes],
-                           few_shot=few_shot(table, self.explanations, int(self.cfg["nemotron_a"]["feedback_in"]["k"])),
+                           objective_cfg={"id": "S1", **s1["objective"],
+                                          "natural_switch_bound": s1["switch_state_control"]["natural_switch_bound"],
+                                          "natural_switch_bound_en": s1["switch_state_control"].get("natural_switch_bound_en"),
+                                          "judgment_criteria": self.judgment_criteria()},
+                           routes=[{k: r.get(k) for k in ("route_id", "town", "note", "note_en")} for r in self.routes],
+                           few_shot=few_shot(table, self.explanations, int(acfg["feedback_in"]["k"])),
                            mechanisms=mechanism_summary(self.explanations) if self.video_on else [],
-                           tried=[{k: c.get(k) for k in ("route_id", "environment", "fault", "onset_event", "onset_offset_s")}
-                                  for c in list(self.candidates.values())[-40:]],
-                           include_unreviewed=bool(self.cfg["nemotron_a"].get("include_unreviewed_observations", True)),
-                           surrogate_summary=gp_summary)
+                           tried=tried,
+                           include_unreviewed=bool(acfg.get("include_unreviewed_observations", True)),
+                           surrogate_summary=gp_summary, outcome_examples=examples, route_geometry=geom)
         msgs = NM.a_messages(schema=schema, n=n, context=ctx)
         obj, st = NM.call_a(self.client_a, self.a_settings, msgs, schema, tag="A")
         st.update(round=round_index, requested=n)
@@ -371,7 +495,10 @@ class Loop:
         st["range_extreme_unjustified"] = sum("range_extreme_unjustified" in c.get("tags", []) for c in cands)
         if near and self.a_refine.get("enabled", True) and self.cfg["nemotron_a"].get("refine", {}).get("enabled", True):
             schema_r = NM.candidate_schema(self.space, self.route_ids, self.fault_pool, self.objectives, evidence, len(near))
-            obj_r, st_r = NM.call_a(self.client_a, self.a_refine, NM.refine_messages(schema_r, near, ctx), schema_r, tag="A_refine")
+            near_items = [NM.region_item(c, self.summary_scorer(c) or {}, metric=self.obj_cfg[self.objectives[0]]["metric"],
+                                         native=self.native, y_scale=self.target_y_scale(), level_z=self.level_z(self.obj_cfg[self.objectives[0]]),
+                                         runs=by_sid) for c in near]
+            obj_r, st_r = NM.call_a(self.client_a, self.a_refine, NM.refine_messages(schema_r, near_items, ctx), schema_r, tag="A_refine")
             st_r.update(round=round_index, requested=len(near), refine=True)
             self.stats["a_calls"].append(st_r)
             cands += NM.a_to_candidates(obj_r or {}, self.space, round_index=round_index, source="nemotron_a_refine")
@@ -537,6 +664,36 @@ class Loop:
             if obj.get("acquisition") == "level_set":
                 out[obj["metric"]] = self.level_z(obj)
         return out
+
+    def target_y_scale(self) -> float:
+        m = self.obj_cfg[self.objectives[0]]["metric"]
+        return self.gps.y_scale.get(m, 1.0) if self.gps else 1.0
+
+    def summary_scorer(self, c: dict) -> dict | None:
+        """integration3 #7: the same terms as acq_score (level_set) for Nemotron A's summary; None when not level_set
+        or the GP is not ready (the summary then falls back to its own default score)."""
+        obj = self.obj_cfg[self.objectives[0]]
+        if not self.gp_ready or obj.get("acquisition") != "level_set":
+            return None
+        return boundary_score_parts(c, obj["metric"], SWITCH_METRIC, beta=float(obj.get("beta", 1.96)),
+                                    level_z=self.level_z(obj), y_scale=self.target_y_scale(),
+                                    switch_penalty=float(obj.get("switch_penalty", 1.0)))
+
+    def native(self, mean_z: float, std_z: float) -> tuple[float, float]:
+        """GP z -> lane_recovery_robustness (inverse of judgment.orient)."""
+        rule = (self.metric_rules or {}).get(self.obj_cfg[self.objectives[0]]["metric"]) or {}
+        sc = float((rule.get("gp") or {}).get("scale", 1.0))
+        sign = 1.0 if rule.get("support_direction", "negative") == "negative" else -1.0
+        return sign * mean_z * sc, std_z * sc
+
+    def gp_info(self) -> dict:
+        obj = self.obj_cfg[self.objectives[0]]
+        rule = (self.metric_rules or {}).get(obj["metric"]) or {}
+        ys = self.target_y_scale()
+        return {"y_scale_z": ys, "level_z": self.level_z(obj), "target": (rule.get("gp") or {}).get("target", obj["metric"]),
+                "units": "dimensionless lane_recovery_robustness (NOT metres): lane margin / (lane_width/2 - vehicle half width)",
+                "level": float(obj.get("level", 0.0)), "training_std": round(self.native(0.0, ys)[1], 3),
+                "meaning": self.judgment_criteria()["gp_target"]}
 
     def acq_score(self, c: dict, beta: float) -> float | None:
         """07 acquisition for the active objective. level_set (integration3 default): engine.surrogate.boundary_score;
@@ -852,11 +1009,15 @@ class Loop:
                 else:
                     regions = []
                 # integration3 #4: Nemotron A gets a compact GP summary EVERY round (boundary regions + outcome mix)
+                sv2 = self.cfg["nemotron_a"].get("summary_v2") or {}
                 gp_summary = NM.surrogate_summary(
                     regions=regions, records=self.records, candidates=self.candidates, space=self.space,
                     metric=self.obj_cfg[self.objectives[0]]["metric"], switch_metric=SWITCH_METRIC,
                     n_train=sum(r.get("sim_status") == "ok" for r in self.records) if gps is not None else None,
-                    k=int(self.cfg["nemotron_a"].get("surrogate_summary", {}).get("k", 6)))
+                    k=int(self.cfg["nemotron_a"].get("surrogate_summary", {}).get("k", 6)),
+                    scorer=self.summary_scorer if (self.gp_ready and self.obj_cfg[self.objectives[0]].get("acquisition") == "level_set") else None,
+                    native=self.native, gp_info=self.gp_info(),
+                    k_unexplored=int(sv2.get("k_unexplored", 3)), unexplored_std_frac=float(sv2.get("unexplored_std_frac", 0.75)))
                 dump(rdir / "03_gp_summary.json", gp_summary)
                 n_a = int(self.cfg["nemotron_a"]["A_scenario_generation"]["per_round"]) if self.flags["use_a"] else 0
                 self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")

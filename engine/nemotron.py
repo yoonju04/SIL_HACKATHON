@@ -14,6 +14,7 @@ B: Nemotron-3-Ultra, thinking ON + medium_effort, whole av_stack source files (w
 from __future__ import annotations
 
 import json
+import math
 import random
 import re
 from collections import Counter
@@ -22,6 +23,7 @@ from typing import Any
 
 from . import schema as S
 from .llm import LLMError, extract_json, json_schema_format
+from .feedback import failed_reason, outcome_view
 from .scenarios import faults_by_id, friction_axis, make_candidate, sampling_ranges
 
 
@@ -82,45 +84,101 @@ def candidate_schema(space: dict, routes: list[str], fault_pool: list[str], obje
 A_SYSTEM = """You are Nemotron A, the scenario generator of a software-in-the-loop safety SEARCH for an MPC->LQR steering handover \
 (CARLA 0.9.15, PDM-Lite planner, av_stack MPC primary + LQR backup + latched supervisor; faults are injected only at the MPC output).
 Search objective S1: estimate WHERE LQR recovery after the switch stops succeeding, as a function of the error state at the \
-switch moment and of steering angle / rate saturation.
+switch moment and of steering angle / rate saturation. objective.judgment_criteria states exactly how a run is labelled.
 Your job is NOT to find failures. Failures at the extreme corners of the space are already known (e.g. saturate at full \
 steering for the longest duration fails every time; solver_fail / stale at low speed always recovers) and teach nothing.
 Propose candidates that you expect to sit ON the success/failure boundary: conditions where the SAME fault could recover \
 or fail depending on a small change (fault magnitude/duration, speed, tyre friction, onset relative to the curve).
 Rules:
-- Use surrogate_summary every round: boundary_regions are tried conditions where the surrogate (GP) is most ambiguous \
-(predicted robustness near the boundary and/or high uncertainty, or switch probability near 0.5). Propose candidates \
-in and around those regions, varying one or two fields, and fill gaps between a recovered and a failed run of the same fault.
-- recent_outcomes_by_fault_mode shows which fault modes so far only recovered or only failed: for those, move toward \
-conditions that could flip the outcome (harder for always-recovering modes, milder for always-failing modes).
+- A recovery boundary only exists where the supervisor actually switches to LQR. A run without a switch is not a failed \
+recovery, it is a missing data point.
+- surrogate_summary.boundary_regions are tried conditions the GP cannot yet classify, ranked with the same score the \
+orchestrator uses (recovery level set penalised by 1 - P(switch), or switch probability near 0.5). Propose candidates in \
+and around them, varying one or two fields. surrogate_summary.unexplored_regions are places the GP knows nothing about \
+(uncertainty near its prior): useful to probe, but they are NOT evidence of a boundary.
+- outcome_examples give, per fault mode, the closest recovered + failed pair seen so far: fill the gap between them.
+- recent_outcomes_by_fault_mode[mode].status: "never_switched" -> make the fault stronger / longer or move the onset so \
+the tracking error reaches the supervisor trigger (supervisor.tracking_divergence) and a switch happens; \
+"failed_whenever_switched" -> make it milder (smaller magnitude, shorter, lower speed, higher friction, gentler curve); \
+"recovered_whenever_switched" -> make it harder; "mixed" -> bracket the condition that separates the outcomes.
+- route_geometry gives, per route and onset_event, the baseline time, curvature and speed and the latest onset offset that \
+still leaves the evaluation window before the route ends (V-03). Do not propose an onset the route cannot grade. Use the \
+nominal lateral acceleration v^2*|kappa| against the friction-scaled P-02 limit (route_geometry.rules) to reason about \
+speed and tyre friction.
 - Avoid the ends of the allowed ranges (within 5% of a minimum or maximum). If a value at a range end is genuinely needed, \
 explain why in extreme_justification; otherwise leave extreme_justification as an empty string. Unjustified range-end \
 values are down-ranked by the orchestrator.
 - Set expected_side to "boundary" for boundary candidates; use "recover"/"fail" only for deliberate bracketing pairs.
 - You never decide safety. A deterministic monitor labels every run. Do not claim a scenario is safe or unsafe as a fact.
 - Cite only ids from the evidence enum. Unreviewed code observations are leads, not verified facts.
-- Use only values allowed by the JSON schema. Do not invent controller parameters.
-- Avoid repeating scenarios listed under already_tried.
-- Output ONLY a JSON object that matches the schema below. No prose."""
+- Use only values allowed by the JSON schema (given as the response format). Do not invent controller parameters.
+- Avoid repeating scenarios listed under already_tried (each entry shows its outcome).
+- Output ONLY a JSON object that matches the schema. No prose."""
+
+_HANGUL = re.compile(r"[\uac00-\ud7a3]")
+_DROP = object()
 
 
-def a_messages(*, schema: dict, n: int, context: dict) -> list[dict]:
-    user = {"task": f"Propose exactly {n} candidate scenarios for the active objectives.",
-            **context, "json_schema": schema}
+def english_view(obj: Any, dropped: list[str] | None = None, path: str = "") -> Any:
+    """integration3 #7: the prompt is English. A key `k_en` replaces `k`; keys ending in _ko are left out; a string
+    with Hangul and no English twin is dropped (its path is appended to `dropped`). The YAML keeps the Korean."""
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if k.endswith("_ko") or (k.endswith("_en") and k[:-3] in obj):
+                continue
+            key = k[:-3] if k.endswith("_en") else k
+            val = obj.get(f"{k}_en", v)
+            r = english_view(val, dropped, f"{path}.{key}")
+            if r is not _DROP:
+                out[key] = r
+        return out
+    if isinstance(obj, list):
+        items = [english_view(v, dropped, f"{path}[]") for v in obj]
+        return [v for v in items if v is not _DROP]
+    if isinstance(obj, str) and _HANGUL.search(obj):
+        if dropped is not None:
+            dropped.append(path)
+        return _DROP
+    return obj
+
+
+def a_messages(*, schema: dict, n: int, context: dict, include_schema: bool = False) -> list[dict]:
+    """integration3 #7: the schema goes in response_format (json_schema); it is pasted into the body only for the
+    json_object fallback (call_a adds it there) or when include_schema is set."""
+    user = {"task": f"Propose exactly {n} candidate scenarios for the active objectives.", **context}
+    if include_schema:
+        user["json_schema"] = schema
     return [{"role": "system", "content": A_SYSTEM}, {"role": "user", "content": json.dumps(user, ensure_ascii=False, default=str)}]
+
+
+def _with_schema(messages: list[dict], schema: dict) -> list[dict]:
+    """json_object fallback: the model no longer gets the schema from response_format, so paste it into the body."""
+    out = [dict(m) for m in messages]
+    try:
+        user = json.loads(out[-1]["content"])
+    except (TypeError, ValueError):
+        out[-1]["content"] = f"{out[-1]['content']}\n\nJSON SCHEMA\n{json.dumps(schema)}"
+        return out
+    user["json_schema"] = schema
+    out[-1]["content"] = json.dumps(user, ensure_ascii=False, default=str)
+    return out
 
 
 def a_context(*, profile: dict, prior: dict, space: dict, objective_cfg: dict, routes: list[dict], few_shot: list[dict],
               mechanisms: list[dict], tried: list[dict], include_unreviewed: bool,
-              surrogate_summary: dict | None = None) -> dict:
+              surrogate_summary: dict | None = None, outcome_examples: list[dict] | None = None,
+              route_geometry: dict | None = None) -> dict:
     obs = (profile.get("code_evidence") or {}).get("observations", [])
     verified = [o for o in obs if o.get("verified") is True]
     unreviewed = [] if not include_unreviewed else [
-        {k: o.get(k) for k in ("id", "field", "observed_value", "note")} for o in obs if o.get("verified") is not True]
-    faults = [{k: f.get(k) for k in ("id", "name", "group", "injector_mode", "description", "check", "params",
-                                     "handover_axes", "next_question") if f.get(k) is not None}
+        {k: o.get(k) for k in ("id", "field", "observed_value", "note", "note_en") if o.get(k) is not None}
+        for o in obs if o.get("verified") is not True]
+    faults = [{k: f.get(k) for k in ("id", "name", "group", "injector_mode", "description", "description_en", "check",
+                                     "check_en", "params", "handover_axes", "next_question", "next_question_en")
+               if f.get(k) is not None}
               for f in space.get("faults", [])]
-    return {
+    ctx = {
         "objective": objective_cfg,
         "verified_code_observations": verified,
         "unreviewed_code_observations_static_extraction": unreviewed,
@@ -128,12 +186,20 @@ def a_context(*, profile: dict, prior: dict, space: dict, objective_cfg: dict, r
         "supervisor": space.get("supervisor"),
         "scenario_space": {"environment": space.get("environment"), "fault_timing": space.get("fault_timing"), "faults": faults},
         "routes": routes,
+        "route_geometry": route_geometry or {"note": "no baseline run yet: route geometry unknown"},
+        "outcome_examples": outcome_examples or [],
         "prior_failures_top_k": few_shot,
         "verified_video_mechanisms": mechanisms,
         "already_tried": tried,
-        "surrogate_summary": surrogate_summary or {"gp": None, "boundary_regions": [], "recent_outcomes_by_fault_mode": {},
+        "surrogate_summary": surrogate_summary or {"gp": None, "boundary_regions": [], "unexplored_regions": [],
+                                                    "recent_outcomes_by_fault_mode": {},
                                                     "note": "no runs yet (cold start): spread candidates over interior values"},
     }
+    dropped: list[str] = []
+    ctx = english_view(ctx, dropped)
+    if dropped:
+        ctx["untranslated_fields_omitted"] = len(dropped)
+    return ctx
 
 
 def a_to_candidates(obj: dict, space: dict, *, round_index: int, source: str = "nemotron_a") -> list[dict]:
@@ -192,52 +258,126 @@ def edge_distance(c: dict, space: dict) -> float | None:
     return min(min(u, 1.0 - u) for u in us.values()) if us else None
 
 
-def surrogate_summary(*, regions: list[dict], records: list[dict], candidates: dict, space: dict, metric: str,
-                      switch_metric: str | None, n_train: int | None, k: int = 6, recent: int = 30) -> dict:
-    """Compact GP view for Nemotron A every round (integration3 #4, LeGEND-style: the LLM proposes direction, the
-    GP / search refines). regions: candidate dicts with gp_mean / gp_std (already tried conditions); the k most
-    ambiguous ones (beta*std - |mean| on the recovery metric, or switch probability near 0.5) become boundary_regions
-    in the candidate item shape. recent_outcomes_by_fault_mode: recovery_outcome counts of the last `recent` runs."""
-    def ambiguity(c: dict) -> float | None:
-        gm, gs = c.get("gp_mean") or {}, c.get("gp_std") or {}
-        vals = []
-        if gm.get(metric) is not None and gs.get(metric) is not None:
-            vals.append(1.96 * gs[metric] - abs(gm[metric]))
-        if switch_metric and gm.get(switch_metric) is not None:
-            p = gm[switch_metric]
-            p = (p + 1) / 2 if p < 0 or p > 1 else p   # +/-1 regression -> rough probability
-            vals.append(1.0 - 2.0 * abs(min(1.0, max(0.0, p)) - 0.5))
-        return max(vals) if vals else None
-    scored = sorted(((ambiguity(c), c) for c in regions), key=lambda t: -1e9 if t[0] is None else t[0], reverse=True)
-    out_regions = []
-    for amb, c in scored[:k]:
-        if amb is None:
-            continue
-        gm, gs = c.get("gp_mean") or {}, c.get("gp_std") or {}
-        item = {"fault_id": c["fault"]["fault_id"], "params": c["fault"]["params"], "route_id": c["route_id"],
-                "max_speed_kmh": c["environment"]["max_speed_kmh"], "onset_event": c["onset_event"],
-                "onset_offset_s": c["onset_offset_s"],
-                "predicted_robustness_mean_z": None if gm.get(metric) is None else round(gm[metric], 3),
-                "predicted_robustness_std_z": None if gs.get(metric) is None else round(gs[metric], 3),
-                "predicted_switch": None if not switch_metric or gm.get(switch_metric) is None else round(gm[switch_metric], 3),
-                "ambiguity": round(amb, 3)}
-        if "tire_friction_scale" in c["environment"]:
-            item["tire_friction_scale"] = c["environment"]["tire_friction_scale"]
-        out_regions.append(item)
+def _phi(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def outcome_status(d: dict) -> str:
+    """integration3 #7: never_switched is not 'failed' (no LQR recovery exists to judge)."""
+    if d["switched"] == 0:
+        return "never_switched" if d["never_switched"] else "no_valid_runs"
+    if d["recovered"] == 0 and d["failed"] > 0:
+        return "failed_whenever_switched"
+    if d["failed"] == 0 and d["recovered"] > 0:
+        return "recovered_whenever_switched"
+    return "mixed" if d["recovered"] and d["failed"] else "unknown"
+
+
+def outcomes_by_fault_mode(records: list[dict]) -> dict[str, dict]:
     per: dict[str, dict] = {}
-    for r in records[-recent:]:
-        if r.get("sim_status") != "ok":
-            continue
+    for r in records:
         mode = (((r.get("parameters") or {}).get("fault") or {}).get("mode")) or "?"
-        d = per.setdefault(mode, {"n": 0, "final_safe": 0, "outcomes": {}})
+        d = per.setdefault(mode, {"n": 0, "switched": 0, "never_switched": 0, "recovered": 0, "failed": 0,
+                                  "unlabelled": 0, "invalid": 0, "failed_reasons": {}})
         d["n"] += 1
-        d["final_safe"] += r.get("final_safe_recovery") is True
-        d["outcomes"][str(r.get("recovery_outcome"))] = d["outcomes"].get(str(r.get("recovery_outcome")), 0) + 1
+        if r.get("sim_status") != "ok":
+            d["invalid"] += 1
+            continue
+        if r.get("switch_time") is None:
+            d["never_switched"] += 1
+            continue
+        d["switched"] += 1
+        fs = r.get("final_safe_recovery")
+        if fs is True:
+            d["recovered"] += 1
+        elif fs is False:
+            d["failed"] += 1
+            why = failed_reason(r)
+            d["failed_reasons"][why] = d["failed_reasons"].get(why, 0) + 1
+        else:
+            d["unlabelled"] += 1
     for d in per.values():
-        d["only"] = "recovered" if d["final_safe"] == d["n"] else ("failed" if d["final_safe"] == 0 else "mixed")
-    return {"gp": {"metric": metric, "n_train": n_train, "z_boundary": 0.0,
-                   "meaning": "mean_z < 0 riskier; |mean_z| small + std large = boundary unknown"} if n_train else None,
-            "boundary_regions": out_regions, "recent_outcomes_by_fault_mode": per}
+        d["status"] = outcome_status(d)
+        if not d["failed_reasons"]:
+            d.pop("failed_reasons")
+    return per
+
+
+def surrogate_summary(*, regions: list[dict], records: list[dict], candidates: dict, space: dict, metric: str,
+                      switch_metric: str | None, n_train: int | None, k: int = 6, recent: int = 30,
+                      scorer=None, native=None, gp_info: dict | None = None, k_unexplored: int = 3,
+                      unexplored_std_frac: float = 0.75) -> dict:
+    """Compact GP view for Nemotron A every round (integration3 #4, LeGEND-style: the LLM proposes direction, the
+    GP / search refines). integration3 #7:
+    - values in the target's own units (`native(mean_z, std_z)` -> lane_recovery_robustness), not GP z units;
+    - ranked by `scorer(c)` = engine.surrogate.boundary_score_parts (the real acquisition: level set penalised by
+      1 - P(switch), or switch uncertainty); points whose GP std is >= unexplored_std_frac of the training std are
+      'unexplored_regions' (prior-level uncertainty), the rest 'boundary_regions';
+    - recent_outcomes_by_fault_mode separates never_switched from failed."""
+    gi = dict(gp_info or {})
+    y_scale = float(gi.get("y_scale_z") or 1.0)
+    level_z = float(gi.get("level_z") or 0.0)
+    if native is None:
+        native = lambda m, sd: (m, sd)   # noqa: E731
+    if scorer is None:
+        from .surrogate import boundary_score_parts
+        scorer = lambda c: boundary_score_parts(c, metric, switch_metric, beta=1.96, level_z=level_z, y_scale=y_scale)  # noqa: E731
+    run_ids = {r.get("scenario_id"): r for r in records}
+
+    def item(c: dict, parts: dict) -> dict:
+        return region_item(c, parts, metric=metric, native=native, y_scale=y_scale, level_z=level_z, runs=run_ids)
+    scored = []
+    for c in regions:
+        parts = scorer(c) or {}
+        if parts.get("score") is None:
+            continue
+        sz = (c.get("gp_std") or {}).get(metric)
+        frac = None if sz is None else sz / max(y_scale, 1e-9)
+        scored.append((parts, frac, c))
+    explored = [t for t in scored if t[1] is None or t[1] < unexplored_std_frac]
+    unexplored = [t for t in scored if t[1] is not None and t[1] >= unexplored_std_frac]
+    explored.sort(key=lambda t: t[0]["score"], reverse=True)
+    unexplored.sort(key=lambda t: (t[0].get("p_switch") or 0.0, t[1]), reverse=True)
+    per = outcomes_by_fault_mode(records[-recent:])
+    gp = None
+    if n_train:
+        gp = {"target": gi.get("target", metric), "metric_id": metric, "n_train": n_train,
+              "units": gi.get("units"), "level": gi.get("level", 0.0),
+              "training_std": gi.get("training_std"),
+              "meaning": gi.get("meaning"),
+              "ranking": "acquisition_score = max(recovery level-set score in training-std units - switch_penalty * "
+                         "(1 - p_switch), switch-classifier level-set score); the orchestrator picks runs with the "
+                         "same score",
+              "unexplored_rule": f"gp_uncertainty_vs_training_std >= {unexplored_std_frac}"}
+    return {"gp": gp,
+            "boundary_regions": [item(c, p) for p, _, c in explored[:k]],
+            "unexplored_regions": [item(c, p) for p, _, c in unexplored[:k_unexplored]],
+            "recent_outcomes_by_fault_mode": per}
+
+
+def region_item(c: dict, parts: dict, *, metric: str, native, y_scale: float, level_z: float,
+                runs: dict | None = None) -> dict:
+    """One GP region / refine candidate in the candidate item shape plus the GP view in target units."""
+    gm, gs = c.get("gp_mean") or {}, c.get("gp_std") or {}
+    mz, sz = gm.get(metric), gs.get(metric)
+    mean, sd = native(mz, sz) if mz is not None and sz is not None else (None, None)
+    out = {"fault_id": c["fault"]["fault_id"], "fault_mode": c["fault"].get("mode"), "params": c["fault"]["params"],
+           "route_id": c["route_id"], "max_speed_kmh": c["environment"]["max_speed_kmh"],
+           "onset_event": c["onset_event"], "onset_offset_s": c["onset_offset_s"]}
+    if "tire_friction_scale" in c["environment"]:
+        out["tire_friction_scale"] = c["environment"]["tire_friction_scale"]
+    out.update({
+        "predicted_lane_recovery_robustness": None if mean is None else round(mean, 3),
+        "predicted_lane_recovery_robustness_std": None if sd is None else round(sd, 3),
+        "p_below_level": None if mz is None or not sz else round(_phi((level_z - mz) / sz), 3),
+        "p_switch": None if parts.get("p_switch") is None else round(parts["p_switch"], 3),
+        "gp_uncertainty_vs_training_std": None if sz is None else round(sz / max(y_scale, 1e-9), 2),
+        "acquisition_score": None if parts.get("score") is None else round(parts["score"], 3),
+        "ranked_by": parts.get("dominant")})
+    r = (runs or {}).get(c.get("scenario_id"))
+    if r is not None:
+        out["observed"] = outcome_view(r)
+    return out
 
 
 def call_a(client, settings: dict, messages: list[dict], schema: dict, tag: str = "A") -> tuple[dict | None, dict]:
@@ -253,7 +393,7 @@ def call_a(client, settings: dict, messages: list[dict], schema: dict, tag: str 
             stats["truncated"] = "finish_reason=length" in str(e)
             return None, stats
         stats["response_format"] = "json_object_fallback"
-        res = client.chat(settings["model"], messages, response_format={"type": "json_object"}, **kw)
+        res = client.chat(settings["model"], _with_schema(messages, schema), response_format={"type": "json_object"}, **kw)
     stats["usage"] = res.usage
     try:
         obj = extract_json(res.content)
@@ -271,18 +411,28 @@ def call_a(client, settings: dict, messages: list[dict], schema: dict, tag: str 
     return obj, stats
 
 
-REFINE_INSTR = """Refine pass (thinking enabled). For each candidate below the surrogate predicts lane_recovery_robustness \
-mean +- std (0 = lane boundary). Propose ONE modified scenario per candidate that you expect to lie closer to the \
-recovery boundary (robustness ~ 0), changing at most two fields and keeping route_id and fault_id. Same JSON schema."""
+REFINE_INSTR = """Refine pass (thinking enabled). Each candidate below is a tried condition near the recovery boundary, \
+with the GP prediction of lane_recovery_robustness in its own units (see surrogate.gp.units; level 0 = vehicle body at \
+the lane edge), p_below_level, p_switch and the observed outcome if it ran. Propose ONE modified scenario per candidate \
+that you expect to lie closer to the boundary (predicted robustness ~ 0 with the switch still happening), changing at \
+most two fields and keeping route_id and fault_id. Respect route_geometry (V-03 latest onset offset) and \
+objective.judgment_criteria. Output ONLY the JSON object of the response format."""
+
+REFINE_CONTEXT_KEYS = ("objective", "supervisor", "scenario_space", "routes", "route_geometry", "outcome_examples",
+                       "already_tried")
 
 
-def refine_messages(schema: dict, near: list[dict], context: dict) -> list[dict]:
-    items = [{k: c.get(k) for k in ("route_id", "environment", "fault", "onset_event", "onset_offset_s")} |
-             {"predicted_robustness_mean_z": (c.get("gp_mean") or {}).get("recovery_success"),
-              "predicted_robustness_std_z": (c.get("gp_std") or {}).get("recovery_success")} for c in near]
-    user = {"task": REFINE_INSTR, "candidates": items, "routes": context.get("routes"),
-            "prior_failures_top_k": context.get("prior_failures_top_k"), "json_schema": schema}
-    return [{"role": "system", "content": A_SYSTEM}, {"role": "user", "content": json.dumps(user, default=str)}]
+def refine_messages(schema: dict, near: list[dict], context: dict, include_schema: bool = False) -> list[dict]:
+    """integration3 #7: refine gets the same compact context as the main call (faults, supervisor, criteria, route
+    geometry, outcome pairs, already_tried, GP header + outcome mix) and `near` already in target units
+    (region_item rows)."""
+    summ = context.get("surrogate_summary") or {}
+    user = {"task": REFINE_INSTR, "candidates": near,
+            **{k: context.get(k) for k in REFINE_CONTEXT_KEYS if context.get(k) is not None},
+            "surrogate": {"gp": summ.get("gp"), "recent_outcomes_by_fault_mode": summ.get("recent_outcomes_by_fault_mode")}}
+    if include_schema:
+        user["json_schema"] = schema
+    return [{"role": "system", "content": A_SYSTEM}, {"role": "user", "content": json.dumps(user, ensure_ascii=False, default=str)}]
 
 
 # ----------------------------------------------------------------------------- B
@@ -587,6 +737,46 @@ def _stub_near(region: dict, items_schema: dict, rng: random.Random) -> dict | N
 
 
 
+def _stub_between(pair: dict, items_schema: dict, rng: random.Random) -> dict | None:
+    """SYNTHETIC: a candidate halfway between a recovered and a failed run of the same fault (outcome_examples)."""
+    rec, fail = pair["recovered"], pair["failed"]
+    region = dict(fail)
+    for key in ("max_speed_kmh", "onset_offset_s", "tire_friction_scale"):
+        if isinstance(rec.get(key), (int, float)) and isinstance(fail.get(key), (int, float)):
+            region[key] = 0.5 * (rec[key] + fail[key])
+    region["params"] = {k: (0.5 * (v + rec["params"][k]) if isinstance(v, (int, float)) and not isinstance(v, bool)
+                            and isinstance((rec.get("params") or {}).get(k), (int, float)) else v)
+                        for k, v in (fail.get("params") or {}).items()}
+    c = _stub_near(region, items_schema, rng)
+    if c is not None:
+        c["expected_side"] = "boundary"
+    return c
+
+
+def _stub_fit_route(c: dict, items_schema: dict, geom: dict) -> None:
+    """SYNTHETIC: use route_geometry like a careful proposer would: pick an onset_event the route has at about this
+    speed and keep the onset offset at or before the latest one V-03 can still grade."""
+    g = geom.get(c.get("route_id"))
+    if not g or not g.get("events"):
+        return
+    kmh = float(c.get("max_speed_kmh", 0))
+    br = next((b for b in items_schema.get("anyOf", []) if b["properties"]["fault_id"]["enum"] == [c.get("fault_id")]), None)
+    if br is None:
+        return
+    allowed = br["properties"]["onset_event"]["enum"]
+    lo = br["properties"]["onset_offset_s"]["minimum"]
+    hi = br["properties"]["onset_offset_s"]["maximum"]
+    def latest(ev):   # route_geometry columns: [max_speed_kmh, t_s, kappa, speed, v2kappa, latest_offset]
+        rows = g["events"].get(ev) or []
+        return min(rows, key=lambda r: abs(float(r[0]) - kmh))[5] if rows else None
+    if latest(c.get("onset_event")) is None or latest(c["onset_event"]) < lo:
+        ok = [ev for ev in allowed if latest(ev) is not None and latest(ev) >= lo]
+        if not ok:
+            return
+        c["onset_event"] = ok[0]
+    c["onset_offset_s"] = max(lo, min(float(c["onset_offset_s"]), hi, latest(c["onset_event"]) - 0.05))
+
+
 # SYNTHETIC: what the --mock B "reads" from the code. Mostly the real answer, with one deliberate mistake (stale ->
 # stale_mpc for Q-B1, what the real Nemotron answered in result_1..5) so the hallucination metric has something to count.
 _STUB_B_TABLE = {
@@ -617,21 +807,33 @@ def stub_handler(seed: int = 0):
         user = messages[-1]["content"]
         if tag.startswith("A"):
             payload = json.loads(user)
-            schema = payload["json_schema"]
+            # integration3 #7: the schema rides in response_format; the body has it only on the json_object fallback
+            schema = payload.get("json_schema") or ((kw.get("response_format") or {}).get("json_schema") or {}).get("schema")
+            refine = "candidates" in payload and "exactly" not in payload["task"]
             n = int(re.search(r"exactly (\d+)", payload["task"]).group(1)) if "exactly" in payload["task"] else \
                 len(payload.get("candidates", [])) or 3
             items_schema = schema["properties"]["candidates"]["items"]
-            regions = ((payload.get("surrogate_summary") or {}).get("boundary_regions") or [])
+            summ = payload.get("surrogate_summary") or payload.get("surrogate") or {}
+            regions = payload.get("candidates") if refine else (summ.get("boundary_regions") or [])
+            pairs = [e for e in payload.get("outcome_examples") or [] if e.get("recovered") and e.get("failed")]
+            geom = (payload.get("route_geometry") or {}).get("routes") or {}
             cands = []
             for i in range(n):
-                # integration3 stub: half the items jitter a GP boundary region (as the real prompt asks), rest random
-                if regions and i % 2 == 0:
-                    c = _stub_near(regions[(i // 2) % len(regions)], items_schema, rng)
+                # SYNTHETIC stub: refine jitters each given candidate; the main call jitters a GP boundary region for
+                # half the items, takes the midpoint of a recovered/failed pair for some, and samples the rest
+                if regions and (refine or i % 2 == 0):
+                    c = _stub_near(regions[(i if refine else i // 2) % len(regions)], items_schema, rng)
+                    if c is not None:
+                        cands.append(c)
+                        continue
+                if pairs and i % 4 == 1:
+                    c = _stub_between(pairs[(i // 4) % len(pairs)], items_schema, rng)
                     if c is not None:
                         cands.append(c)
                         continue
                 cands.append(S.sample(items_schema, rng))
             for c in cands:
+                _stub_fit_route(c, items_schema, geom)
                 c["expected_mechanism"] = "SYNTHETIC stub: no model was called"
                 c["extreme_justification"] = ""
             return json.dumps({"candidates": cands})
