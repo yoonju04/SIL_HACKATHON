@@ -139,6 +139,45 @@ with only the video fix applied, SYNTHETIC simulator and stub LLMs):
 The remaining constant columns are options nobody chose (one-hot zeros). The mock B is synthetic, so these numbers
 only show the plumbing works; real-model effects need a real run.
 
+## 7. Nemotron A boundary context (integration3 #7)
+
+Review finding: A is supposed to find the recovery boundary, but the information it needs to judge a boundary did
+not reach it. Every point was checked in code first.
+
+| # | finding | verdict | change |
+|---|---|---|---|
+| 1 | surrogate_summary values were GP z units labelled like metres | **confirmed, partly corrected**: values were z = lrr / 0.1 (10× lane_recovery_robustness), but lrr itself is dimensionless (margin / (lane_w/2 − half width)), not metres | values are converted to lrr (`Loop.native`), renamed `predicted_lane_recovery_robustness(_std)`, `gp.units/meaning/training_std` state the definition; P01 metres are shown separately as `lane_margin_min_m`; refine prompt now matches |
+| 2 | summary "ambiguity" is not the acquisition | confirmed (summary used its own score with no 1 − P(switch) penalty) | `engine.surrogate.boundary_score_parts` = the exact terms of `boundary_score`; summary ranks by `Loop.summary_scorer` (same beta, level, y_scale, switch_penalty as `acq_score`). Points with GP std ≥ 0.75 × training std go to `unexplored_regions` (not boundary evidence) |
+| 3 | no-switch runs counted as failed, prompt pushed toward milder faults | confirmed (`final_safe_recovery` is False without a switch) | `recent_outcomes_by_fault_mode` has switched / never_switched / recovered / failed / failed_reasons / status; prompt: never_switched → stronger/longer, failed_whenever_switched → milder, mixed → bracket |
+| 4 | no route geometry → V-03 rejections | confirmed | `route_geometry` (round_XX/03_route_geometry.json): per route × onset_event rows `[kmh, t_s, kappa, speed, v²κ, latest_onset_offset_s_for_V03]` from completed baselines, rules for V-03 and v²κ vs 4.41·scale (DF-06). mock probes baselines at 20/30/40 km/h; **real mode does not probe** (`probe_baselines.real: false`, extra CARLA runs = user decision), it only shows baselines already run |
+| 5 | few-shot was failures only, already_tried had no outcomes | confirmed | `outcome_examples`: per fault mode the closest recovered + failed pair (normalised parameter distance); `already_tried` rows carry outcome label, switched, `lane_margin_min_m`; `feedback_in.k` 5 → 3. B and Cosmos inputs unchanged (no results) |
+| 6 | objective had no judgment criteria | confirmed | `objective.judgment_criteria` from `thresholds_from_config` + P-02 formula (3 s / 0.3 m / 0.1 rad / 1 s hold, 4.41·scale = 0.5·0.9·scale·9.81, jerk 5, window 10 s, V-03 5 s) |
+| 7a | verified flags | not flipped; all 25 observations re-checked against av_stack (line drift noted in note_en, e.g. O-001 run_benchmark.py:114 not 105, O-017 rate 90°/s at pdm_agent.py:86/231) | – |
+| 7b | Korean in the prompt | confirmed | `*_en` fields (faults, supervisor, handover, saturate params, S1 natural_switch_bound_en, route note_en, observation note_en); `english_view` uses them and drops Korean-only leaves; the captured prompt has no Hangul |
+| 7c | schema sent twice | confirmed | schema only in `response_format` (json_schema); pasted into the body only on the json_object fallback |
+| 7d | refine had less context | confirmed | refine gets objective, supervisor, scenario_space, routes, route_geometry, outcome_examples, already_tried, GP header + outcome mix; near rows in lrr units |
+| 7e | two temperatures | confirmed: `nemotron_a.yaml temperature 0.7` and `nemotron_b.yaml 0.0` were never read; effective = `llm_models.yaml` A 1.0 / A_refine 1.0 / B 1.0 (top_p 0.95) | yaml keys removed with a comment; effective values unchanged |
+
+Captured messages, mock seed 0, 2 rounds, `PYTHONHASHSEED=0` (before = 6fff06a; stub A, SYNTHETIC simulator):
+
+| | before | after |
+|---|---|---|
+| user chars A r0 / r1 / refine1 / r2 / refine2 | 24,258 / 36,407 / 19,175 / 40,431 / 19,492 (incl. 11.8 k schema each) | 20,849 / 40,886 / 25,695 / 45,644 / 30,096 (no schema in body) |
+| system prompt chars | 2,334 | 3,432 |
+| boundary_regions r1 (mode, P(switch)) | F-03 .14, F-03 .16, F-03 .14, F-07 .15, F-04 .16, F-04 .16 | F-04 .75, F-04 .16, F-05 .16, F-02 .87, F-06 .88, F-05 .89 (+ unexplored F-03 .25/.19/.19) |
+| boundary_regions r2 | F-03 ×6 (.10–.19) | F-04 .73, F-05 .86 ×3, F-04 .17 ×2 (+ unexplored F-03 .16 ×3) |
+| output_delay (F-03) among 48 A items | 18 | 6 |
+| V-03 rejections total / of A candidates | 13 / 5 | 5 / 2 |
+
+GP sign / balanced accuracy, X-5 mock seeds 0–2 (`--cold-start 24 --batch-size 12 --rounds 4`, n = 21 each):
+before 0.905/0.857, 0.905/0.857, 0.857/0.786 → after 0.857/0.786, 0.905/0.857, 0.905/0.857 (same mean; switched
+runs 86 → 98 over the three seeds). The section-6 numbers (0.905/0.909/0.909) were without `PYTHONHASHSEED`.
+
+Caveats: the stub A is SYNTHETIC (it reads the new fields mechanically), so these numbers only show the information
+arrives; how the real Nemotron uses it is unmeasured. The mock route ends shrink with speed and V-03 is checked
+against the nearest probed speed, so some rejections remain. In real mode route_geometry is empty until baselines
+exist.
+
 ## Mock comparison (seed 0, `PYTHONHASHSEED=0`, SYNTHETIC simulator, stub LLMs)
 
 `python run.py --mock --seed 0 --open-screen off`; before = `bd683b5`, after = `651add7`.
@@ -163,6 +202,6 @@ run on CARLA.
 ## Tests
 
 `tests/test_integration3_faults.py`, `tests/test_integration3_nemotron.py`, `tests/test_integration3_gp.py`,
-`tests/test_integration3_nemotron_b.py`
+`tests/test_integration3_nemotron_b.py`, `tests/test_integration3_nemotron_a_context.py`
 (plus updated existing tests). Root suite, `pipeline/09_monitor` and the av_stack suite (without GPU / reference
 tests) pass.
