@@ -1,0 +1,345 @@
+[
+  {
+    "scenario_id": "SC-e25eb5a1b4",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.8,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "O-017",
+      "PK-001"
+    ],
+    "expected_mechanism": "Steering saturates at positive limit; LQR output plateaus while cross-track error grows; supervisor detects tracking_divergence after 0.25 s and triggers safe stop.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-307629dfb6",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.8,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-007",
+      "O-008",
+      "O-017",
+      "PK-001"
+    ],
+    "expected_mechanism": "Steering saturates at negative limit; LQR output plateaus while cross-track error grows; supervisor detects tracking_divergence after 0.25 s and triggers safe stop.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-2bd3b40be0",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.08
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.3,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-017",
+      "PK-002"
+    ],
+    "expected_mechanism": "Constant bias applied to LQR command; at higher speed the biased steering exceeds rate/saturation limits sooner; LQR may diverge or supervisor may detect tracking_divergence depending on error state at switch.",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-5305e90646",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.5
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "O-005",
+      "O-012",
+      "PK-003"
+    ],
+    "expected_mechanism": "MPC solver fails to converge; last valid command falls back to none; supervisor triggers immediate switch to LQR; LQR must stabilize from the then-current error state.",
+    "expected_side": "recover"
+  },
+  {
+    "scenario_id": "SC-f7d40cd5d3",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.013
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.865,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-416819d815",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1264,
+        "on_s": 0.1765,
+        "off_s": 0.6721
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.5,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-37598bd06a",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.5488
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.832,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-031965232c",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0938
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.258,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2b13e8dc1d",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0088
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.123,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4af4f7b8d5",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 2.6888
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.41,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-c12b1b1cdf",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.7325
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.156,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-0d505dad71",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 0.6844
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.318,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-5f1f8b9c71",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.032
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.693,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b243883f6d",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0455
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.654,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  }
+]

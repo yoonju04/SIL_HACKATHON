@@ -1,0 +1,12 @@
+{
+  "supervisor": {
+    "safe_stop": false
+  },
+  "meta": {
+    "planner": "PDM-Lite",
+    "controller": "supervised",
+    "fault_mode": "bias",
+    "fault_start": 46.4,
+    "fault_magnitude": 0.08
+  }
+}

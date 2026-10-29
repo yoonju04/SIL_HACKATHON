@@ -1,0 +1,49 @@
+{
+ "insights": {
+  "status": "complete",
+  "n_insights": 5,
+  "model_calls": 5,
+  "error": null,
+  "dropped_insights": [],
+  "rejected_attempts": [
+   "인사이트 5개가 검증에 실패했습니다(통과 1개):\n- 인사이트 1 'solver_fail 고장은 대부분 통과했지만, cur': 인사이트가 입력에 없는 run_id 'R00-0017-solver_fail'를 인용했습니다. evidence의 run_id는 records에 있는 실제 값(R00-0000-bias, R00-0001-solver_fail, R00-0002-intermittent_bias, R00-0003-solver_fail, R00-0004-drift, R00-0005-stale, R00-0006-drift, R00-0007-bias, R01-0008-drift, R01-0009-intermittent_bias, R01-0010-intermittent_bias, R01-0011-saturate, R01-0012-bias, R01-0013-solver_fail, R02-0014-saturate, R02-0015-intermittent_bias, R02-0016-intermittent_bias, R02-0017-solver_fail)이어야 합니다. 그룹 통계는 evidence가 아니라 finding 문장에만 쓰세요.\n- 인사이트 2 'bias 고장은 curve_entry에서 모두 실패했다': 'bias 고장은 curve_entry에서 모두 실패했다'라고 했지만 실패 런의 고장 시점은 {'curve_entry': 9, 'curve_exit': 5, 'straight': 1}입니다 (summary.facts.failure_onset_events). 전체 주장은 이 개수와 맞게 고치세요.\n- 인사이트 3 'drift 고장은 curve_entry에서 모두 실패했': 'drift 고장은 curve_entry에서 모두 실패했다'라고 했지만 실패 런의 고장 시점은 {'curve_entry': 9, 'curve_exit': 5, 'straight': 1}입니다 (summary.facts.failure_onset_events). 전체 주장은 이 개수와 맞게 고치세요.\n- 인사이트 4 'intermittent_bias 고장은 curve_ex': 인사이트가 입력에 없는 run_id 'R01-0015-intermittent_bias'를 인용했습니다. evidence의 run_id는 records에 있는 실제 값(R00-0000-bias, R00-0001-solver_fail, R00-0002-intermittent_bias, R00-0003-solver_fail, R00-0004-drift, R00-0005-stale, R00-0006-drift, R00-0007-bias, R01-0008-drift, R01-0009-intermittent_bias, R01-0010-intermittent_bias, R01-0011-saturate, R01-0012-bias, R01-0013-solver_fail, R02-0014-saturate, R02-0015-intermittent_bias, R02-0016-intermittent_bias, R02-0017-solver_fail)이어야 합니다. 그룹 통계는 evidence가 아니라 finding 문장에만 쓰세요.\n- 인사이트 5 'saturate 고장은 curve_entry에서 모두 ': 'saturate 고장은 curve_entry에서 모두 실패했다'라고 했지만 실패 런의 고장 시점은 {'curve_entry': 9, 'curve_exit': 5, 'straight': 1}입니다 (summary.facts.failure_onset_events). 전체 주장은 이 개수와 맞게 고치세요.",
+   "인사이트 1개가 검증에 실패했습니다(통과 4개):\n- 인사이트 2 'curve_entry 시점 고장이 가장 높은 실패율을 ': 근거 값이 모니터의 실제 값과 다릅니다: R02-0018-solver_fail fault_plan.onset_event에 curve_apex라고 했지만 실제 값은 curve_entry입니다. evidence에는 레코드 값을 그대로 복사하고, 평균 같은 계산값은 summary.by_fault_type / summary.by_outcome 값을 인용하세요."
+  ]
+ },
+ "power_events": [
+  {
+   "t": 1793228219.8639526,
+   "event": "start_requested",
+   "reason": "insights only (BUG-019)",
+   "t_local": "15:56:59"
+  },
+  {
+   "t": 1793228374.1079144,
+   "event": "ready",
+   "reason": "insights only (BUG-019)",
+   "startup_s": 155.4,
+   "t_local": "15:59:34"
+  },
+  {
+   "t": 1793228395.3272154,
+   "event": "data_plane_ready",
+   "reason": "insights only (BUG-019)",
+   "at_s": 176.7,
+   "code": 200,
+   "t_local": "15:59:55"
+  },
+  {
+   "t": 1793228595.309645,
+   "event": "stop_requested",
+   "reason": "insights only (BUG-019)",
+   "t_local": "16:03:15"
+  },
+  {
+   "t": 1793228595.601149,
+   "event": "already_off",
+   "reason": "insights cycle end",
+   "t_local": "16:03:15"
+  }
+ ],
+ "elapsed_s": 377
+}

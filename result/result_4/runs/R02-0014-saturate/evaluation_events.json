@@ -1,0 +1,56 @@
+[
+  {
+    "criterion": "RouteCompletionTest",
+    "frame": 0,
+    "event_type": "ROUTE_COMPLETION",
+    "message": "Agent has completed 40.26 of the route"
+  },
+  {
+    "criterion": "CollisionTest",
+    "frame": 1476953,
+    "event_type": "COLLISION_VEHICLE",
+    "message": "Agent collided against object with type=vehicle.ford.mustang and id=7010 at (x=-39.357, y=63.437, z=-0.002)"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1476449,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 301.15% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1476583,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 243.93% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1476662,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 244.14% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1476903,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 49.36% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1477016,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 163.35% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1477095,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 291.79% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1477175,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 396.87% of the surrounding traffic's one"
+  }
+]

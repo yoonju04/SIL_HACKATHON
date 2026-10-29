@@ -1,0 +1,80 @@
+[
+  {
+    "scenario_id": "SC-55aafdb727",
+    "source": "perturbation",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 1.3989709657013165,
+      "switched_indicator": 0.9923222901872316
+    },
+    "gp_std": {
+      "recovery_success": 4.786529740214402,
+      "switched_indicator": 0.1217106000614746
+    }
+  },
+  {
+    "scenario_id": "SC-f7e20b27a0",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 0.5056085956064607,
+      "switched_indicator": -0.9263631115682149
+    },
+    "gp_std": {
+      "recovery_success": 4.858035774859109,
+      "switched_indicator": 0.288392963204534
+    }
+  },
+  {
+    "scenario_id": "SC-867fd24463",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 4.182865064621403,
+      "switched_indicator": 0.25
+    },
+    "gp_std": {
+      "recovery_success": 5.613368485464105,
+      "switched_indicator": 0.8528429443069214
+    }
+  },
+  {
+    "scenario_id": "SC-abc11916c4",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 4.20275245350342,
+      "switched_indicator": 0.25
+    },
+    "gp_std": {
+      "recovery_success": 5.6144411407835015,
+      "switched_indicator": 0.8528429443069214
+    }
+  },
+  {
+    "scenario_id": "SC-ab807a2962",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 4.220195465760694,
+      "switched_indicator": 0.25
+    },
+    "gp_std": {
+      "recovery_success": 5.61534049146777,
+      "switched_indicator": 0.8528429443069214
+    }
+  },
+  {
+    "scenario_id": "SC-8fb1c6cf2f",
+    "source": "perturbation",
+    "selected_by": "random_space_filling",
+    "gp_mean": {
+      "recovery_success": -0.8256060827548062,
+      "switched_indicator": 0.9999966031520293
+    },
+    "gp_std": {
+      "recovery_success": 0.1500998488544439,
+      "switched_indicator": 0.004923280793514913
+    }
+  }
+]

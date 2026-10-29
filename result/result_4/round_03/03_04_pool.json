@@ -1,0 +1,4774 @@
+[
+  {
+    "scenario_id": "SC-1b960b4d5c",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.5
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [],
+    "evidence_ids": [
+      "O-001",
+      "O-002",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "MPC solver fails to converge, immediate LQR takeover; LQR attempts recovery from small tracking error.",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-071b1e2c75",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.5
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.0,
+    "tags": [],
+    "evidence_ids": [
+      "O-001",
+      "O-002",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "Solver failure at low speed on straight; LQR starts with small error, recovery likely if within linear range.",
+    "expected_side": "recover"
+  },
+  {
+    "scenario_id": "SC-c349917b35",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.7325
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.654,
+    "tags": [],
+    "evidence_ids": [
+      "O-001",
+      "O-002",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "Stale output during curve exit; LQR must correct accumulated error, rate limits may hinder rapid recovery.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-a85245c950",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [],
+    "evidence_ids": [
+      "O-001",
+      "O-002",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "Two-tick output delay; LQR receives stale command at switch, initial recovery attempt based on outdated steering intent.",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-a6fef14050",
+    "source": "nemotron_a",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 6
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.693,
+    "tags": [],
+    "evidence_ids": [
+      "O-001",
+      "O-002",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "Six-tick delay at moderate speed entering curve; LQR switch occurs with delayed state information, likely insufficient margin for recovery.",
+    "expected_side": "fail"
+  },
+  {
+    "scenario_id": "SC-0068a23547",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.08
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.023,
+    "tags": [],
+    "evidence_ids": [
+      "O-001",
+      "O-002",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "Constant bias added to MPC output; LQR takeover occurs with bias present, offset error may prevent lane recovery.",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-d82f3b453d",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.08
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.654,
+    "tags": [],
+    "evidence_ids": [
+      "O-001",
+      "O-002",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "Bias on curve exit at low speed; LQR must overcome bias while dealing with decreasing curvature, recovery margin uncertain.",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-447d35fcca",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0407
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.56,
+    "tags": [],
+    "evidence_ids": [
+      "O-001",
+      "O-002",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "Drift at low speed entering curve; error growth may be slow enough for LQR to recover if switch occurs early in drift trajectory.",
+    "expected_side": "recover"
+  },
+  {
+    "scenario_id": "SC-b7792740d6",
+    "source": "nemotron_a_refine",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0407
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.6,
+    "tags": [],
+    "evidence_ids": [
+      "F-05",
+      "E-01"
+    ],
+    "expected_mechanism": "reduced_speed_curvature_entry",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-c0fdc7d1cd",
+    "source": "nemotron_a_refine",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.092,
+        "on_s": 0.4694,
+        "off_s": 0.898
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.2,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "F-07",
+      "E-02"
+    ],
+    "expected_mechanism": "lower_speed_intermittent_bias",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-3acd71fa4d",
+    "source": "nemotron_a_refine",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.08
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [],
+    "evidence_ids": [
+      "F-04",
+      "E-01"
+    ],
+    "expected_mechanism": "moderate_speed_zero_offset",
+    "expected_side": "boundary"
+  },
+  {
+    "scenario_id": "SC-3c42023240",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.574,
+        "side": "negative"
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.125,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-e490f4f5f5",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.1542
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.054,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-32f5121595",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0541
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.272,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-710ead7b1a",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.954,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-82959eadf5",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.8744,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.284,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2ff128c6a2",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0926
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.97,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b8b4f506df",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1198,
+        "on_s": 0.4424,
+        "off_s": 0.1119
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.247,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-eebcb57a48",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 0.1841
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.175,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b474f144ed",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0823
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.81,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-090c6e64f6",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.9634
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.088,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-c0d658e1bf",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.436,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-c499cfe754",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1492,
+        "on_s": 0.2646,
+        "off_s": 0.1666
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.606,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7695818cde",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0275
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.453,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-c54b2900b4",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 4
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.428,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4b52593994",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 0.8973
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.924,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9f3a574232",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 0.5334
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.451,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7b766be43e",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.025,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3d0a4a8216",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6252,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.642,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-5347b505f9",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.4382
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.313,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b99b4164d3",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.009
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.729,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4d97166d1f",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1349,
+        "on_s": 0.9423,
+        "off_s": 0.8603
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.675,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b50336718b",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.092
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.786,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-0c7fddc579",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.7391,
+        "side": "positive"
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.115,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-8c6b6e85bd",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0211
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.775,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-5564aac59f",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 0.583
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.22,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-d817a1dd96",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1458,
+        "on_s": 0.6772,
+        "off_s": 0.9716
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.018,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-16f65bc255",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0301
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.553,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b1cd8a3805",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0184
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.525,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9f2ae3b8e8",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0224
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.876,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-98e34cd1d0",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0716,
+        "on_s": 0.8231,
+        "off_s": 0.9797
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.384,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ba47a8c6db",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0814
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.84,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4fb427bbff",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0188
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.388,
+    "tags": [
+      "stress_test"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-099b79f41e",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.684,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-8ffb2d569d",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.344,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9cf1ccfd32",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0694,
+        "on_s": 0.6606,
+        "off_s": 0.169
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.537,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f809827e4b",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 2.8382
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.561,
+    "tags": [
+      "stress_test"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-bfe60d0e69",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0616,
+        "on_s": 0.7399,
+        "off_s": 0.0871
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.725,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-602403ac34",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0605
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.917,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b25ec198bf",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.4599
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.026,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-6dbbb7bfbf",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 0.9695
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.273,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-6b4abb2dfe",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.3592
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.095,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7fd85fd2da",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.5376
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.186,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-5b9b7ad353",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.5592
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.524,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-47d822aa1a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.02
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.067,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b83f82c55f",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.8499
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.006,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-a2e27d0e9e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.6212
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.489,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-fe9fffa340",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.2175
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.2,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-946f90e05e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.6464
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.053,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7a51bfd33b",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 0.4542
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.091,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-cf8b1027ce",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.154
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.198,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-bd7e8aacda",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 0.415
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.122,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4c479c05ca",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.8213
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.23,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9592069c0c",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 0.9141
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.468,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-0e12253ad9",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.1455
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.599,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-dc0799b3b2",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.0328
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.374,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-09eeaa082b",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.1883
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.19,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-74066a62b1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.1708
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.06,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2245a0238a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 0.812
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.092,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2b7e9cd7d3",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.0921
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.164,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ad973b9724",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.6246
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.608,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-533a7d83b3",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 2.3744
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.089,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-55f10f7e7e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.5576
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.192,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f7fb14f8e7",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.2897
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.159,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-e1c22928d5",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.7558
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.649,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-869f2f031b",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.1121
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.605,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2570b25524",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.4109
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.369,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-0c495ef603",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.964
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.453,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b34ae7a165",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {
+        "duration_s": 1.5179
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.184,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-0948da5154",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 2.5821
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.369,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-91d067ec70",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.33
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.363,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-eb2be20c00",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.9512
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.019,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-317df33f4c",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 2.0223
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.085,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f37db2e02b",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.3613
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.111,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-26e296a4f8",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.5138
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.332,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-41f9164ad7",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.339
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.299,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f57166c853",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.9172
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.148,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9427c8060f",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.4186
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.54,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3bcbefe9e9",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.258
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.203,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-6ffc127bcc",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.3271
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.552,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-8268f49b07",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.0206
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.004,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7e1344be11",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.3927
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.95,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-56cefcc90d",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 2.4012
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.792,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-44d5b1fdb1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.5054
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.79,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-a1b24de6c5",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.4767
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.776,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4e1493c7cf",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 2.1271
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -1.0,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2ab667831d",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 1.6968
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.397,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-cdac42bc9c",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {
+        "duration_s": 2.1637
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.599,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3efdb905a1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.008,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-548e59d9dd",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 1
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.483,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-03b70d0d88",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 1
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.255,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4ce0ff0c38",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 1
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.037,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-415b849cc4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.109,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-75949dba44",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.851,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-a49a58780e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.395,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-660e3ce7d9",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.229,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-126268f77f",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 6
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.481,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f35373b71a",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 6
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.943,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b355c46c29",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 6
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.784,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-18d45e9656",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 6
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.961,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f582e56ef7",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 4
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.486,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-efc2c35452",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 6
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.98,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-26ac083872",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 6
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.901,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-48d166c2f0",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0983
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.158,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4aba21d734",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0706
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.007,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-0db960b74e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.1
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.055,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-cea2487617",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0736
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.154,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-49fdca0d86",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0672
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.422,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f5ddaa1b5a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0933
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.09,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-301426d0b0",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0859
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.321,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9d554a6bff",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0576
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.661,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-94386d93eb",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0776
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.29,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-061621c035",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0925
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.537,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-647d47bd1d",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0734
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.735,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9ff631113d",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0853
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.283,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3cb1c5f938",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0738
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.505,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9614405740",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0793
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.491,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-6661b47927",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0759
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.69,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-e5f2d7c6da",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0753
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.97,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ff29bd4204",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0831
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.385,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-86d211b19d",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0828
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.693,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-bd66bad40e",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0306
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.516,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-e8213a5898",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0264
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.604,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9806fde288",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0261
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.743,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-94783860d4",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0359
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.548,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-33f3369aea",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0378
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.918,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-06ddeeec0b",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0241
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 1.0,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-151b21c47e",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.045
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.455,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-95e9893aae",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0264
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.274,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-dbc58a4dbf",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.032
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.383,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-1dafbd34a0",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0326
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.786,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-6de926e56e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0382
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.042,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-13b904bbb6",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0464
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.427,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-eda95049eb",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0431
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 1.0,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f20bde2044",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0456
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.391,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3a35004cc9",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0319
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.794,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ac7e8082f4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0342
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.097,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4318188c14",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0362
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.025,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-686708f444",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0421
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.524,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-04630c81f7",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.05
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.575,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4aecebb23e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5497,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -1.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-5b3790c863",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 1.0,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -1.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7f9975f99a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5001,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.934,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9bef4705c9",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.7823,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.701,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-be781b4ee1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5759,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -1.0,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-5a5115ee75",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.605,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.803,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7941a456b2",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5564,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.825,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-d58f8331a7",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6853,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.99,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f0ae26fe73",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6574,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.834,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-1f5cf351bb",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.8028,
+        "side": "negative"
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -1.0,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-22099f6017",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2341,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.213,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-19e8e7375c",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2929,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.734,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b7d495c95a",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.35,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.691,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-bdf3116600",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2561,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.831,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9d8cc25afd",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.372,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f16ab71813",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.657,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-1498994dea",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3333,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.287,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7a695f89d1",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3095,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.861,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-8d2839410d",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1556,
+        "side": "positive"
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.201,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3bf7b2632c",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1087,
+        "on_s": 0.3203,
+        "off_s": 0.6225
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.869,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4ecac745e9",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1271,
+        "on_s": 0.1346,
+        "off_s": 0.6634
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.795,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-749530bedc",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1171,
+        "on_s": 0.2639,
+        "off_s": 0.7859
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.351,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-a109438e6d",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1216,
+        "on_s": 0.1,
+        "off_s": 0.6719
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.337,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-8d958ef70a",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1271,
+        "on_s": 0.2638,
+        "off_s": 0.663
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.885,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-995ca4125d",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1235,
+        "on_s": 0.2328,
+        "off_s": 0.8207
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.448,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9b83f97030",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1257,
+        "on_s": 0.1,
+        "off_s": 0.6641
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.846,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-047836b5c6",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1188,
+        "on_s": 0.196,
+        "off_s": 0.7057
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.423,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-6c8de169b6",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1217,
+        "on_s": 0.2156,
+        "off_s": 0.9362
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.391,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-775871bdc4",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1065,
+        "on_s": 0.2407,
+        "off_s": 0.6883
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -1.0,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7385c2208a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0996,
+        "on_s": 0.5279,
+        "off_s": 0.843
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.585,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-dbb5454cc3",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1082,
+        "on_s": 0.4149,
+        "off_s": 0.9552
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.577,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ac18a32bcf",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.079,
+        "on_s": 0.5684,
+        "off_s": 1.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.247,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-922b97291c",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1047,
+        "on_s": 0.7512,
+        "off_s": 0.9154
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.49,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-dd222d62b5",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0577,
+        "on_s": 0.3862,
+        "off_s": 0.9926
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.238,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-40c3af0071",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.078,
+        "on_s": 0.3903,
+        "off_s": 0.598
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.32,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2a7d7e5740",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0854,
+        "on_s": 0.6862,
+        "off_s": 0.9453
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.457,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-24dadbef04",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0876,
+        "on_s": 0.2622,
+        "off_s": 1.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.566,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-b41fd21417",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1164,
+        "on_s": 0.4413,
+        "off_s": 0.9879
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.249,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-4463fc5144",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0687,
+        "on_s": 0.6113,
+        "off_s": 0.7862
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.202,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3300deefa0",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0459
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.11,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-fe8ac0e62a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0398
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.762,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-ea0c793f32",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0487
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.82,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-d276dcb330",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0443
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.991,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-a90a0cc685",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0373
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.86,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f629693c34",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.045
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.04,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-d9974d2e77",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0338
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.581,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-de2b15d70e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.05
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.816,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-9f4ff8c1f5",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0405
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.963,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-78bbdcc59e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1133,
+        "on_s": 0.459,
+        "off_s": 1.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.412,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-d924bc9440",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1091,
+        "on_s": 0.4238,
+        "off_s": 0.6213
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.238,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-daa906bfd4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0858,
+        "on_s": 0.5932,
+        "off_s": 0.808
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.076,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-7afdf5d0e9",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0973,
+        "on_s": 0.6057,
+        "off_s": 1.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.244,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-eebfe2ab4a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0854,
+        "on_s": 0.4157,
+        "off_s": 1.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.158,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-3d855c7d42",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1142,
+        "on_s": 0.2877,
+        "off_s": 0.8043
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.398,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-6f6f972cc9",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0747,
+        "on_s": 0.55,
+        "off_s": 0.79
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.047,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-bdf7e06353",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1027,
+        "on_s": 0.485,
+        "off_s": 0.9811
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.48,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-f90f7072f1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 10.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0992,
+        "on_s": 0.5967,
+        "off_s": 1.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.54,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-d7ff5fffa0",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.093
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.246,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-85525f9f63",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0553
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.084,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-6a9eec84ae",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0918
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.132,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-1c90425a19",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0783
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.42,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-1f9ec39ffa",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0814
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.232,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2eae3be17e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0758
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.213,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-a1089569b6",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0921
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.278,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-2ca69ed0d1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0826
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.834,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  },
+  {
+    "scenario_id": "SC-cbaf5553ac",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0839
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.342,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null
+  }
+]

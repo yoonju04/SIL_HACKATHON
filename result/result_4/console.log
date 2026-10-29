@@ -1,0 +1,175 @@
+==============================================================================
+== real_gen2_1028.log  (last modified 2026-10-28 13:45 PT)
+==============================================================================
+[cosmos-power] auto: endpoint dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq is started only for stage 10 / insights
+live screen opened: C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\results\real_gen2_1028\screen\campaign.html
+[00-02] prior payload (25 unverified obs omitted), objectives ['S1'], scenario space C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\04_feasibility_expansion\scenario_space_av_stack.yaml
+[round 0] pool 14 -> batch 8 (X-5, video on)
+  [08] skip SC-e25eb5a1b4 bench2drive:28035 30km/h saturate: baseline: V-03 window shorter than minimum
+  [08] skip SC-307629dfb6 bench2drive:28035 30km/h saturate: baseline: V-03 window shorter than minimum
+  [08/09] R00-0000-bias bench2drive:28035 35km/h bias @curve_entry-0.30s -> recovered_after_departure (lrr=-0.08, trigger=46.40s, detected=tracking_divergence, sr=invalid, sel=cold_start_nemotron_a)
+  [08/09] R00-0001-solver_fail bench2drive:28035 25km/h solver_fail @straight+0.00s -> safe_recovery (lrr=1.00, trigger=7.10s, detected=solver_failure, sr=pass, sel=cold_start_nemotron_a)
+  [08] skip SC-f7d40cd5d3 bench2drive:28035 35km/h drift: baseline: V-03 window shorter than minimum
+  [08/09] R00-0002-intermittent_bias town10_long 35km/h intermittent_bias @curve_exit-0.50s -> no_switch (lrr=None, trigger=41.05s, detected=None, sr=F1_no_or_late_switch, sel=cold_start_space_filling)
+  [08/09] R00-0003-solver_fail bench2drive:24206 40km/h solver_fail @curve_apex-0.83s -> safe_recovery (lrr=0.93, trigger=8.45s, detected=solver_failure, sr=pass, sel=cold_start_space_filling)
+  [08] skip SC-031965232c bench2drive:28048 20km/h bias: baseline: V-03 window shorter than minimum
+  [08/09] R00-0004-drift bench2drive:28154 25km/h drift @straight-0.12s -> no_switch (lrr=None, trigger=7.05s, detected=None, sr=F1_no_or_late_switch, sel=replacement_for_SC-e25eb5a1b4)
+  [08] skip SC-4af4f7b8d5 bench2drive:28048 25km/h stale: baseline: V-03 window shorter than minimum
+  [08/09] R00-0005-stale bench2drive:24206 15km/h stale @straight+0.16s -> safe_recovery (lrr=1.00, trigger=31.50s, detected=stale_sequence, sr=pass, sel=replacement_for_SC-f7d40cd5d3)
+  [08] skip SC-0d505dad71 town10_long 10km/h solver_fail: baseline failed
+  [08/09] R00-0006-drift town10_long 30km/h drift @curve_entry+0.69s -> recovered_after_departure (lrr=-0.50, trigger=35.45s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=replacement_for_SC-4af4f7b8d5)
+  [08/09] R00-0007-bias bench2drive:28048 15km/h bias @curve_exit-0.65s -> no_switch (lrr=None, trigger=37.30s, detected=None, sr=F1_no_or_late_switch, sel=replacement_for_SC-0d505dad71)
+[cosmos-power] starting Cosmos endpoint (stage_10 round 0); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 249s (enabled=True status=updating readiness=ready ready_replicas=1)
+  [10] R00-0000-bias explained via video -> rejected ['departure_time_s']
+  [10] R00-0004-drift explained via video -> rejected ['departure_time_s']
+  [10] R00-0006-drift explained via video -> rejected ['departure_time_s', 'evidence_frames_s_in_clip']
+[cosmos-power] stop requested (stage_10 round 0); was enabled=True status=updating readiness=ready ready_replicas=1
+[round 1] pool 181 -> batch 6 (X-5, video on)
+  [08] skip SC-55aafdb727 bench2drive:28035 40km/h bias: baseline: V-03 window shorter than minimum
+  [08/09] R01-0008-drift bench2drive:28048 20km/h drift @curve_entry+0.56s -> recovered_after_departure (lrr=-0.01, trigger=32.15s, detected=tracking_divergence, sr=invalid, sel=acquisition)
+  [08/09] R01-0009-intermittent_bias bench2drive:28048 15km/h intermittent_bias @curve_entry+0.40s -> no_switch (lrr=None, trigger=32.50s, detected=None, sr=F1_no_or_late_switch, sel=acquisition)
+  [08/09] R01-0010-intermittent_bias bench2drive:28035 20km/h intermittent_bias @curve_entry+0.96s -> no_switch (lrr=None, trigger=47.70s, detected=None, sr=invalid, sel=acquisition)
+  [08/09] R01-0011-saturate bench2drive:28035 15km/h saturate @curve_entry-0.95s -> unrecovered (lrr=-1.14, trigger=51.15s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=acquisition)
+  [08/09] R01-0012-bias bench2drive:28035 25km/h bias @curve_entry+0.02s -> no_switch (lrr=None, trigger=46.50s, detected=None, sr=invalid, sel=random_space_filling)
+  [08] skip SC-f20b674f24 bench2drive:28035 35km/h solver_fail: baseline: V-03 window shorter than minimum
+  [08/09] R01-0013-solver_fail bench2drive:28035 35km/h solver_fail @curve_entry-0.30s -> safe_recovery (lrr=0.81, trigger=46.40s, detected=solver_failure, sr=F2_switch_transient, sel=replacement_for_SC-f20b674f24)
+[cosmos-power] starting Cosmos endpoint (stage_10 round 1); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (11s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 156s (enabled=True status=updating readiness=ready ready_replicas=1)
+  [10] R01-0008-drift explained via video -> rejected ['departure_time_s', 'evidence_frames_s_in_clip']
+  [10] R01-0011-saturate explained via video -> rejected ['departure_time_s', 'tags_in_taxonomy']
+  [10] R01-0013-solver_fail explained via video -> ACCEPTED []
+[cosmos-power] stop requested (stage_10 round 1); was enabled=True status=updating readiness=ready ready_replicas=1
+[round 2] pool 223 -> batch 6 (X-5, video on)
+  [08/09] R02-0014-saturate town10_long 25km/h saturate @curve_exit-0.76s -> recovered_after_departure (lrr=-0.91, trigger=34.95s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=acquisition)
+  [08] skip SC-f191103f2c bench2drive:28154 15km/h bias: baseline: V-03 window shorter than minimum
+  [08/09] R02-0015-intermittent_bias town10_long 40km/h intermittent_bias @curve_exit-0.34s -> no_switch (lrr=None, trigger=41.75s, detected=None, sr=F1_no_or_late_switch, sel=acquisition)
+  [08] skip SC-c01f5bc6d2 bench2drive:28154 30km/h bias: baseline: V-03 window shorter than minimum
+  [08/09] R02-0016-intermittent_bias town10_long 40km/h intermittent_bias @curve_exit-0.08s -> no_switch (lrr=None, trigger=42.00s, detected=None, sr=F1_no_or_late_switch, sel=acquisition)
+  [08/09] R02-0017-solver_fail bench2drive:28035 15km/h solver_fail @straight+0.00s -> safe_recovery (lrr=1.00, trigger=9.70s, detected=solver_failure, sr=pass, sel=random_space_filling)
+  [08/09] R02-0018-solver_fail bench2drive:28035 25km/h solver_fail @curve_entry+0.00s -> safe_recovery (lrr=0.81, trigger=46.45s, detected=solver_failure, sr=pass, sel=replacement_for_SC-f191103f2c)
+  [08] skip SC-3b85f9ea8b bench2drive:28035 25km/h solver_fail: baseline: V-03 window shorter than minimum
+  [08/09] R02-0019-solver_fail bench2drive:28035 35km/h solver_fail @curve_entry-0.30s -> safe_recovery (lrr=0.81, trigger=46.40s, detected=solver_failure, sr=F2_switch_transient, sel=replacement_for_SC-3b85f9ea8b)
+[cosmos-power] starting Cosmos endpoint (stage_10 round 2); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 156s (enabled=True status=updating readiness=ready ready_replicas=1)
+  [10] R02-0014-saturate explained via video -> rejected ['departure_time_s', 'collision_seen']
+  [10] R02-0019-solver_fail explained via video -> rejected ['departure_time_s']
+[cosmos-power] stop requested (stage_10 round 2); was enabled=True status=updating readiness=ready ready_replicas=1
+[round 3] pool 216 -> batch 6 (X-5, video on)
+  [08] skip SC-c499cfe754 bench2drive:28154 30km/h intermittent_bias: baseline: V-03 window shorter than minimum; baseline: V-03 no samples in window
+  [08] skip SC-b99b4164d3 bench2drive:28154 40km/h drift: baseline: V-03 window shorter than minimum
+Traceback (most recent call last):
+  File "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\run.py", line 995, in <module>
+    sys.exit(main())
+  File "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\run.py", line 977, in main
+    m = loop.run()
+  File "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\run.py", line 664, in run
+    new = self.stage_08_09(batch, rnd, reserve=[c for c in pool if c not in batch])
+  File "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\run.py", line 491, in stage_08_09
+    base_dir, cached = self.runner.ensure_baseline(c)
+  File "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\engine\carla_runner.py", line 70, in ensure_baseline
+    res = self._run(c, d, fault_args=None)
+  File "C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\engine\carla_runner.py", line 162, in _run
+    raise FileExistsError(f"{out} already has results.json (run_benchmark.py needs a fresh --out)")
+FileExistsError: C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\results\real_gen2_1028\runs\baselines\aa67077909ad already has results.json (run_benchmark.py needs a fresh --out)
+EXIT 1 2026-10-28T13:45:31
+
+==============================================================================
+== real_gen2_1028_finalize.log  (last modified 2026-10-28 13:59 PT)
+==============================================================================
+[cosmos-power] starting Cosmos endpoint (campaign insights); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 155s (enabled=True status=updating readiness=ready ready_replicas=1)
+campaign insights (C_cosmos): error, 0 insights, 2 model calls -> results\real_gen2_1028\insights\insights.json  error: Token Factory HTTP 404
+[cosmos-power] stop requested (campaign insights); was enabled=True status=updating readiness=ready ready_replicas=1
+insights done in 158s: {"status": "error", "n_insights": 0, "model_calls": 2, "error": "Token Factory HTTP 404"}
+screen redrawn
+EXIT 0 2026-10-28T13:59:13
+
+==============================================================================
+== real_gen2_1028_finalize2.log  (last modified 2026-10-28 15:00 PT)
+==============================================================================
+[cosmos-power] starting Cosmos endpoint (campaign insights); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 166s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (166s); waiting
+[cosmos-power] data plane answers after 187s (probe HTTP 200)
+campaign insights (C_cosmos): error, 0 insights, 4 model calls -> results\real_gen2_1028\insights\insights.json  error: ∞¥╕∞é¼∞¥┤φè╕ 'F1_no_or_late_switch ∞ïñφî¿ δƒ░∞¥ÿ Ω│╡φå╡ '∞¥ÿ finding∞ùÉ ∞ô┤ ∞êÿ∞╣ÿ 0.96∞¥┤(Ω░Ç) Ω╖╕ ∞¥╕∞é¼∞¥┤φè╕∞¥ÿ evidence Ω░Æ∞¥┤δéÿ φå╡Ω│ä Ω░Æ∞ùÉ ∞ùå∞è╡δïêδïñ. evidence∞ùÉ ∞₧êδèö Ω░Æδºî ∞ô░Ω▒░δéÿ φò┤δï╣ Ω╖╝Ω▒░δÑ╝ ∞╢öΩ░Çφòÿ∞ä╕∞Üö.
+[cosmos-power] stop requested (campaign insights); was enabled=True status=running readiness=ready ready_replicas=1
+insights done in 325s: {"status": "error", "n_insights": 0, "model_calls": 4, "error": "∞¥╕∞é¼∞¥┤φè╕ 'F1_no_or_late_switch ∞ïñφî¿ δƒ░∞¥ÿ Ω│╡φå╡ '∞¥ÿ finding∞ùÉ ∞ô┤ ∞êÿ∞╣ÿ 0.96∞¥┤(Ω░Ç) Ω╖╕ ∞¥╕∞é¼∞¥┤φè╕∞¥ÿ evidence Ω░Æ∞¥┤δéÿ φå╡Ω│ä Ω░Æ∞ùÉ ∞ùå∞è╡δïêδïñ. evidence∞ùÉ ∞₧êδèö Ω░Æδºî ∞ô░Ω▒░δéÿ φò┤δï╣ Ω╖╝Ω▒░δÑ╝ ∞╢öΩ░Çφòÿ∞ä╕∞Üö."}
+screen redrawn
+EXIT 0 2026-10-28T15:00:35
+
+==============================================================================
+== real_gen2_1028_finalize3.log  (last modified 2026-10-28 15:10 PT)
+==============================================================================
+[cosmos-power] starting Cosmos endpoint (campaign insights); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (11s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 155s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (155s); waiting
+[cosmos-power] data plane answers after 166s (probe HTTP 200)
+campaign insights (C_cosmos): error, 0 insights, 10 model calls -> results\real_gen2_1028\insights\insights.json  error: ∞¥╕∞é¼∞¥┤φè╕ 'δ¬¿δôá ∞ïñφî¿ δƒ░∞¥Ç curve_entry∞ùÉ∞ä£ Ω│á∞₧Ñ δ░£∞â¥, '∞¥ÿ finding∞ùÉ ∞ô┤ ∞êÿ∞╣ÿ 46.45∞¥┤(Ω░Ç) Ω╖╕ ∞¥╕∞é¼∞¥┤φè╕∞¥ÿ evidence Ω░Æ∞¥┤δéÿ φå╡Ω│ä Ω░Æ∞ùÉ ∞ùå∞è╡δïêδïñ. evidence∞ùÉ ∞₧êδèö Ω░Æδºî ∞ô░Ω▒░δéÿ φò┤δï╣ Ω╖╝Ω▒░δÑ╝ ∞╢öΩ░Çφòÿ∞ä╕∞Üö.
+[cosmos-power] stop requested (campaign insights); was enabled=True status=running readiness=ready ready_replicas=1
+insights done in 519s: {"status": "error", "n_insights": 0, "model_calls": 10, "error": "∞¥╕∞é¼∞¥┤φè╕ 'δ¬¿δôá ∞ïñφî¿ δƒ░∞¥Ç curve_entry∞ùÉ∞ä£ Ω│á∞₧Ñ δ░£∞â¥, '∞¥ÿ finding∞ùÉ ∞ô┤ ∞êÿ∞╣ÿ 46.45∞¥┤(Ω░Ç) Ω╖╕ ∞¥╕∞é¼∞¥┤φè╕∞¥ÿ evidence Ω░Æ∞¥┤δéÿ φå╡Ω│ä Ω░Æ∞ùÉ ∞ùå∞è╡δïêδïñ. evidence∞ùÉ ∞₧êδèö Ω░Æδºî ∞ô░Ω▒░δéÿ φò┤δï╣ Ω╖╝Ω▒░δÑ╝ ∞╢öΩ░Çφòÿ∞ä╕∞Üö."}
+screen redrawn
+EXIT 0 2026-10-28T15:10:06
+
+==============================================================================
+== real_gen2_1028_cycle.log  (last modified 2026-10-28 15:45 PT)
+==============================================================================
+[cosmos-power] starting Cosmos endpoint (re-explain + insights (BUG-018/019)); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (11s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 166s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (166s); waiting
+[cosmos-power] data plane answers after 177s (probe HTTP 200)
+  [10 rerun] R00-0000-bias via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> ACCEPTED [] errors=[]
+  [10 rerun] R00-0004-drift via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> rejected ['departure_time_s'] errors=[]
+  [10 rerun] R00-0006-drift via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> ACCEPTED [] errors=[]
+  [10 rerun] R01-0008-drift via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> rejected ['collision_seen', 'tags_in_taxonomy'] errors=[]
+  [10 rerun] R01-0011-saturate via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> rejected ['departure_time_s'] errors=[]
+  [10 rerun] R02-0014-saturate via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> ACCEPTED [] errors=[]
+  [10 rerun] R02-0019-solver_fail via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> rejected ['departure_time_s'] errors=[]
+insights: {"status": "error", "n_insights": 0, "model_calls": 9, "error": "R00-0000-bias: ∞í┤∞₧¼φòÿ∞ºÇ ∞òèδèö Ω╖╝Ω▒░ ∞ºÇφæ£: lateral_error_rmse_m (null∞¥Ç δ»╕∞╕í∞áò∞¥┤δ¥╝ Ω╖╝Ω▒░δí£ ∞ô╕ ∞êÿ ∞ùåΩ│á, Ω▓╜δí£δèö records Ω╖╕δîÇδí£ ∞ô░∞ä╕∞Üö)"}
+[cosmos-power] stop requested (re-explain + insights (BUG-018/019)); was enabled=True status=running readiness=ready ready_replicas=1
+screen redrawn; summary -> results\real_gen2_1028\rerun_bug018_019.json
+
+==============================================================================
+== real_gen2_1028_insights_cycle.log  (last modified 2026-10-28 16:03 PT)
+==============================================================================
+[cosmos-power] starting Cosmos endpoint (insights only (BUG-019)); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 155s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (156s); waiting
+[cosmos-power]   control plane ready but chat/completions -> HTTP 429 (166s); waiting
+[cosmos-power] data plane answers after 177s (probe HTTP 200)
+insights: {"status": "complete", "n_insights": 5, "model_calls": 5, "error": null}
+[cosmos-power] stop requested (insights only (BUG-019)); was enabled=True status=running readiness=ready ready_replicas=1
+screen redrawn; summary -> results\real_gen2_1028\rerun_bug019_insights.json
+
+==============================================================================
+== real_gen2_1028_vidcycle.log  (last modified 2026-10-28 17:15 PT)
+==============================================================================
+[cosmos-power] starting Cosmos endpoint (re-explain 4 rejected (BUG-020)); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 166s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (166s); waiting
+[cosmos-power] data plane answers after 187s (probe HTTP 200)
+  [10 rerun] R00-0004-drift via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> rejected ['departure_time_s'] errors=[]
+  [10 rerun] R01-0008-drift via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> rejected ['switch_time_s', 'departure_time_s'] errors=[]
+  [10 rerun] R01-0011-saturate via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq contact_sheet -> ACCEPTED [] errors=['video: dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq: finish_reason=length (raise max_tokens or disable thinking)']
+  [10 rerun] R02-0019-solver_fail via dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq video -> rejected ['departure_time_s'] errors=[]
+[cosmos-power] stop requested (re-explain 4 rejected (BUG-020)); was enabled=True status=running readiness=ready ready_replicas=1
+screen redrawn; summary -> results\real_gen2_1028\rerun_bug020.json
+

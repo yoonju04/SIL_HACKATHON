@@ -1,0 +1,285 @@
+{
+ "explanations": [
+  {
+   "run_id": "R00-0000-bias",
+   "accepted": true,
+   "failed": [],
+   "model": "dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq",
+   "checks": {
+    "switch_time_s": {
+     "pass": true,
+     "monitor": 48.55,
+     "claimed": 48.55,
+     "error_s": 0.0
+    },
+    "departure_time_s": {
+     "pass": true,
+     "monitor": 48.55,
+     "claimed": 48.55,
+     "error_s": 0.0
+    },
+    "collision_seen": {
+     "pass": true,
+     "monitor": false,
+     "claimed": false
+    },
+    "evidence_frames_s_in_clip": {
+     "pass": true
+    },
+    "tags_in_taxonomy": {
+     "pass": true,
+     "unknown": []
+    }
+   }
+  },
+  {
+   "run_id": "R00-0004-drift",
+   "accepted": false,
+   "failed": [
+    "departure_time_s"
+   ],
+   "model": "dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq",
+   "checks": {
+    "switch_time_s": {
+     "pass": true,
+     "monitor": null,
+     "claimed": null
+    },
+    "departure_time_s": {
+     "pass": false,
+     "monitor": 21.75,
+     "claimed": null,
+     "error_s": null
+    },
+    "collision_seen": {
+     "pass": true,
+     "monitor": false,
+     "claimed": false
+    },
+    "evidence_frames_s_in_clip": {
+     "pass": true
+    },
+    "tags_in_taxonomy": {
+     "pass": true,
+     "unknown": []
+    }
+   }
+  },
+  {
+   "run_id": "R00-0006-drift",
+   "accepted": true,
+   "failed": [],
+   "model": "dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq",
+   "checks": {
+    "switch_time_s": {
+     "pass": true,
+     "monitor": 40.75,
+     "claimed": 40.75,
+     "error_s": 0.0
+    },
+    "departure_time_s": {
+     "pass": true,
+     "monitor": 40.25,
+     "claimed": 40.75,
+     "error_s": 0.5
+    },
+    "collision_seen": {
+     "pass": true,
+     "monitor": false,
+     "claimed": false
+    },
+    "evidence_frames_s_in_clip": {
+     "pass": true
+    },
+    "tags_in_taxonomy": {
+     "pass": true,
+     "unknown": []
+    }
+   }
+  },
+  {
+   "run_id": "R01-0008-drift",
+   "accepted": false,
+   "failed": [
+    "collision_seen",
+    "tags_in_taxonomy"
+   ],
+   "model": "dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq",
+   "checks": {
+    "switch_time_s": {
+     "pass": true,
+     "monitor": 37.1,
+     "claimed": 37.1,
+     "error_s": 0.0
+    },
+    "departure_time_s": {
+     "pass": true,
+     "monitor": null,
+     "claimed": null,
+     "not_visible_intervals": [
+      [
+       37.15,
+       37.3
+      ]
+     ]
+    },
+    "collision_seen": {
+     "pass": false,
+     "monitor": false,
+     "claimed": true
+    },
+    "evidence_frames_s_in_clip": {
+     "pass": true
+    },
+    "tags_in_taxonomy": {
+     "pass": false,
+     "unknown": [
+      "drift_fault",
+      "collision_after_switch"
+     ]
+    }
+   }
+  },
+  {
+   "run_id": "R01-0011-saturate",
+   "accepted": false,
+   "failed": [
+    "departure_time_s"
+   ],
+   "model": "dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq",
+   "checks": {
+    "switch_time_s": {
+     "pass": true,
+     "monitor": 52.1,
+     "claimed": 52.1,
+     "error_s": 0.0
+    },
+    "departure_time_s": {
+     "pass": false,
+     "monitor": 51.85,
+     "claimed": 51.15,
+     "error_s": -0.7
+    },
+    "collision_seen": {
+     "pass": true,
+     "monitor": false,
+     "claimed": false
+    },
+    "evidence_frames_s_in_clip": {
+     "pass": true
+    },
+    "tags_in_taxonomy": {
+     "pass": true,
+     "unknown": []
+    }
+   }
+  },
+  {
+   "run_id": "R02-0014-saturate",
+   "accepted": true,
+   "failed": [],
+   "model": "dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq",
+   "checks": {
+    "switch_time_s": {
+     "pass": true,
+     "monitor": 35.65,
+     "claimed": 35.65,
+     "error_s": 0.0
+    },
+    "departure_time_s": {
+     "pass": true,
+     "monitor": 35.4,
+     "claimed": 34.95,
+     "error_s": -0.45
+    },
+    "collision_seen": {
+     "pass": true,
+     "monitor": true,
+     "claimed": true
+    },
+    "evidence_frames_s_in_clip": {
+     "pass": true
+    },
+    "tags_in_taxonomy": {
+     "pass": true,
+     "unknown": []
+    }
+   }
+  },
+  {
+   "run_id": "R02-0019-solver_fail",
+   "accepted": false,
+   "failed": [
+    "departure_time_s"
+   ],
+   "model": "dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq",
+   "checks": {
+    "switch_time_s": {
+     "pass": true,
+     "monitor": 46.4,
+     "claimed": 46.4,
+     "error_s": 0.0
+    },
+    "departure_time_s": {
+     "pass": false,
+     "monitor": null,
+     "claimed": 46.4
+    },
+    "collision_seen": {
+     "pass": true,
+     "monitor": false,
+     "claimed": false
+    },
+    "evidence_frames_s_in_clip": {
+     "pass": true
+    },
+    "tags_in_taxonomy": {
+     "pass": true,
+     "unknown": []
+    }
+   }
+  }
+ ],
+ "insights": {
+  "status": "error",
+  "n_insights": 0,
+  "model_calls": 9,
+  "error": "R00-0000-bias: 존재하지 않는 근거 지표: lateral_error_rmse_m (null은 미측정이라 근거로 쓸 수 없고, 경로는 records 그대로 쓰세요)"
+ },
+ "power_events": [
+  {
+   "t": 1793227014.1098433,
+   "event": "start_requested",
+   "reason": "re-explain + insights (BUG-017/018)",
+   "t_local": "15:36:54"
+  },
+  {
+   "t": 1793227178.6140451,
+   "event": "ready",
+   "reason": "re-explain + insights (BUG-017/018)",
+   "startup_s": 165.7,
+   "t_local": "15:39:38"
+  },
+  {
+   "t": 1793227189.6999872,
+   "event": "data_plane_ready",
+   "reason": "re-explain + insights (BUG-017/018)",
+   "at_s": 176.8,
+   "code": 200,
+   "t_local": "15:39:49"
+  },
+  {
+   "t": 1793227538.2004845,
+   "event": "stop_requested",
+   "reason": "re-explain + insights (BUG-017/018)",
+   "t_local": "15:45:38"
+  },
+  {
+   "t": 1793227538.498496,
+   "event": "already_off",
+   "reason": "cycle end",
+   "t_local": "15:45:38"
+  }
+ ],
+ "elapsed_s": 526
+}

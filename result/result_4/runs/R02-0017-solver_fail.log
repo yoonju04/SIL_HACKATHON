@@ -1,0 +1,61 @@
+INFO:  Found the required file in cache!  Carla/Maps/Nav/Town10HD_Opt.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town10HD_Opt.bin 
+
+[1m========= Preparing RouteScenario_28035 (repetition 0) =========[0m
+[1m> Loading the world[0m
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town01.bin 
+[1m> Setting up the agent[0m
+[av_stack] PDM-Lite + supervised steering | max speed 15 km/h | comfort pedals on | traffic lights normal
+[1m> Running the route[0m
+Sparse Waypoints: 5
+Dense Waypoints: 126
+[supervisor] t=9.70s MPC -> LQR reason=solver_failure
+
+============================================================================
+  [SUPERVISOR] fault detected -> steering switched MPC -> LQR   (t=9.70 s)
+    detected : MPC solver reported failure
+    when     : no fault injected
+    state    : e_y=+0.00 m, e_psi=-0.0 deg, v=14.9 km/h
+============================================================================
+
+[1m> Stopping the route[0m
+
+[1m========= Results of RouteScenario_28035 (repetition 0) ------ [91mFAILURE[0m [1m=========[0m
+
+╒═══════════════════════╤═════════════════════╕
+│ Start Time            │ 2026-10-28 13:39:07 │
+├───────────────────────┼─────────────────────┤
+│ End Time              │ 2026-10-28 13:39:24 │
+├───────────────────────┼─────────────────────┤
+│ System Time           │ 17.15s              │
+├───────────────────────┼─────────────────────┤
+│ Game Time             │ 24.75s              │
+├───────────────────────┼─────────────────────┤
+│ Ratio (Game / System) │ 1.443               │
+╘═══════════════════════╧═════════════════════╛
+
+╒═══════════════════════╤═════════╤═════════╕
+│ Criterion             │ Result  │ Value   │
+├───────────────────────┼─────────┼─────────┤
+│ RouteCompletionTest   │ [91mFAILURE[0m │ 43.97 % │
+├───────────────────────┼─────────┼─────────┤
+│ OutsideRouteLanesTest │ [92mSUCCESS[0m │ 0 %     │
+├───────────────────────┼─────────┼─────────┤
+│ CollisionTest         │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ RunningRedLightTest   │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ RunningStopTest       │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ MinSpeedTest          │ [91mFAILURE[0m │ 64.25 % │
+├───────────────────────┼─────────┼─────────┤
+│ InRouteTest           │ [92mSUCCESS[0m │         │
+├───────────────────────┼─────────┼─────────┤
+│ AgentBlockedTest      │ [92mSUCCESS[0m │         │
+├───────────────────────┼─────────┼─────────┤
+│ ScenarioTimeoutTest   │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ Timeout               │ [92mSUCCESS[0m │         │
+╘═══════════════════════╧═════════╧═════════╛
+
+[1m> Registering the route statistics[0m
