@@ -10,7 +10,7 @@ def _rec():
 
 
 def _insight(title, conf):
-    return {"title": title, "finding": f"{title} 관측", "interpretation": "i", "confidence": conf,
+    return {"title": title, "finding": f"{title} observed", "interpretation": "i", "confidence": conf,
             "evidence": [{"run_id": "R00-0000-saturate", "metric": "metrics.margin_delta_m", "value": -7.384}]}
 
 
@@ -19,36 +19,36 @@ def test_main_screen_renders_compact_insight_panel(tmp_path):
     (tmp_path / "insights").mkdir()
     (tmp_path / "insights" / "campaign.html").write_text("x", encoding="utf-8")
     (tmp_path / "insights" / "insights.json").write_text(json.dumps({
-        "status": "complete", "summary": "요약 <b>", "model": "m",
+        "status": "complete", "summary": "summary <b>", "model": "m",
         "statistics": {"failure_rate": 0.5, "graded_triggered_runs": 2, "failure_count": 1},
-        "insights": [_insight("낮은 것", "low"), _insight("중간 것", "medium"), _insight("포화 고장", "high"),
-                     _insight("두번째 높음", "high")],
-        "next_experiments": [{"proposal": "직선 비교", "rationale": "r", "run_ids": ["R00-0000-saturate"]}],
-        "limitations": ["표본 부족"]}, ensure_ascii=False), encoding="utf-8")
+        "insights": [_insight("low one", "low"), _insight("medium one", "medium"), _insight("first high", "high"),
+                     _insight("second high", "high")],
+        "next_experiments": [{"proposal": "compare straight", "rationale": "r", "run_ids": ["R00-0000-saturate"]}],
+        "limitations": ["small sample"]}, ensure_ascii=False), encoding="utf-8")
     page = D.refresh(tmp_path / "run_records.jsonl", tmp_path / "screen", spec={}).read_text(encoding="utf-8")
     panel = page[page.index('id="ins"'):]
-    assert "인사이트" in panel and "AI 분석 요약" not in panel
-    assert "실패 비율" in panel and "50.0%" in panel
-    assert panel.index("포화 고장") < panel.index("두번째 높음") < panel.index("중간 것")   # high confidence first
-    assert "낮은 것" not in panel                                                      # only top 3
-    assert "<details" not in panel and "원문" not in panel
+    assert "Insights" in panel
+    assert "Failure rate" in panel and "50.0%" in panel
+    assert panel.index("first high") < panel.index("second high") < panel.index("medium one")   # high confidence first
+    assert "low one" not in panel                                                      # only top 3
+    assert "<details" not in panel
     assert "position:fixed" not in page
-    right = page[page.index("지금까지 돌린 시나리오"):]
+    right = page[page.index("Scenarios Run ("):]
     assert right.index("</section>") < right.index('id="ins"') and right.index('id="ins"') < right.index("</div>\n</div>")
 
 
 def test_main_screen_without_insights_shows_small_badge(tmp_path):
     (tmp_path / "run_records.jsonl").write_text(json.dumps(_rec()) + "\n", encoding="utf-8")
     page = D.refresh(tmp_path / "run_records.jsonl", tmp_path / "screen", spec={}).read_text(encoding="utf-8")
-    assert 'class="insbadge"' in page and "아직 없음" in page
-    assert 'id="ins"' not in page and page.index("지금까지 돌린 시나리오") < page.index('id="insbadge"')
+    assert 'class="insbadge"' in page and "Not available yet" in page
+    assert 'id="ins"' not in page and page.index("Scenarios Run (") < page.index('id="insbadge"')
 
 
 def test_live_status_shown_in_header(tmp_path):
     from engine import dashboard as D
-    page = D.refresh(tmp_path / "none.jsonl", tmp_path / "screen", status="라운드 0: 시뮬레이션 중")
+    page = D.refresh(tmp_path / "none.jsonl", tmp_path / "screen", status="Round 0: simulating")
     html = page.read_text(encoding="utf-8")
-    assert '<span class="live">라운드 0: 시뮬레이션 중</span>' in html
+    assert '<span class="live">Round 0: simulating</span>' in html
     assert "location.reload" in html          # self-reload (works on file:// pages)
 
 
@@ -75,7 +75,7 @@ def test_method_card_counts_a_hypotheses(tmp_path):
     assert m["n_obs"] == 25 and m["n_props"] == 2 and m["b_files"] == ["lqr_controller/lqr.py"]
     assert [(x["run_id"], x["hit"]) for x in m["tests"]] == [("R1", True), ("R2", None)]
     html = D.render_method(camp / "screen")
-    assert "예상 적중 1/1" in html and "전환 없음 1" in html and "lqr.py" in html
+    assert "Prediction hits 1/1" in html and "no switch 1" in html and "lqr.py" in html
 
 
 def test_stability_short_no_switch_is_held_not_green():
@@ -83,11 +83,11 @@ def test_stability_short_no_switch_is_held_not_green():
     base = {"display_outcome": "fail", "recovery_outcome": "no_switch", "failed_requirements": ["SR5"],
             "sr": {"SR4": {"pass": True, "collision": False}}}
     s = D._stability_short(base)
-    assert "판정 보류" in s and "✓" not in s and 'class="mut"' in s
+    assert "held" in s and "✓" not in s and 'class="mut"' in s
     lane = dict(base, failed_requirements=["SR4", "SR5"], sr={"SR4": {"pass": False, "collision": False}})
-    assert "✗" in D._stability_short(lane) and "차선" in D._stability_short(lane)
+    assert "✗" in D._stability_short(lane) and "Lane" in D._stability_short(lane)
     hit = dict(base, failed_requirements=["SR4"], sr={"SR4": {"pass": False, "collision": True}})
-    assert "충돌" in D._stability_short(hit)
+    assert "Collision" in D._stability_short(hit)
     ok = {"display_outcome": "pass", "recovery_outcome": "safe_recovery", "failed_requirements": [],
           "sr": {"SR4": {"pass": True}}}
     assert "✓" in D._stability_short(ok)

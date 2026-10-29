@@ -146,6 +146,6 @@ def test_dashboard_one_page_latest_left_all_right(folders, tmp_path):
     page = refresh(recs, tmp_path / "screen").read_text(encoding="utf-8")
     assert 'http-equiv="refresh"' in page and 'data-latest="r3"' in page
     assert page.count('class="run"') == 3 and page.count("<tr class=") == 3
-    assert ("무효" in page or "판정 불가" in page) and "운행 안전성" in page
+    assert ("Invalid" in page or "Not graded" in page) and "Driving Safety" in page
     empty = refresh(tmp_path / "none.jsonl", tmp_path / "s2").read_text(encoding="utf-8")
-    assert "아직 끝난 시나리오가 없습니다" in empty
+    assert "No finished scenarios yet" in empty

@@ -2,24 +2,27 @@
 
   <out>/screen/campaign.html
 
-One fixed screen (100vh, no page scroll, no click needed), plain professional Korean:
-  header: topic "MPC → LQR 제어기 전환 안정성 평가" + one-line question, method band + 3 columns (최근 시나리오 / 시나리오 표 / 가설·인사이트); was score cards (
-          판정 불가) and progress n/N
-  band  : method flow 코드 분석 → 가설 수립 → 고장 시나리오 생성 → CARLA 시뮬레이션 → 통계 검증 (counts from the files)
-  left  : latest run (or the clicked one): verdict, one terse line from recorded times, facts, video;
-          technical codes (SR ids, F1, recovery v2, lrr, selector) only under "자세히 보기"
-  middle: SR count strip + one dense row per run (latest 20, "외 k개" beyond)
+One fixed screen (100vh, no page scroll, no click needed), concise professional English:
+  header: topic "MPC → LQR Handover Stability Evaluation", method band + 3 columns (Latest Scenario / scenario table /
+          Hypotheses + Insights)
+  band  : method flow Nemotron code analysis → Hypothesis → Fault scenario generation → CARLA simulation →
+          Statistical verification (counts from the files)
+  left  : latest run (or the clicked one): verdict, one terse line from recorded times, facts, video, and the full
+          post-handover check table (Item | Measured | Threshold)
+  middle: SR count strip + one dense row per run (latest 20, "+k more" beyond)
   right : hypotheses tested (02_objectives question, 00_prior_payload testable hypotheses + status from runs) and
-          the Cosmos campaign insights in plain words ("운행 안전성" = recovery v2 outcome)
+          the Cosmos campaign insights ("Driving Safety" = recovery v2 outcome)
 
 Input is OUR run_record (engine.monitor.evaluate: recovery v2 fields + sr_* fields from engine.sr_checks) and
 OUR explanations.jsonl (engine.explainer via run.py stage 10). run.py redraws it after every run.
-Every number on the page comes from those records; a missing value is shown as "알 수 없음", never guessed.
+Every number on the page comes from those records; a missing value is shown as "Unknown", never guessed.
+All UI text is English; Korean can only appear when it comes from the data (e.g. a Cosmos insight title without
+structured evidence), which is why Pretendard stays in the font stack as a fallback.
 
   python -m engine.dashboard --records outputs/<run>/run_records.jsonl --out outputs/<run>/screen [--open] [--watch]
 
 Plain HTML, no server, no internet. The page reloads itself every few seconds (not while a video plays) and keeps
-the selected run, the scroll position and every opened "자세히 보기" across reloads.
+the selected run, the scroll position and every opened details block across reloads.
 """
 from __future__ import annotations
 
@@ -36,46 +39,49 @@ from pathlib import Path
 
 REFRESH_S = 5
 
-# sr_outcome (engine.sr_checks) -> (label, colour class, one plain sentence)   [technical, shown under 자세히 보기]
+# sr_outcome (engine.sr_checks) -> (label, colour class, one plain sentence)
 OUTCOME = {
-    "pass": ("통과", "ok", "제때 전환했고 전환 후에도 차선을 유지함"),
-    "harmless": ("통과 (전환 불필요)", "ok", "전환하지 않았지만 차선을 유지한 고장 (실패 아님)"),
-    "no_trigger": ("시험 안 됨", "mut", "고장을 넣었지만 MPC 출력이 바뀌지 않음"),
-    "F1_no_or_late_switch": ("제어기 전환 실패/늦음", "bad", "위험한 고장인데 LQR로 전환을 못 했거나 너무 늦게 함"),
-    "F2_switch_transient": ("전환 순간 불안정", "bad", "전환은 했지만 그 순간 조향이 크게 튐"),
-    "F3_not_recovered": ("전환 후 주행 불안정", "bad", "전환은 했지만 차선을 안정적으로 유지하지 못함"),
-    "invalid": ("판정 불가 (무효, 실패 아님)", "mut",
-                "기록이나 비교 조건이 맞지 않아 채점하지 않음. 안전 실패로 세지 않음"),
+    "pass": ("Pass", "ok", "Switched in time and kept the lane after the switch"),
+    "harmless": ("Pass (no switch needed)", "ok", "No switch, but the car kept its lane (not a failure)"),
+    "no_trigger": ("Not tested", "mut", "Fault injected, but the MPC output did not change"),
+    "F1_no_or_late_switch": ("Controller handover failed/late", "bad", "Hazardous fault, but no switch to LQR or too late"),
+    "F2_switch_transient": ("Unstable at handover", "bad", "Switched, but steering spiked at the moment of the switch"),
+    "F3_not_recovered": ("Unstable after handover", "bad", "Switched, but could not hold the lane stably"),
+    "invalid": ("Not graded (invalid, not a failure)", "mut",
+                "Recording or baseline conditions not met; not graded and not counted as a safety failure"),
 }
-# recovery v2 outcome = "운행 안전성" (전환 후 차선 유지 결과) on the page
-RECOVERY_KO = {"safe_recovery": "차선 유지", "recovered_after_departure": "이탈 후 복귀", "unsettled": "불안정 지속",
-               "unrecovered": "복귀 실패", "no_switch": "전환 없음 · 판정 보류", "simulation_invalid": "무효"}
-ONSET_KO = {"curve_entry": "곡선 진입", "curve_apex": "곡선 정점", "straight": "직선", "curve_exit": "곡선 탈출"}
+# recovery v2 outcome = "Driving Safety" (lane keeping after the handover) on the page
+RECOVERY_KO = {"safe_recovery": "Lane kept", "recovered_after_departure": "Back after departure", "unsettled": "Not settled",
+               "unrecovered": "Not recovered", "no_switch": "No switch · held", "simulation_invalid": "Invalid"}
+ONSET_KO = {"curve_entry": "Curve entry", "curve_apex": "Curve apex", "straight": "Straight", "curve_exit": "Curve exit"}
 
 # result bucket -> (score label, short note, colour class)
 BUCKET = {
-    "safe": ("안전 대응", "감지·전환 후 차선 유지", "g"),
-    "danger": ("위험", "늦은 감지·미감지·차선 이탈·충돌 등", "r"),
-    "harmless": ("미감지·무해", "감지 못 했으나 차선 유지 (실패 아님)", "n"),
-    "na": ("판정 불가", "기록 조건 불충족 (실패 아님)", "x"),
+    "safe": ("Safe response", "Detected, switched and kept the lane", "g"),
+    "danger": ("Unsafe", "Late or missed detection, lane departure, collision", "r"),
+    "harmless": ("Undetected · harmless", "Not detected but kept the lane (not a failure)", "n"),
+    "na": ("Not graded", "Recording conditions not met (not a failure)", "x"),
 }
 KEY_BUCKET = {"pass": "safe", "harmless": "harmless", "F1_no_or_late_switch": "danger", "F2_switch_transient": "danger",
               "F3_not_recovered": "danger", "invalid": "na", "no_trigger": "na"}
 # fault mode -> (short name, what it does). Checked against scenario_space_av_stack.yaml (F-01..F-07).
 FAULT_KO = {
-    "solver_fail": ("Solver Failure", "MPC가 해를 찾지 못했다고 보고"),
-    "stale": ("Stale Command", "새 명령 대신 직전 명령을 그대로 재전송"),
-    "output_delay": ("Output Delay", "몇 단계 전에 계산한 조향 명령을 현재 명령으로 전송"),
-    "bias": ("Steering Bias", "조향 명령에 일정 각도가 더해짐"),
-    "drift": ("Ramp Bias / Drift", "조향 오차가 시간에 따라 증가"),
-    "saturate": ("Steering Saturation", "조향 명령이 최대각 쪽으로 고정됨"),
-    "intermittent_bias": ("Intermittent Bias", "편향이 주기적으로 켜졌다 꺼짐"),
+    "solver_fail": ("Solver Failure", "MPC reports that it found no solution"),
+    "stale": ("Stale Command", "The previous command is resent instead of a new one"),
+    "output_delay": ("Output Delay", "A steering command from several steps earlier is sent as current"),
+    "bias": ("Steering Bias", "A constant angle is added to the steering command"),
+    "drift": ("Ramp Bias / Drift", "Steering error grows over time"),
+    "saturate": ("Steering Saturation", "The steering command is pinned toward the maximum angle"),
+    "intermittent_bias": ("Intermittent Bias", "A bias switches on and off periodically"),
 }
-WHEN_KO = {"curve_entry": "커브 진입", "curve_apex": "커브 정점", "straight": "직선", "curve_exit": "커브 탈출"}
-UNKNOWN = "알 수 없음"
-# Korean wording of the testable prior-knowledge hypotheses in 00_prior_payload.json (others shown as written)
-PK_KO = {"PK-002": "고정 이득 LQR은 설계 동작점에서 멀어질수록(전환 순간 오차가 클수록) 성능이 떨어진다",
-         "PK-003": "감지·전환 지연이 길수록 차선 유지 여유가 줄어든다"}
+WHEN_KO = {"curve_entry": "Curve entry", "curve_apex": "Curve apex", "straight": "Straight", "curve_exit": "Curve exit"}
+UNKNOWN = "Unknown"
+# Screen wording of the testable prior-knowledge hypotheses in 00_prior_payload.json (others shown as written)
+PK_KO = {"PK-002": "Fixed-gain LQR degrades as the state moves away from its design point (larger error at the switch)",
+         "PK-003": "Longer detection and handover latency leaves less lane-keeping margin"}
+# English wording of the research question when 02_objectives.json only carries question_ko
+QUESTION_EN = {"S1": "How far off the path can the car be at the switch (error state), and how hard can LQR commands hit "
+                     "the steering-angle and steering-rate limits, before LQR fails to recover within the lane?"}
 MAX_ROWS = 20
 
 
@@ -170,7 +176,7 @@ table.list tbody tr:last-child td,.tech table.chk tr:last-child td{border-bottom
 .listbox{flex:1;min-height:0;overflow:hidden;margin:var(--s3) var(--s4) var(--s4)}
 table.list{height:100%;font-size:.9rem}
 table.list thead th{height:2.1rem}
-table.list .scentd{width:19%}table.list .faulttd{width:31%}table.list .swtd{width:16%}table.list .safetd{width:17%}table.list .cliptd{width:17%}
+table.list .scentd{width:20%}table.list .faulttd{width:26%}table.list .swtd{width:15%}table.list .safetd{width:18%}table.list .cliptd{width:21%}
 table.list tbody tr{cursor:pointer}
 table.list tbody tr.g td{background:#f2f9f4}table.list tbody tr.r td{background:#fdf4f3}
 table.list tbody tr.n td,table.list tbody tr.x td{background:#f7f8f9}
@@ -204,7 +210,7 @@ table.list tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 .listbox.dense table.list td{padding:.12rem .55rem}
 .listbox.dense table.list thead th{height:1.9rem}
 .listbox.dense .smeta{display:none}
-.listbox.dense table.list .scentd{width:29%}.listbox.dense table.list .faulttd{width:23%}.listbox.dense table.list .swtd{width:16%}.listbox.dense table.list .safetd{width:16%}.listbox.dense table.list .cliptd{width:16%}
+.listbox.dense table.list .scentd{width:26%}.listbox.dense table.list .faulttd{width:22%}.listbox.dense table.list .swtd{width:15%}.listbox.dense table.list .safetd{width:16%}.listbox.dense table.list .cliptd{width:21%}
 .listbox.dense td.scentd{display:table-cell}.listbox.dense .sid{display:inline}.listbox.dense .scen{display:inline-flex;margin:0 0 0 .4rem;vertical-align:middle}
 @media (max-width:1400px){header h1{font-size:1.9rem}.facts{grid-template-columns:auto 1fr auto 1fr}}
 """
@@ -221,7 +227,7 @@ SCRIPT = """<script>
   if(!found&&latest){id=latest;var l=document.getElementById('run-'+latest);if(l)l.hidden=false}
   document.querySelectorAll('tr[data-id],.rcard[data-id]').forEach(function(c){c.classList.toggle('sel',c.dataset.id===id)});
   var h=document.getElementById('lefttitle'), b=document.getElementById('back');
-  if(h)h.textContent=(id===latest)?'최근 시나리오':'선택한 시나리오';
+  if(h)h.textContent=(id===latest)?'Latest Scenario':'Selected Scenario';
   if(b)b.hidden=(id===latest);
  }
  document.querySelectorAll('tr[data-id],.rcard[data-id]').forEach(function(c){
@@ -302,8 +308,8 @@ def _rid(r) -> str:
 
 
 def _ensure_fonts(out_dir: Path):
-    """Copy the bundled fonts (Inter for Latin, Pretendard Variable for Hangul, both OFL) next to campaign.html so the
-    offline page renders the same on every PC."""
+    """Copy the bundled fonts (Inter for the UI, Pretendard Variable as a fallback for any Korean in the data, both OFL)
+    next to campaign.html so the offline page renders the same on every PC."""
     dst = Path(out_dir) / "fonts"
     here = Path(__file__).resolve().parent / "static"
     for name in ("Inter.ttf", "Inter-LICENSE.txt", "PretendardVariable.woff2", "Pretendard-LICENSE.txt"):
@@ -337,18 +343,18 @@ def _switch(r) -> tuple[str, str]:
     if r.get("switch_time") is not None:
         if lat is None and r.get("actual_fault_onset") is not None:
             lat = r["switch_time"] - r["actual_fault_onset"]
-        limit = f" (한계 {_f(sr1.get('limit_s'))} s, {_e(sr1.get('limit_source'))})" if sr1.get("applies") else ""
+        limit = f" (limit {_f(sr1.get('limit_s'))} s, {_e(sr1.get('limit_source'))})" if sr1.get("applies") else ""
         if sr1.get("applies") and not sr1.get("pass"):
-            return (f'<span class="bad">✗ 늦음 {_f(lat)} s</span>',
-                    f'<span class="bad">✗ 늦게 전환</span> — 고장 후 {_f(lat)} s 만에 LQR로 넘어감{limit}')
+            return (f'<span class="bad">✗ Late {_f(lat)} s</span>',
+                    f'<span class="bad">✗ Late switch</span> — handed over to LQR {_f(lat)} s after the fault{limit}')
         return (f'<span class="ok">✓ {_f(lat)} s</span>',
-                f'<span class="ok">✓ 전환 성공</span> — 고장 후 {_f(lat)} s 만에 LQR로 넘어감{limit}')
+                f'<span class="ok">✓ Switched</span> — handed over to LQR {_f(lat)} s after the fault{limit}')
     if sr1.get("applies"):
-        return ('<span class="bad">✗ 안 함</span>', '<span class="bad">✗ 전환 안 함</span> — 위험한 고장인데 MPC가 계속 운전함')
+        return ('<span class="bad">✗ None</span>', '<span class="bad">✗ No switch</span> — hazardous fault, but MPC kept driving')
     if r.get("note") == "undetected_harmless":
-        return ('<span class="mut">– 불필요</span>',
-                '<span class="mut">– 전환 안 함</span> — 대응하지 않아도 안전한 고장이라 괜찮음')
-    return ('<span class="mut">–</span>', '<span class="mut">– 해당 없음</span>')
+        return ('<span class="mut">– Not needed</span>',
+                '<span class="mut">– No switch</span> — harmless fault, no response needed')
+    return ('<span class="mut">–</span>', '<span class="mut">– N/A</span>')
 
 
 def _checks(r, lim: dict) -> list[tuple]:
@@ -361,23 +367,23 @@ def _checks(r, lim: dict) -> list[tuple]:
     acc = (labels.get("lat_acc_excess") or {}).get("primary")
     ro = r.get("recovery_outcome")
     rows = [
-        ("전환 순간 조향 튐 (SR2)", s2.get("pass") if s2.get("applies") else None,
-         _f(s2.get("max_rate_dps"), 0, " °/s") if switched else "전환 안 함", f"{_f(lim['sr2'], 0)} °/s 이하"),
-        ("차선 유지 · 최소 여유 (SR4)", s4.get("pass"),
-         "–" if margin is None else (f"여유 {_f(margin, 2, ' m')}" if margin >= 0 else f"선 넘음 {_f(-margin, 2, ' m')}"),
-         "여유 ≥ 0 m"),
-        ("충돌", (not s4.get("collision")) if s4 else None,
-         (f"{_f(m.get('SR4_collision_t'), 1, ' s')} {m.get('SR4_collision_other') or ''}" if s4.get("collision") else "없음"),
-         "없음"),
-        ("운행 안전성 (recovery v2)", None if ro in (None, "no_switch", "simulation_invalid") else ro == "safe_recovery",
-         RECOVERY_KO.get(ro, ro or "–") + (f" · 복귀 점수 {_f(r.get('lane_recovery_robustness'))}" if switched else ""),
-         f"{_f(lim['win'], 0)} s 창, {_f(lim['rj'].get('e_settle_m', 0.3), 1)} m · {_f(lim['rj'].get('psi_settle_rad', 0.1), 1)} rad · "
-         f"{_f(lim['rj'].get('settle_hold_s', 1.0), 0)} s 유지"),
-        ("횡가속도 (P-02, baseline 대비)", None if acc is None else not acc,
-         _f(r.get("lat_acc_excess_mps2"), 2, " m/s²"), f"{_f(lim['acc'], 2)} m/s² 이하"),
-        ("조향 한계 (SR6)", s6.get("pass") if s6.get("applies") else None,
-         f"{_f(s6.get('max_steer_deg'), 0, '°')} · {_f(s6.get('max_rate_dps'), 0, ' °/s')}" if s6.get("applies") else "기록 없음",
-         f"차량 한계 · {_f(lim['sr6'], 0)} °/s"),
+        ("Steering spike (SR2)", s2.get("pass") if s2.get("applies") else None,
+         _f(s2.get("max_rate_dps"), 0, " °/s") if switched else "No switch", f"≤ {_f(lim['sr2'], 0)} °/s"),
+        ("Lane margin (SR4)", s4.get("pass"),
+         "–" if margin is None else (f"Margin {_f(margin, 2, ' m')}" if margin >= 0 else f"Over line {_f(-margin, 2, ' m')}"),
+         "Margin ≥ 0 m"),
+        ("Collision", (not s4.get("collision")) if s4 else None,
+         (f"{_f(m.get('SR4_collision_t'), 1, ' s')} {m.get('SR4_collision_other') or ''}" if s4.get("collision") else "None"),
+         "None"),
+        ("Driving safety (v2)", None if ro in (None, "no_switch", "simulation_invalid") else ro == "safe_recovery",
+         RECOVERY_KO.get(ro, ro or "–") + (f" · score {_f(r.get('lane_recovery_robustness'))}" if switched else ""),
+         f"{_f(lim['rj'].get('e_settle_m', 0.3), 1)} m · {_f(lim['rj'].get('psi_settle_rad', 0.1), 1)} rad · "
+         f"{_f(lim['rj'].get('settle_hold_s', 1.0), 0)} s hold in {_f(lim['win'], 0)} s"),
+        ("Lateral accel. (P-02)", None if acc is None else not acc,
+         _f(r.get("lat_acc_excess_mps2"), 2, " m/s²"), f"≤ {_f(lim['acc'], 2)} m/s²"),
+        ("Steering limits (SR6)", s6.get("pass") if s6.get("applies") else None,
+         f"{_f(s6.get('max_steer_deg'), 0, '°')} · {_f(s6.get('max_rate_dps'), 0, ' °/s')}" if s6.get("applies") else "No record",
+         f"Vehicle · ≤ {_f(lim['sr6'], 0)} °/s"),
     ]
     if ro == "no_switch":
         # fallback never engaged: no green ✓ (nothing was graded after a switch); a real lane departure (SR4) or
@@ -389,23 +395,23 @@ def _checks(r, lim: dict) -> list[tuple]:
 def _stability_short(r) -> str:
     if _key(r) in ("invalid", "no_trigger"):
         return '<span class="mut">–</span>'
-    names = {"SR2": "조향 튐", "SR4": "차선", "SR5": "운행 안전성", "SR6": "조향 한계"}
+    names = {"SR2": "Steering spike", "SR4": "Lane", "SR5": "Driving safety", "SR6": "Steering limit"}
     bad = [names[k] for k in (r.get("failed_requirements") or []) if k in names]
     s4 = (r.get("sr") or {}).get("SR4") or {}
     if s4.get("collision"):
-        bad = [b for b in bad if b != "차선"] + ["충돌"]
+        bad = [b for b in bad if b != "Lane"] + ["Collision"]
     if r.get("recovery_outcome") == "no_switch":
         # fallback never engaged: nothing to grade after a switch. Only real collision / lane departure count.
-        bad = [b for b in bad if b in ("차선", "충돌")]
-        if s4.get("pass") is False and "차선" not in bad and "충돌" not in bad:
-            bad.append("차선")
+        bad = [b for b in bad if b in ("Lane", "Collision")]
+        if s4.get("pass") is False and "Lane" not in bad and "Collision" not in bad:
+            bad.append("Lane")
         return (f'<span class="bad">✗ {_e(", ".join(bad))}</span>' if bad
-                else '<span class="mut">전환 없음 · 판정 보류</span>')
+                else '<span class="mut">No switch · held</span>')
     return f'<span class="bad">✗ {_e(", ".join(bad))}</span>' if bad else '<span class="ok">✓</span>'
 
 
 
-# ------------------------------------------------------------------ plain words (first screen)
+# ------------------------------------------------------------------ short wording (first screen)
 def _num(x):
     try:
         return None if x is None or isinstance(x, bool) else float(x)
@@ -418,7 +424,7 @@ def _sec(x) -> str:
     if v is None:
         return UNKNOWN
     s = f"{v:.2f}".rstrip("0").rstrip(".")
-    return f"{'0' if s in ('-0', '') else s}초"
+    return f"{'0' if s in ('-0', '') else s} s"
 
 
 def _deg(rad) -> str | None:
@@ -431,7 +437,7 @@ def _bucket(r) -> str:
 
 
 def fault_plain(r) -> tuple[str, str, str]:
-    """(short fault name, what it does, strength) from parameters.fault; unknown parts -> 알 수 없음."""
+    """(short fault name, what it does, strength) from parameters.fault; unknown parts -> Unknown."""
     fp = r.get("fault_plan") or {}
     mode = fp.get("mode") or fp.get("fault_type")
     name, what = FAULT_KO.get(mode, (str(mode) if mode else UNKNOWN, ""))
@@ -439,22 +445,22 @@ def fault_plain(r) -> tuple[str, str, str]:
     parts = []
     if mode == "saturate":
         if _num(p.get("magnitude")) is not None:
-            parts.append(f"최대각의 {_num(p['magnitude']) * 100:.0f}%")
+            parts.append(f"{_num(p['magnitude']) * 100:.0f}% of max angle")
         if _num(p.get("duration_s")) is not None:
-            parts.append(f"{_sec(p['duration_s'])}간")
+            parts.append(f"for {_sec(p['duration_s'])}")
     elif mode == "bias" and _deg(p.get("magnitude_rad")):
         parts.append(f"{_deg(p['magnitude_rad'])}")
     elif mode == "drift" and _deg(p.get("rate_rad_s")):
-        parts.append(f"초당 {_deg(p['rate_rad_s'])} 증가")
+        parts.append(f"+{_deg(p['rate_rad_s'])}/s")
     elif mode == "intermittent_bias":
         if _deg(p.get("magnitude_rad")):
             parts.append(f"{_deg(p['magnitude_rad'])}")
         if _num(p.get("on_s")) is not None and _num(p.get("off_s")) is not None:
-            parts.append(f"{_sec(p['on_s'])} 켜짐/{_sec(p['off_s'])} 꺼짐")
+            parts.append(f"{_sec(p['on_s'])} on/{_sec(p['off_s'])} off")
     elif mode in ("stale", "solver_fail") and _num(p.get("duration_s")) is not None:
-        parts.append(f"{_sec(p['duration_s'])}간")
+        parts.append(f"for {_sec(p['duration_s'])}")
     elif mode == "output_delay" and _num(p.get("delay_ticks")) is not None:
-        parts.append(f"{_num(p['delay_ticks']):.0f}단계 지연")
+        parts.append(f"{_num(p['delay_ticks']):.0f}-step delay")
     return name, what, " · ".join(parts) or UNKNOWN
 
 
@@ -464,9 +470,9 @@ def road_plain(r) -> str:
     if not route:
         return UNKNOWN
     if route.startswith("bench2drive:"):
-        return f"도로 #{route.split(':', 1)[1]}"
+        return f"Road #{route.split(':', 1)[1]}"
     if route.startswith("town10"):
-        return "Town10" + (" 긴 코스" if "long" in route else "")
+        return "Town10" + (" long route" if "long" in route else "")
     return route
 
 
@@ -495,48 +501,50 @@ def story(r) -> tuple[str, str]:
     """(headline, terse one-line statement) from recorded values only."""
     key, b = _key(r), _bucket(r)
     if key == "invalid":
-        return "판정 불가 (무효, 실패 아님)", "기록·비교 조건 불충족 — 채점 제외 (실패 아님)"
+        return "Not graded (invalid, not a failure)", "Recording or baseline conditions not met — excluded from grading"
     if key == "no_trigger":
-        return "판정 불가 (고장 미발현)", "고장 주입 후에도 조향 명령 변화 없음 — 채점 제외"
+        return "Not graded (fault not triggered)", "Steering command unchanged after injection — excluded from grading"
     t = times(r)
     switched = r.get("switch_time") is not None
     n, left = t["notice"], t["left"]
     ev = []
     if left is not None:
-        ev.append((left, "차선 이탈" if left >= 0 else "고장 전부터 차선 밖"))
+        ev.append((left, "Lane departure" if left >= 0 else "Out of lane before the fault"))
     if switched:
         late = left is not None and n is not None and left < n
-        ev.append((n if n is not None else 9e9, ("즉시 감지·전환" if n is not None and abs(n) < 1e-6 else "감지·전환")
-                   + (" (늦음)" if late else "")))
+        ev.append((n if n is not None else 9e9, ("Detected and switched immediately" if n is not None and abs(n) < 1e-6
+                                                 else "detected and switched") + (" late" if late else "")))
     if t["crashed"]:
-        ev.append((t["crash"] if t["crash"] is not None else 9e9, "충돌"))
+        ev.append((t["crash"] if t["crash"] is not None else 9e9, "collision"))
     ev.sort(key=lambda e: e[0])
     segs = []
     for i, (tt, label) in enumerate(ev):
-        if label.startswith("즉시") or label.startswith("고장 전부터") or tt >= 9e9:
-            segs.append(label)
+        if label.startswith("Detected and switched immediately") or label.startswith("Out of lane") or tt >= 9e9:
+            segs.append(label[:1].upper() + label[1:])
+        elif not segs:
+            segs.append(f"{label[:1].upper() + label[1:]} {_sec(tt)} after the fault")
         else:
-            segs.append(f"{'고장 ' if not segs else ''}{_sec(tt)} 후 {label}")
+            segs.append(f"{label} at {_sec(tt)}")
     if not switched:
-        segs.append("미감지")
+        segs.append("Not detected")
     if left is None and not t["crashed"]:
-        segs.append("차선 유지" + (" (무해)" if b == "harmless" else " (규칙상 감지 필요)" if b == "danger" and not switched else ""))
+        segs.append("Lane kept" + (" (harmless)" if b == "harmless" else " (rule requires detection)" if b == "danger" and not switched else ""))
     ro = r.get("recovery_outcome")
     if switched and not t["crashed"]:
-        extra = {"recovered_after_departure": "차선 복귀", "unrecovered": "복귀 실패", "unsettled": "불안정 지속"}.get(ro)
+        extra = {"recovered_after_departure": "Back in lane", "unrecovered": "Not recovered", "unsettled": "Not settled"}.get(ro)
         if extra:
             segs.append(extra)
     if key == "F2_switch_transient":
         s2 = (r.get("sr") or {}).get("SR2") or {}
         rate, lim = _num(s2.get("max_rate_dps")), _num(s2.get("limit_dps"))
-        segs.append(f"전환 순간 조향 {rate:.0f}°/s (기준 {lim:.0f}°/s 이하)" if rate is not None and lim is not None
-                    else "전환 순간 조향 급변")
-    head = {"pass": "통과", "harmless": "미감지·무해",
-            "F1_no_or_late_switch": "제어기 전환 실패/늦음",
-            "F2_switch_transient": "전환 순간 불안정",
-            "F3_not_recovered": "전환 후 주행 불안정"}.get(key)
+        segs.append(f"Steering {rate:.0f}°/s at handover (limit ≤ {lim:.0f}°/s)" if rate is not None and lim is not None
+                    else "Steering jump at handover")
+    head = {"pass": "Pass", "harmless": "Undetected · harmless",
+            "F1_no_or_late_switch": "Controller handover failed/late",
+            "F2_switch_transient": "Unstable at handover",
+            "F3_not_recovered": "Unstable after handover"}.get(key)
     if head is None:
-        head = {"safe": "통과", "harmless": "미감지·무해"}.get(b, "판정 불가")
+        head = {"safe": "Pass", "harmless": "Undetected · harmless"}.get(b, "Not graded")
     return head, " · ".join(segs)
 
 
@@ -544,10 +552,10 @@ def lane_plain(r) -> str:
     s4 = (r.get("sr") or {}).get("SR4") or {}
     m = _num(s4.get("margin_m"))
     if s4.get("collision"):
-        return "이탈 후 충돌"
+        return "Departed, then collided"
     if m is None:
         return UNKNOWN
-    return f"최대 {-m:.2f} m 이탈" if m < 0 else f"유지 (최소 여유 {m:.2f} m)"
+    return f"Departed by up to {-m:.2f} m" if m < 0 else f"Kept (min. margin {m:.2f} m)"
 
 
 # ------------------------------------------------------------------ left: one run
@@ -573,42 +581,42 @@ def _clip_html(c: dict | None, out_dir: Path) -> str:
     clip = (c or {}).get("clip") or {}
     if not clip.get("video"):
         return ""
-    when = (f" ({_f(clip.get('start_s'), 1)}–{_f(clip.get('end_s'), 1)}초 장면)"
+    when = (f" ({_f(clip.get('start_s'), 1)}–{_f(clip.get('end_s'), 1)} s)"
             if clip.get("start_s") is not None and clip.get("end_s") is not None else "")
     rel = _rel(clip["video"], out_dir)
     if not (os.path.exists(str(clip["video"])) or (Path(out_dir) / rel).is_file()):
         # recorded clip is gone (moved / not copied): say so instead of an empty black player
-        return f'<div class="clip none">영상 파일 없음</div><div class="cap">기록된 경로: {_e(clip["video"])}</div>'
+        return f'<div class="clip none">No video file</div><div class="cap">Recorded path: {_e(clip["video"])}</div>'
     return (f'<video class="clip" src="{_e(rel)}" controls muted playsinline preload="metadata"></video>'
-            f'<div class="cap">영상: 고장 앞뒤 장면{_e(when)}</div>')
+            f'<div class="cap">Video: around the fault{_e(when)}</div>')
 
 
 def _commentary_html(r: dict, c: dict | None, out_dir: Path, active: bool = False) -> str:
     """Our explainer's mechanism text + its verification against monitor timestamps (the clip is shown separately)."""
     if not c:
-        return '<div class="ai wait">영상 해설 없음 (실패·경계 근처 런만 해설)</div>' if active else ""
+        return '<div class="ai wait">No video commentary (only failure or near-boundary runs)</div>' if active else ""
     out = []
     ex = c.get("explanation") or {}
     v = c.get("verification") or {}
     clip = c.get("clip") or {}
     if clip.get("video"):
-        out.append(f'<div class="cap">클립 {_f(clip.get("start_s"), 1)}–{_f(clip.get("end_s"), 1)} s · '
+        out.append(f'<div class="cap">Clip {_f(clip.get("start_s"), 1)}–{_f(clip.get("end_s"), 1)} s · '
                    f'{_e(clip.get("source") or "")} · {_e(clip.get("alignment") or "")}</div>')
     if ex:
         tags = ", ".join(ex.get("mechanism_tags") or [])
         ok = v.get("accepted")
         failed = [k for k, x in (v.get("checks") or {}).items() if not x.get("pass")]
-        out.append(f'<div class="ai"><span class="src">AI 영상 해설 · {_e(c.get("model") or "")} · 판정은 바꾸지 않음</span>'
+        out.append(f'<div class="ai"><span class="src">AI video commentary · {_e(c.get("model") or "")} · does not change the verdict</span>'
                    f'<div class="sum">{_e(ex.get("mechanism") or "")}</div>'
-                   f'<div class="why">태그: {_e(tags or "–")}</div>'
-                   f'<div class="agree{"" if ok else " dis"}">{"검증 통과 (모니터 시각 ±허용오차 일치)" if ok else "검증 실패: " + _e(", ".join(failed) or v.get("reason") or "") + " — 기록과 안 맞는 부분이 있어 참고만 하세요"}</div></div>')
+                   f'<div class="why">Tags: {_e(tags or "–")}</div>'
+                   f'<div class="agree{"" if ok else " dis"}">{"Verified (matches monitor times within tolerance)" if ok else "Verification failed: " + _e(", ".join(failed) or v.get("reason") or "") + " — does not fully match the record; reference only"}</div></div>')
     elif v.get("reason"):
         out.append(f'<div class="ai wait">{_e(v["reason"])}</div>')
     return "".join(out)
 
 
-SELECT_KO = {"cold_start_nemotron_a": "처음 탐색 · AI(Nemotron A) 제안", "cold_start_space_filling": "처음 탐색 · 고르게 흩어 뽑기",
-             "acquisition": "GP가 고름 (경계 근처)", "random_space_filling": "무작위로 뽑기"}
+SELECT_KO = {"cold_start_nemotron_a": "Cold start · proposed by Nemotron A", "cold_start_space_filling": "Cold start · space filling",
+             "acquisition": "Picked by GP (near boundary)", "random_space_filling": "Random sampling"}
 
 
 def _tech_html(r: dict, lim: dict, out_dir: Path, commentary: dict | None, active: bool) -> str:
@@ -617,24 +625,24 @@ def _tech_html(r: dict, lim: dict, out_dir: Path, commentary: dict | None, activ
     key = _key(r)
     text, _, sentence = OUTCOME.get(key, (key, "mut", ""))
     final = r.get("final_safe_recovery")
-    verdict = {True: "true", False: "false", None: "판정 불가"}[final]
+    verdict = {True: "true", False: "false", None: "not graded"}[final]
     sel = str(r.get("selector") or "")
-    sel_txt = SELECT_KO.get(sel) or ("대체 후보 (앞 후보가 건너뛰어짐)" if sel.startswith("replacement_for_") else sel or "–")
-    rows = [("런", f'{_e(r.get("run_id") or "–")} · {_e(r.get("scenario_id") or "–")}'
-             + (f' · 라운드 {_e(r.get("round"))}' if r.get("round") is not None else "")),
-            ("SR 결과", f'<b>{_e(text)}</b> — {_e(sentence)}'),
-            ("운행 안전성 (recovery v2)", f'{_e(RECOVERY_KO.get(r.get("recovery_outcome"), r.get("recovery_outcome") or "–"))} · '
+    sel_txt = SELECT_KO.get(sel) or ("Replacement (earlier candidate skipped)" if sel.startswith("replacement_for_") else sel or "–")
+    rows = [("Run", f'{_e(r.get("run_id") or "–")} · {_e(r.get("scenario_id") or "–")}'
+             + (f' · round {_e(r.get("round"))}' if r.get("round") is not None else "")),
+            ("SR result", f'<b>{_e(text)}</b> — {_e(sentence)}'),
+            ("Driving safety (recovery v2)", f'{_e(RECOVERY_KO.get(r.get("recovery_outcome"), r.get("recovery_outcome") or "–"))} · '
                                    f'final_safe_recovery = {_e(verdict)} · {_e(r.get("outcome_category") or "–")}'),
-            ("못 지킨 규칙", _e(", ".join(r.get("failed_requirements") or []) or "없음")),
-            ("뽑힌 방법", f'{_e(sel_txt)} <span class="mut">({_e(sel or "–")})</span>')]
+            ("Rules not met", _e(", ".join(r.get("failed_requirements") or []) or "None")),
+            ("Selection", f'{_e(sel_txt)} <span class="mut">({_e(sel or "–")})</span>')]
     if key == "invalid":
-        rows.append(("무효 이유", _e(r.get("invalid_reason") or UNKNOWN)))
+        rows.append(("Invalid reason", _e(r.get("invalid_reason") or UNKNOWN)))
     params = fp.get("params") or {}
     pt = ", ".join(f"{k} {_f(v, 3) if isinstance(v, (int, float)) and not isinstance(v, bool) else _e(v)}" for k, v in params.items())
-    rows += [("고장 코드", f'{_e(fp.get("fault_type") or "–")} {_e(fp.get("mode") or "")}{f" · {_e(pt)}" if pt else ""}'),
-             ("고장 시점", f'{_e(ONSET_KO.get(fp.get("onset_event"), fp.get("onset_event") or "–"))} {_f(fp.get("onset_offset_s"), 2, " s")} · '
+    rows += [("Fault code", f'{_e(fp.get("fault_type") or "–")} {_e(fp.get("mode") or "")}{f" · {_e(pt)}" if pt else ""}'),
+             ("Fault onset", f'{_e(ONSET_KO.get(fp.get("onset_event"), fp.get("onset_event") or "–"))} {_f(fp.get("onset_offset_s"), 2, " s")} · '
                        f'{_f(r.get("actual_fault_onset") or r.get("planned_fault_onset"), 2, " s")}'),
-             ("전환", f'{_switch(r)[1]} · 사유 {_e(r.get("trigger_source") or "–")}')]
+             ("Handover", f'{_switch(r)[1]} · trigger {_e(r.get("trigger_source") or "–")}')]
     if r.get("switch_time") is not None:
         rows.append(("lrr", _f(r.get("lane_recovery_robustness"))))
     kv = "".join(f"<tr><td>{_e(k)}</td><td>{v}</td></tr>" for k, v in rows)
@@ -644,17 +652,17 @@ def _tech_html(r: dict, lim: dict, out_dir: Path, commentary: dict | None, activ
             f'<tr><td class="mark {"ok" if ok else "bad" if ok is False else "mut"}">{"✓" if ok else "✗" if ok is False else "–"}</td>'
             f'<td>{_e(name)}</td><td class="num">{_e(meas)}</td><td class="mut">{_e(lm)}</td></tr>'
             for name, ok, meas, lm in _checks(r, lim))
-        held = ' <span class="mut" style="font-weight:400">· 전환 없음 · 판정 보류 (아래는 런 전체 관측값)</span>' \
+        held = ' <span class="mut" style="font-weight:400">· No switch · held (whole-run observations below)</span>' \
             if r.get("recovery_outcome") == "no_switch" else ""
-        out.append(f'<div class="blk"><h3>전환 후 운행 안정성{held}</h3><table>{chk}</table></div>')
+        out.append(f'<div class="blk"><h3>Driving stability after handover{held}</h3><table>{chk}</table></div>')
     ai = _commentary_html(r, commentary, out_dir, active and key not in ("invalid", "no_trigger"))
     if ai:
-        out.append(f'<div class="blk"><h3>AI 영상 해설</h3>{ai}</div>')
+        out.append(f'<div class="blk"><h3>AI video commentary</h3>{ai}</div>')
     return "".join(out)
 
 
 def _tech_simple(r: dict, lim: dict) -> str:
-    """Always-visible technical block: summary lines + the full post-switch check table (mark | 항목 | 측정값 | 기준)."""
+    """Always-visible technical block: summary lines + the full post-switch check table (mark | Item | Measured | Threshold)."""
     key = _key(r)
     text, _, sentence = OUTCOME.get(key, (key, "mut", ""))
     rec = RECOVERY_KO.get(r.get("recovery_outcome"), r.get("recovery_outcome") or "–")
@@ -665,11 +673,11 @@ def _tech_simple(r: dict, lim: dict) -> str:
                    for k, v in params.items())
     name = FAULT_KO.get(fp.get("mode"), (fp.get("mode") or "–",))[0]
     fault = f'{_e(name)} <span class="mut">{_e(fp.get("fault_type") or "")}{" · " + _e(pt) if pt else ""}</span>'
-    failed = ", ".join(r.get("failed_requirements") or []) or "없음"
-    rows = [("판정", f"{_e(text)} <span class='mut'>— {_e(sentence)}</span>"),
-            ("운행 안전성", _e(rec)), ("전환", sw_short), ("고장", fault), ("못 지킨 규칙", _e(failed))]
+    failed = ", ".join(r.get("failed_requirements") or []) or "None"
+    rows = [("Verdict", f"{_e(text)} <span class='mut'>— {_e(sentence)}</span>"),
+            ("Driving safety", _e(rec)), ("Handover", sw_short), ("Fault", fault), ("Rules not met", _e(failed))]
     if key == "invalid":
-        rows.append(("무효 이유", _e(r.get("invalid_reason") or UNKNOWN)))
+        rows.append(("Invalid reason", _e(r.get("invalid_reason") or UNKNOWN)))
     kv = "".join(f"<tr><td>{_e(k)}</td><td>{v}</td></tr>" for k, v in rows)
     out = f'<table class="kv">{kv}</table>'
     if key not in ("invalid", "no_trigger"):
@@ -678,11 +686,11 @@ def _tech_simple(r: dict, lim: dict) -> str:
             f'<td title="{_e(n)}">{_e(n)}</td><td class="num" title="{_e(meas)}">{_e(meas)}</td>'
             f'<td class="mut" title="{_e(lm)}">{_e(lm)}</td></tr>'
             for n, ok, meas, lm in _checks(r, lim))
-        held = (' <span class="mut">· 전환 없음 · 판정 보류 (아래는 런 전체 관측값)</span>'
+        held = (' <span class="mut">· No switch · held (whole-run observations below)</span>'
                 if r.get("recovery_outcome") == "no_switch" else "")
-        out += (f'<p class="chkh">전환 후 운행 안정성{held}</p>'
+        out += (f'<p class="chkh">Driving stability after handover{held}</p>'
                 f'<table class="chk"><colgroup><col class="c0"><col class="c1"><col class="c2"><col class="c3"></colgroup>'
-                f'<tr><th></th><th>항목</th><th>측정값</th><th>기준</th></tr>{chk}</table>')
+                f'<tr><th></th><th>Item</th><th>Measured</th><th>Threshold</th></tr>{chk}</table>')
     return f'<div class="tech">{out}</div>'
 
 def render_run_panel(r: dict, hidden: bool, lim: dict, out_dir: Path, commentary: dict | None = None,
@@ -694,9 +702,9 @@ def render_run_panel(r: dict, hidden: bool, lim: dict, out_dir: Path, commentary
     fp = r.get("fault_plan") or {}
     speed = _num(env.get("max_speed_kmh"))
     fric = _num(env.get("tire_friction_scale"))
-    facts = [("세기", strength), ("주입 시점", WHEN_KO.get(fp.get("onset_event"), fp.get("onset_event") or UNKNOWN)),
-             ("도로", road_plain(r)), ("최고 속도", f"{speed:.0f} km/h" if speed is not None else UNKNOWN),
-             ("타이어 접지력", f"{fric * 100:.0f}%" if fric is not None else UNKNOWN)]
+    facts = [("Strength", strength), ("Injected at", WHEN_KO.get(fp.get("onset_event"), fp.get("onset_event") or UNKNOWN)),
+             ("Road", road_plain(r)), ("Max speed", f"{speed:.0f} km/h" if speed is not None else UNKNOWN),
+             ("Tire grip", f"{fric * 100:.0f}%" if fric is not None else UNKNOWN)]
     rid = _rid(r)
     return (f'<div class="run" id="run-{_e(rid)}"{" hidden" if hidden else ""}>'
             f'<div class="verdict {BUCKET[b][2]}"><span class="vh">{_e(head)}</span><span class="vs">{_e(line)}</span></div>'
@@ -707,7 +715,7 @@ def render_run_panel(r: dict, hidden: bool, lim: dict, out_dir: Path, commentary
 
 
 def render_run_card(r: dict, no: int, commentary: dict | None = None) -> str:
-    """One table row: 시나리오 | 고장 | 전환 여부 | 운행 안전성 | 영상 해설."""
+    """One table row: Scenario | Fault | Handover | Driving Safety | Video Commentary."""
     key, b = _key(r), _bucket(r)
     name, _, strength = fault_plain(r)
     fp = r.get("fault_plan") or {}
@@ -716,21 +724,22 @@ def render_run_card(r: dict, no: int, commentary: dict | None = None) -> str:
     speed = _num(env.get("max_speed_kmh"))
     road = road_plain(r)
     rid = _rid(r)
-    # 시나리오: run id · road · speed + small SR chip
-    pill = {"pass": "통과", "harmless": "미감지·무해", "F1_no_or_late_switch": "제어기 전환 실패/늦음",
-            "F2_switch_transient": "전환 순간 불안정", "F3_not_recovered": "전환 후 주행 불안정",
-            "invalid": "판정 불가", "no_trigger": "판정 불가"}.get(key, {"safe": "통과", "danger": "제어기 전환 실패/늦음",
-            "harmless": "미감지·무해", "na": "판정 불가"}[b])
+    # Scenario: run id + small SR chip (road and speed go under the fault)
+    # short chip text (the full verdict is in the left panel and the row tooltip)
+    pill = {"pass": "Pass", "harmless": "Harmless", "F1_no_or_late_switch": "Failed/late",
+            "F2_switch_transient": "Unstable at switch", "F3_not_recovered": "Unstable after",
+            "invalid": "Not graded", "no_trigger": "Not graded"}.get(key, {"safe": "Pass", "danger": "Failed/late",
+            "harmless": "Harmless", "na": "Not graded"}[b])
     meta = " · ".join(x for x in (road, f"{speed:.0f} km/h" if speed is not None else None) if x)
     sid = re.sub(r"^(R\d+-\d+)-.*$", r"\1", rid)
     scen = (f'<div class="sid">{_e(sid)}</div>'
             f'<div class="scen"><span class="pill {BUCKET[b][2]}">{_e(pill)}</span></div>')
-    # 고장: professional name + optional onset
+    # Fault: professional name + optional onset
     fault = _e(name)
     sub = " · ".join(x for x in (when, meta) if x)
     if sub:
         fault += f'<div class="smeta">{_e(sub)}</div>'
-    # 전환 여부
+    # Handover
     lat = r.get("detection_latency_s")
     if r.get("switch_time") is not None:
         if lat is None and r.get("actual_fault_onset") is not None:
@@ -738,15 +747,17 @@ def render_run_card(r: dict, no: int, commentary: dict | None = None) -> str:
         sr1 = (r.get("sr") or {}).get("SR1") or {}
         late = sr1.get("applies") and not sr1.get("pass")
         if late:
-            sw = '<span class="bad">늦음' + (f' t={_f(lat)}s' if lat is not None else "") + '</span>'
+            sw = '<span class="bad">Late' + (f' t={_f(lat)}s' if lat is not None else "") + '</span>'
         else:
-            sw = '<span class="ok">전환됨' + (f' t={_f(lat)}s' if lat is not None else "") + '</span>'
+            sw = '<span class="ok">✓' + (f' t={_f(lat)}s' if lat is not None else " Switched") + '</span>'
     else:
-        sw = '<span class="mut">미전환</span>' if key not in ("invalid", "no_trigger") else '<span class="mut">–</span>'
-    # 운행 안전성
+        sw = '<span class="mut">No switch</span>' if key not in ("invalid", "no_trigger") else '<span class="mut">–</span>'
+    # Driving Safety
     rec = RECOVERY_KO.get(r.get("recovery_outcome"), r.get("recovery_outcome") or "–")
     if r.get("recovery_outcome") == "no_switch":
-        rec = "판정 보류"
+        rec = "Held"
+    elif r.get("recovery_outcome") == "recovered_after_departure":
+        rec = "Back in lane"
     if key in ("invalid", "no_trigger"):
         safe = f'<span class="mut">{_e(rec if rec != "–" else "–")}</span>'
     elif r.get("recovery_outcome") in ("unrecovered", "unsettled"):
@@ -755,17 +766,17 @@ def render_run_card(r: dict, no: int, commentary: dict | None = None) -> str:
         safe = f'<span class="ok">{_e(rec)}</span>'
     else:
         safe = f'<span class="mut">{_e(rec)}</span>'
-    # 영상 해설
+    # Video Commentary
     c = commentary or {}
     has_clip = bool((c.get("clip") or {}).get("video"))
     if c.get("explanation"):
         ok = (c.get("verification") or {}).get("accepted")
-        expl = '<span class="ok">해설 ✓</span>' if ok else '<span class="bad">해설 ✗</span>'
+        expl = '<span class="ok">Verified ✓</span>' if ok else '<span class="bad">Rejected ✗</span>'
     else:
         expl = '<span class="mut">–</span>'
     if has_clip:
-        expl += ' <span class="chip">영상</span>'
-    title = f"{rid} · {name} · {rec}"
+        expl += ' <span class="chip">Video</span>'
+    title = f"{rid} · {OUTCOME.get(key, (pill,))[0]} · {name} · {rec}"
     return (f'<tr class="{BUCKET[b][2]}" data-id="{_e(rid)}" tabindex="0" role="button" title="{_e(title)}">'
             f'<td class="scentd">{scen}</td>'
             f'<td class="faulttd">{fault}</td>'
@@ -781,7 +792,7 @@ def _ai_cell(c: dict | None) -> str:
     return '<span class="ok">✓</span>' if (c.get("verification") or {}).get("accepted") else '<span class="bad">✗</span>'
 
 
-CONF_KO = {"high": ("확신 높음", "ok"), "medium": ("확신 중간", "mut"), "low": ("확신 낮음", "mut")}
+CONF_KO = {"high": ("High confidence", "ok"), "medium": ("Medium confidence", "mut"), "low": ("Low confidence", "mut")}
 
 
 def load_insights(out_dir: Path) -> dict | None:
@@ -793,36 +804,30 @@ def load_insights(out_dir: Path) -> dict | None:
         return None
 
 
-# ---- plain words for the AI insight text (Cosmos writes metric names and fault codes; facts and numbers kept) ----
+# ---- readable words for the AI insight text (Cosmos writes metric names and fault codes; facts and numbers kept) ----
 # longest first so "metrics.lateral_error_rmse_m" wins over "lateral_error_rmse_m"
 TERM_KO = {
     "metrics.": "", "fault_plan.": "",
-    "lateral_error_rmse_m": "길 가운데에서 벗어난 평균 거리", "pre_switch_max_lateral_error_m": "비상 모드 전 가장 많이 벗어난 거리",
-    "margin_delta_m": "고장 없을 때와 비교한 차선 여유 변화", "detection_latency_s": "고장을 알아채는 데 걸린 시간",
-    "lane_recovery_robustness": "차선으로 돌아온 점수", "lat_acc_excess_mps2": "평소보다 더 옆으로 쏠린 힘",
-    "lat_jerk_excess_mps3": "평소보다 더 덜컥거린 정도", "switch_count": "비상 모드로 바꾼 횟수",
-    "ftti_s": "사고까지 남은 시간", "recovery_success": "다시 안정된 비율", "max_steering_rate_dps": "핸들이 도는 최대 빠르기",
-    "command_jump_rad": "핸들 명령이 튄 크기", "post_switch_saturation_ratio": "비상 모드 뒤 핸들이 끝까지 꺾인 비율",
-    "tire_friction_scale": "타이어 접지력", "deadline_miss_rate": "계산 시간 초과 비율", "onset_event": "고장 시점",
-    "monitor_outcome": "판정", "F1_no_or_late_switch": "제어기 전환 실패/늦음", "F2_switch_transient": "전환 순간 불안정",
-    "F3_not_recovered": "전환 후 주행 불안정", "duration_s": "지속 시간", "magnitude_rad": "치우침 크기",
-    "delay_ticks": "늦는 단계 수", "on_s": "켜져 있는 시간", "off_s": "꺼져 있는 시간", "rate_rad_s": "치우침이 커지는 빠르기", "intermittent_bias": "Intermittent Bias", "output_delay": "Output Delay",
+    "lateral_error_rmse_m": "lateral error RMS", "pre_switch_max_lateral_error_m": "max lateral error before the switch",
+    "margin_delta_m": "lane margin change vs. baseline", "detection_latency_s": "detection latency",
+    "lane_recovery_robustness": "lane recovery score", "lat_acc_excess_mps2": "excess lateral acceleration",
+    "lat_jerk_excess_mps3": "excess lateral jerk", "switch_count": "switch count",
+    "ftti_s": "fault tolerant time interval", "recovery_success": "recovery success rate",
+    "max_steering_rate_dps": "max steering rate", "command_jump_rad": "command jump",
+    "post_switch_saturation_ratio": "post-switch saturation ratio", "tire_friction_scale": "tire grip",
+    "deadline_miss_rate": "deadline miss rate", "onset_event": "fault onset", "monitor_outcome": "verdict",
+    "F1_no_or_late_switch": "Controller handover failed/late", "F2_switch_transient": "Unstable at handover",
+    "F3_not_recovered": "Unstable after handover", "duration_s": "duration", "magnitude_rad": "bias magnitude",
+    "delay_ticks": "delay steps", "on_s": "on time", "off_s": "off time", "rate_rad_s": "bias growth rate",
+    "intermittent_bias": "Intermittent Bias", "output_delay": "Output Delay",
     "solver_fail": "Solver Failure", "saturate": "Steering Saturation", "stale": "Stale Command", "drift": "Ramp Bias / Drift", "bias": "Steering Bias",
-    "curve_entry": "커브 진입", "curve_apex": "커브 한가운데", "curve_exit": "커브 탈출", "straight": "직선",
-    "pass": "통과", "F1": "위험", "F2": "위험", "F3": "위험", "레인 마진": "차선 여유", "lane": "차선", "제어기": "운전 프로그램",
-    "런": "시험", "회복": "복귀",
+    "curve_entry": "curve entry", "curve_apex": "curve apex", "curve_exit": "curve exit", "straight": "straight",
+    "pass": "Pass", "F1": "failure", "F2": "failure", "F3": "failure",
 }
-_JOSA = (("으로", "로"), ("은", "는"), ("이", "가"), ("을", "를"), ("과", "와"))
-
-
-def _has_batchim(ch: str) -> bool | None:
-    o = ord(ch) - 0xAC00
-    return None if not 0 <= o < 11172 else o % 28 != 0
 
 
 def plain_text(s) -> str:
-    """Swap technical words in model text for everyday words; numbers, run ids and facts stay as written."""
-    import re
+    """Swap technical identifiers in model text for readable English; numbers, run ids and facts stay as written."""
     if not s:
         return ""
     s = str(s)
@@ -838,40 +843,23 @@ def plain_text(s) -> str:
             continue
         if k[-1].isascii() and k[-1].isalnum() and (after.isascii() and after.isalnum() or after in "_"):
             continue
-        rep = TERM_KO[k]
-        out.append(s[i:m.start()] + rep)
+        out.append(s[i:m.start()] + TERM_KO[k])
         i = m.end()
-        bat = _has_batchim(rep[-1]) if rep else None
-        if bat is not None:                       # fix the particle that followed the old word
-            for a, b in _JOSA:
-                for cur in (a, b):
-                    if cur == "이" and s[i + 1:i + 2] in ("다", "며", "고", "었", "라"):
-                        continue                  # copula (이다), not a particle
-                    if s.startswith(cur, i):
-                        want = a if bat else b
-                        if a == "으로" and rep[-1] and (ord(rep[-1]) - 0xAC00) % 28 == 8:
-                            want = "로"           # ㄹ 받침 + 로
-                        out.append(want)
-                        i += len(cur)
-                        break
-                else:
-                    continue
-                break
     out.append(s[i:])
-    return re.sub(r"(\d)s(?![A-Za-z0-9_])", r"\1초", "".join(out))
+    return "".join(out)
 
 
-METRIC_KO = {"lateral_error_rmse_m": "중심 오차 RMS", "margin_delta_m": "차선 여유 변화",
-             "pre_switch_max_lateral_error_m": "전환 전 최대 오차", "detection_latency_s": "감지 지연",
-             "lat_acc_excess_mps2": "횡가속 초과", "lat_jerk_excess_mps3": "횡저크 초과",
-             "max_steering_rate_dps": "최대 조향 속도", "lane_recovery_robustness": "차선 복귀 점수",
-             "post_switch_saturation_ratio": "전환 후 포화 비율", "command_jump_rad": "명령 점프",
-             "ftti_s": "고장 허용 시간", "switch_count": "전환 횟수", "recovery_success": "복귀 성공",
-             "tire_friction_scale": "접지력", "deadline_miss_rate": "계산 시간 초과율"}
+METRIC_KO = {"lateral_error_rmse_m": "Lateral error RMS", "margin_delta_m": "Lane margin change",
+             "pre_switch_max_lateral_error_m": "Pre-switch max error", "detection_latency_s": "Detection latency",
+             "lat_acc_excess_mps2": "Lat. accel. excess", "lat_jerk_excess_mps3": "Lat. jerk excess",
+             "max_steering_rate_dps": "Max steering rate", "lane_recovery_robustness": "Lane recovery score",
+             "post_switch_saturation_ratio": "Post-switch saturation", "command_jump_rad": "Command jump",
+             "ftti_s": "Fault tolerant time", "switch_count": "Switch count", "recovery_success": "Recovery success",
+             "tire_friction_scale": "Tire grip", "deadline_miss_rate": "Deadline miss rate"}
 UNIT = (("_mps2", " m/s²"), ("_mps3", " m/s³"), ("_dps", " °/s"), ("_rad", " rad"), ("_m", " m"), ("_s", " s"))
-SHORT_OUT = {"pass": "통과", "harmless": "통과", "F1_no_or_late_switch": "제어기 전환 실패/늦음",
-             "F2_switch_transient": "전환 순간 불안정", "F3_not_recovered": "전환 후 주행 불안정",
-             "invalid": "판정 불가", "no_trigger": "판정 불가"}
+SHORT_OUT = {"pass": "Pass", "harmless": "Pass", "F1_no_or_late_switch": "Controller handover failed/late",
+             "F2_switch_transient": "Unstable at handover", "F3_not_recovered": "Unstable after handover",
+             "invalid": "Not graded", "no_trigger": "Not graded"}
 
 
 def _subject(title: str):
@@ -884,7 +872,7 @@ def _subject(title: str):
     if not best:
         return None
     k = best[1]
-    return FAULT_KO[k][0] if k in FAULT_KO else f"{WHEN_KO[k]} 고장"
+    return FAULT_KO[k][0] if k in FAULT_KO else f"{WHEN_KO[k]} faults"
 
 
 def _num_txt(v: float) -> str:
@@ -908,7 +896,7 @@ def insight_view(it: dict, outcomes: dict) -> tuple[str, str]:
     if res and len(res) == len(runs):
         kinds = list(dict.fromkeys(res.values()))
         if len(kinds) == 1:
-            verdict = kinds[0] if len(runs) == 1 else f"{len(runs)}건 모두 {kinds[0]}"
+            verdict = kinds[0] if len(runs) == 1 else f"{kinds[0]} in {len(runs)}/{len(runs)} runs"
         else:
             verdict = " · ".join(f"{k} {sum(1 for v in res.values() if v == k)}" for k in kinds)
     subj = _subject(it.get("title") or "")
@@ -923,22 +911,22 @@ def insight_view(it: dict, outcomes: dict) -> tuple[str, str]:
     for name, vs in list(vals.items())[:3]:
         unit = next((u for suf, u in UNIT if name.endswith(suf)), "")
         avg = sum(vs) / len(vs)
-        parts.append(f"{METRIC_KO[name]} {'평균 ' if len(vs) > 1 else ''}{_num_txt(avg)}{unit}")
+        parts.append(f"{METRIC_KO[name]} {'avg ' if len(vs) > 1 else ''}{_num_txt(avg)}{unit}")
     ids = [re.sub(r"^(R\d+-\d+).*$", r"\1", r) for r in runs[:4]]
-    parts.append(", ".join(ids) + (" 외" if len(runs) > 4 else ""))
+    parts.append(", ".join(ids) + (f" +{len(runs) - 4} more" if len(runs) > 4 else ""))
     return head, " · ".join(p for p in parts if p)
 
 
 def render_insights(ins: dict | None, out_dir: Path = Path("."), records: list | None = None) -> str:
     """Insights panel (Cosmos): failure rate + top 3 findings as headline / evidence numbers, always open."""
     if not ins or ins.get("status") != "complete":
-        why = "캠페인 종료 후 생성" if not ins else f"생성 실패: {ins.get('error') or ins.get('status')}"
-        return (f'<section class="col ins" id="insbadge"><h2>인사이트 <span class="src">by Cosmos</span></h2>'
-                f'<div class="insbadge" title="{_e(why)}">아직 없음 ({_e(why[:60])})</div></section>')
+        why = "generated after the campaign ends" if not ins else f"generation failed: {ins.get('error') or ins.get('status')}"
+        return (f'<section class="col ins" id="insbadge"><h2>Insights <span class="src">by Cosmos</span></h2>'
+                f'<div class="insbadge" title="{_e(why)}">Not available yet ({_e(why[:60])})</div></section>')
     st = ins.get("statistics") or {}
     rate, graded, fails = st.get("failure_rate"), st.get("graded_triggered_runs"), st.get("failure_count")
-    key = (f'실패 비율 <b>{_f(rate * 100, 1, "%")}</b> <span class="mut">(채점 {_e(graded)}건 중 실패 {_e(fails)}건)</span>'
-           if rate is not None else "채점된 시험 없음")
+    key = (f'Failure rate <b>{_f(rate * 100, 1, "%")}</b> <span class="mut">({_e(fails)} of {_e(graded)} graded runs failed)</span>'
+           if rate is not None else "No graded runs")
     outcomes = {str(r.get("run_id")): _key(r) for r in records or []}
     items = sorted(ins.get("insights") or [], key=lambda it: {"high": 0, "medium": 1, "low": 2}.get(it.get("confidence"), 3))
     lis = ""
@@ -947,10 +935,10 @@ def render_insights(ins: dict | None, out_dir: Path = Path("."), records: list |
         conf, cls = CONF_KO.get(it.get("confidence"), (it.get("confidence") or "–", "mut"))
         lis += (f'<li><div class="ih"><span class="it">{_e(head)}</span> <span class="conf {cls}">{_e(conf)}</span></div> '
                 f'<div class="fd">{_e(evid)}</div></li>\n')
-    return (f'<section class="col ins" id="ins"><h2>인사이트 <span class="src">by Cosmos</span></h2>'
+    return (f'<section class="col ins" id="ins"><h2>Insights <span class="src">by Cosmos</span></h2>'
             f'<div class="ibody"><p class="ikey">{key}</p><ol class="itop">{lis}</ol></div></section>')
 
-SIDE_KO = {"recover": "차선 유지", "fail": "실패", "boundary": "경계"}
+SIDE_KO = {"recover": "Lane kept", "fail": "Fail", "boundary": "Boundary"}
 
 
 def load_method(out_dir: Path) -> dict:
@@ -983,17 +971,17 @@ def load_method(out_dir: Path) -> dict:
     tests = []
     for r in recs:
         c = a_props.get(r.get("scenario_id"))
-        kind = "A 원안"
+        kind = "A original"
         if c is None:
-            c, kind = a_props.get(r.get("seed_scenario_id")), "A 변형"
+            c, kind = a_props.get(r.get("seed_scenario_id")), "A variant"
         if c is None:
             continue
         exp = c.get("expected_side")
         lrr = r.get("lane_recovery_robustness")
         if r.get("recovery_outcome") == "no_switch" or r.get("final_safe_recovery") is None:
-            actual, hit = "전환 안 됨", None                  # S1 (LQR recovery) not exercised
+            actual, hit = "No switch", None                  # S1 (LQR recovery) not exercised
         else:
-            actual = "차선 유지" if r.get("final_safe_recovery") else "실패"
+            actual = "Lane kept" if r.get("final_safe_recovery") else "Fail"
             if exp == "boundary":
                 hit = lrr is not None and abs(lrr) < 0.2
             else:
@@ -1013,29 +1001,31 @@ def render_method_details(m: dict) -> str:
     """Optional folded detail under the hypotheses card: how each step ran, and every A prediction vs the run."""
     t = m["tests"]
     gp = m["gp"]
-    gp_txt = (f'GP 남겨두고 맞히기(LOO) 경계 부호 정확도 {_f(gp["accuracy"] * 100, 0, "%")} ({_e(gp.get("n"))}런)'
-              if gp.get("accuracy") is not None else "GP 정확도는 캠페인 종료 후 계산")
+    gp_txt = (f'GP leave-one-out (LOO) boundary sign accuracy {_f(gp["accuracy"] * 100, 0, "%")} ({_e(gp.get("n"))} runs)'
+              if gp.get("accuracy") is not None else "GP accuracy is computed after the campaign ends")
     sides = " · ".join(f"{k} {v}" for k, v in m["sides"].items() if v)
     steps = (
-        f'<li><b>코드 분석</b>: Nemotron A는 제어 코드에서 파일·줄 근거와 함께 뽑아 둔 관찰 {_e(m["n_obs"] if m["n_obs"] is not None else "–")}개'
-        f'(사람 검토 전이라 단서로만 사용)와 사전 지식을 읽음. Nemotron B는 av_stack 소스 '
-        f'{_e(len(m["b_files"]) or "–")}개 파일({_e(", ".join(Path(f).name for f in m["b_files"]) or "–")})을 줄번호와 함께 읽고 '
-        f'후보 {_e(m["b_cands"])}개마다 질문 3개에 3번씩 답함.</li>'
-        f'<li><b>가설 수립</b>: A가 시나리오 {_e(m["n_props"])}개마다 차선 유지/실패/경계 예상과 이유를 붙임'
-        f'{f" ({_e(sides)})" if sides else ""}.</li>'
-        f'<li><b>통계 검증</b>: CARLA에서 고장 없는 기준 실행과 짝으로 돌리고 모니터가 규칙대로 채점. '
-        f'GP가 결과로 경계를 추정하고 다음 시나리오를 고름. {gp_txt}.</li>')
+        f'<li><b>Nemotron code analysis</b>: Nemotron A reads '
+        f'{_e(m["n_obs"] if m["n_obs"] is not None else "–")} code observations extracted with file and line evidence '
+        f'(not yet human-reviewed, used as hints only) plus prior knowledge. Nemotron B reads '
+        f'{_e(len(m["b_files"]) or "–")} av_stack source files ({_e(", ".join(Path(f).name for f in m["b_files"]) or "–")}) '
+        f'with line numbers and answers 3 questions 3 times for each of {_e(m["b_cands"])} candidates.</li>'
+        f'<li><b>Hypothesis</b>: A attaches a lane-kept / fail / boundary prediction and a reason to each of '
+        f'{_e(m["n_props"])} scenarios{f" ({_e(sides)})" if sides else ""}.</li>'
+        f'<li><b>Statistical verification</b>: each run is paired in CARLA with a fault-free baseline and graded by the '
+        f'monitor rules. The GP estimates the boundary from the results and picks the next scenarios. {gp_txt}.</li>')
     rows = ""
     for x in t:
         margin = "" if x["lrr"] is None else " (%+.2f)" % x["lrr"]
-        hit = "–" if x["hit"] is None else ("적중" if x["hit"] else "빗나감")
+        hit = "–" if x["hit"] is None else ("Hit" if x["hit"] else "Miss")
         rows += (f'<tr><td>{_e(x["run_id"])}</td><td>{_e(x["kind"])}</td><td>{_e(x["expected"])}</td>'
                  f'<td>{_e(x["actual"])}{margin}</td><td>{hit}</td></tr>')
-    table = (f'<table class="kv mtab"><tr><th>런</th><th>출처</th><th>예상</th><th>실제 (lrr)</th><th>판정</th></tr>{rows}</table>'
-             if rows else "<p>아직 없음</p>")
-    return (f'<details data-k="methsteps"><summary>자세히 보기 (단계별 · 예상별 결과)</summary><ol class="msteps">{steps}</ol>{table}'
-            '<p>적중은 전환이 일어난 런만 셈(전환이 없으면 LQR 대응을 시험하지 못함). 경계 예상은 |lrr| &lt; 0.2이면 적중. '
-            '"A 변형"은 A 시나리오를 GP가 조금 바꾼 것이라 원래 예상을 참고로만 비교.</p></details>')
+    table = (f'<table class="kv mtab"><tr><th>Run</th><th>Source</th><th>Expected</th><th>Actual (lrr)</th><th>Result</th></tr>{rows}</table>'
+             if rows else "<p>None yet</p>")
+    return (f'<details data-k="methsteps"><summary>Details (per step · per prediction)</summary><ol class="msteps">{steps}</ol>{table}'
+            '<p>Hits are counted only for runs with a switch (without one, the LQR response is not tested). A boundary '
+            'prediction is a hit when |lrr| &lt; 0.2. "A variant" is an A scenario slightly changed by the GP, so its '
+            'original prediction is compared for reference only.</p></details>')
 
 
 def render_method(out_dir: Path = Path(".")) -> str:
@@ -1043,15 +1033,15 @@ def render_method(out_dir: Path = Path(".")) -> str:
     m = load_method(out_dir)
     t = m["tests"]
     graded = [x for x in t if x["hit"] is not None]
-    key = (f"예상 적중 {sum(1 for x in graded if x['hit'])}/{len(graded)}" if graded else "채점된 예상 없음")
+    key = (f"Prediction hits {sum(1 for x in graded if x['hit'])}/{len(graded)}" if graded else "No graded predictions")
     n_untested = sum(1 for x in t if x["hit"] is None)
-    key += f" · 전환 없음 {n_untested}" if n_untested else ""
+    key += f" · no switch {n_untested}" if n_untested else ""
     return f'<div class="meth" id="meth"><p class="hkey">{_e(key)}</p>{render_method_details(m)}</div>'
 
 
 def load_hypotheses(out_dir: Path) -> dict:
     """What this campaign tests, from files run.py writes next to screen/ (nothing is made up):
-    question  : 02_objectives.json  <S>_objective.question_ko
+    question  : 02_objectives.json  <S>_objective.question_en (else QUESTION_EN[<S>], else question_ko as written)
     prior     : 00_prior_payload.json  domain_prior_knowledge.principles[kind == testable_hypothesis]
     status    : runs whose Nemotron A scenario cites that id (round_*/03_04_pool.json evidence_ids), scored like load_method."""
     camp = Path(out_dir).parent
@@ -1062,8 +1052,10 @@ def load_hypotheses(out_dir: Path) -> dict:
         except (OSError, json.JSONDecodeError):
             return default
     obj = rj(camp / "02_objectives.json", {}) or {}
-    questions = [(sid, str((obj.get(f"{sid}_objective") or {}).get("question_ko") or "").strip())
-                 for sid in obj.get("active") or []]
+    def _question(sid):
+        o = obj.get(f"{sid}_objective") or {}
+        return str(o.get("question_en") or QUESTION_EN.get(sid) or o.get("question_ko") or "").strip()
+    questions = [(sid, _question(sid)) for sid in obj.get("active") or []]
     questions = [q for q in questions if q[1]]
     prior = []
     pay = rj(camp / "00_prior_payload.json", {}) or {}
@@ -1088,7 +1080,7 @@ def load_hypotheses(out_dir: Path) -> dict:
 
 def _question_lines(text: str) -> list[str]:
     """Break a long research question at its clause joints for reading (wording unchanged)."""
-    parts = re.split(r"(?<=,)\s*(?=그리고 )|(?<=\)),\s*", text)
+    parts = re.split(r"(?<=,)\s*(?=(?:and|그리고) )|(?<=\)),\s*(?!\s*and )", text)
     return [p.strip() for p in parts if p.strip()] or [text]
 
 
@@ -1100,23 +1092,23 @@ def render_hypotheses(out_dir: Path = Path(".")) -> str:
     graded = [x for x in t if x["hit"] is not None]
     hits = sum(1 for x in graded if x["hit"])
     n_untested = sum(1 for x in t if x["hit"] is None)
-    q = "".join('<div class="q"><span class="lab">평가 질문</span> '
+    q = "".join('<div class="q"><span class="lab">Evaluation question</span> '
                 + "".join(f'<span class="ql">{_e(s)}</span> ' for s in _question_lines(text)) + '</div>'
                 for _, text in h["questions"][:1])
     rows = ""
     for p in h["prior"][:2]:
         if p["n"]:
-            res = (f'<span class="ck">시험 {p["n"]}</span> <span class="ck ok">적중 {p["hit"]}</span> '
-                   f'<span class="ck bad">빗나감 {p["miss"]}</span> <span class="ck">확인 불가 {p["na"]}</span>')
+            res = (f'<span class="ck">Tests {p["n"]}</span> <span class="ck ok">Hit {p["hit"]}</span> '
+                   f'<span class="ck bad">Miss {p["miss"]}</span> <span class="ck">Unverified {p["na"]}</span>')
         else:
-            res = '<span class="none">해당 가설을 겨냥한 시험 없음</span>'
+            res = '<span class="none">No test targeted this hypothesis yet</span>'
         rows += (f'<li><span class="pk">{_e(p["id"])}</span> <span class="ht">{_e(p["text"])}</span> '
                  f'<div class="hs">{res}</div></li>\n')
-    key = (f'Nemotron A 예측 적중 <b>{hits}/{len(graded)}</b>' if graded else "채점된 예측 없음")
+    key = (f'Nemotron A prediction hits <b>{hits}/{len(graded)}</b>' if graded else "No graded predictions")
     if n_untested:
-        key += f' <span class="mut">· 전환 없어 확인 불가 {n_untested}</span>'
-    body = q + (f'<ol class="hyp">{rows}</ol>' if rows else '<p class="mut">가설 파일 없음</p>')
-    return ('<section class="col hypo" id="hypo"><h2>가설 <span class="src">사전 지식 · 예측 Nemotron A</span></h2>'
+        key += f' <span class="mut">· unverified (no switch) {n_untested}</span>'
+    body = q + (f'<ol class="hyp">{rows}</ol>' if rows else '<p class="mut">No hypothesis file</p>')
+    return ('<section class="col hypo" id="hypo"><h2>Hypotheses <span class="src">Prior knowledge · predictions by Nemotron A</span></h2>'
             f'<div class="ibody">{body}<p class="hkey">{key}</p></div></section>')
 
 def render_flow(out_dir: Path = Path("."), n_runs: int = 0, planned: int | None = None) -> str:
@@ -1124,18 +1116,18 @@ def render_flow(out_dir: Path = Path("."), n_runs: int = 0, planned: int | None 
     m = load_method(out_dir)
     graded = [x for x in m["tests"] if x["hit"] is not None]
     gp = m["gp"]
-    stat = (f"GP 경계 정확도 {_f(gp['accuracy'] * 100, 0, '%')}" if gp.get("accuracy") is not None
-            else f"예측 적중 {sum(1 for x in graded if x['hit'])}/{len(graded)}" if graded else "채점 진행 중")
+    stat = (f"GP boundary accuracy {_f(gp['accuracy'] * 100, 0, '%')}" if gp.get("accuracy") is not None
+            else f"Prediction hits {sum(1 for x in graded if x['hit'])}/{len(graded)}" if graded else "Grading in progress")
     obs = m["n_obs"] if m["n_obs"] is not None else "–"
-    steps = [("코드 분석", "Nemotron이 감독기·제어기 코드를 읽고 근거 정리",
-              f"관찰 {obs}개 · 소스 {len(m['b_files']) or '–'}개 파일"),
-             ("가설 수립", "사전 지식 가설로 Nemotron A가 시나리오 결과 예측",
-              f"예측 붙은 시나리오 {m['n_props']}개"),
-             ("고장 시나리오 생성", "고장 7종 × 시점 × 도로·속도·노면, GP가 다음 후보 선택",
-              "조향 고장 주입 계획"),
-             ("CARLA 시뮬레이션", "고장 주행과 고장 없는 기준 주행을 같은 조건으로 실행",
-              f"실행 {n_runs}" + (f"/{planned}" if planned else "") + "건"),
-             ("통계 검증", "SR 모니터 채점, 예측 적중 확인, 경계 추정", stat)]
+    steps = [("Nemotron code analysis", "Reads supervisor and controller code, cites evidence",
+              f"{obs} observations · {len(m['b_files']) or '–'} source files"),
+             ("Hypothesis", "Nemotron A predicts outcomes from prior knowledge",
+              f"{m['n_props']} scenarios with predictions"),
+             ("Fault scenario generation", "7 faults × onset × conditions, GP picks next",
+              "Steering fault injection plan"),
+             ("CARLA simulation", "Fault run and fault-free baseline, same conditions",
+              f"{n_runs}" + (f"/{planned}" if planned else "") + " runs"),
+             ("Statistical verification", "SR monitor grading, prediction check, boundary", stat)]
     cells = '<i class="arr">→</i>'.join(
         f'<div class="step"><span class="sn">{k + 1}</span><div class="st"><b>{_e(a)}</b>'
         f'<span class="sd">{_e(d)}</span><span class="sc2">{_e(c)}</span></div></div>'
@@ -1146,11 +1138,11 @@ def render_counts(records: list[dict], commentary: dict) -> str:
     cnt = defaultdict(int)
     for r in records:
         cnt[_key(r)] += 1
-    counts = [("전체", len(records), ""), ("통과", cnt["pass"] + cnt["harmless"], "ok"),
-              ("제어기 전환 실패/늦음", cnt["F1_no_or_late_switch"], "bad"),
-              ("전환하는 순간 불안정", cnt["F2_switch_transient"], "bad"),
-              ("전환 후 불안정", cnt["F3_not_recovered"], "bad"),
-              ("시험 안 됨·무효", cnt["no_trigger"] + cnt["invalid"], "")]
+    counts = [("Total", len(records), ""), ("Pass", cnt["pass"] + cnt["harmless"], "ok"),
+              ("Controller handover failed/late", cnt["F1_no_or_late_switch"], "bad"),
+              ("Unstable at handover", cnt["F2_switch_transient"], "bad"),
+              ("Unstable after handover", cnt["F3_not_recovered"], "bad"),
+              ("Not tested · invalid", cnt["no_trigger"] + cnt["invalid"], "")]
     return '<div class="counts">' + "".join(
         f'<div><b class="num {c if v else ""}">{v}</b><span>{_e(t)}</span></div>' for t, v, c in counts) + "</div>"
 
@@ -1172,7 +1164,7 @@ def render_scorecards(records: list[dict], planned: int | None = None) -> str:
     cards = "".join(f'<div class="sc {cls}" title="{_e(sub)}"><b class="num">{cnt[k]}</b><span class="l">{_e(label)}</span></div>'
                     for k, (label, sub, cls) in BUCKET.items())
     pct = min(100.0, n / planned * 100) if planned else None
-    prog = (f'<div class="sc prog"><b class="num">{n}/{planned if planned else "?"}</b><span class="l">진행</span>'
+    prog = (f'<div class="sc prog"><b class="num">{n}/{planned if planned else "?"}</b><span class="l">Progress</span>'
             + (f'<div class="pbar"><i style="width:{pct:.0f}%"></i></div>' if pct is not None else "") + "</div>")
     return f'<div class="cards">{cards}{prog}</div>'
 
@@ -1187,31 +1179,31 @@ def render_page(records: list[dict], refresh=REFRESH_S, commentary: dict | None 
     active = bool(commentary)
     left = "".join(render_run_panel(r, hidden=(i != n - 1), lim=lim, out_dir=out_dir,
                                     commentary=commentary.get(r.get("run_id")), active=active)
-                   for i, r in enumerate(records)) or '<div class="empty">아직 끝난 시나리오가 없습니다.</div>'
+                   for i, r in enumerate(records)) or '<div class="empty">No finished scenarios yet.</div>'
     shown = list(enumerate(records))[-MAX_ROWS:]
     rows = "".join(render_run_card(r, i + 1, commentary.get(r.get("run_id"))) for i, r in reversed(shown))
-    more = f'<div class="more-runs">외 {n - len(shown)}개 (이전 시험)</div>' if n > len(shown) else ""
+    more = f'<div class="more-runs">+{n - len(shown)} more (earlier runs)</div>' if n > len(shown) else ""
     listing = (f'<div class="listbox{" dense" if len(shown) > 11 else ""}"><table class="list"><thead><tr>'
-               f'<th class="scentd">시나리오</th><th class="faulttd">고장</th><th class="swtd">전환 여부</th>'
-               f'<th class="safetd">운행 안전성</th><th class="cliptd">영상 해설</th>'
+               f'<th class="scentd">Scenario</th><th class="faulttd">Fault</th><th class="swtd">Handover</th>'
+               f'<th class="safetd">Driving Safety</th><th class="cliptd">Video Commentary</th>'
                f'</tr></thead><tbody>{rows}</tbody></table></div>{more}'
-               if rows else '<div class="empty">아직 기록이 없습니다.</div>')
+               if rows else '<div class="empty">No records yet.</div>')
     live = f'<span class="live">{_e(status)}</span>' if status else ""
-    body = f"""<header><div class="ttl"><h1>MPC → LQR 제어기 전환 안정성 평가</h1>
+    body = f"""<header><div class="ttl"><h1>MPC → LQR Handover Stability Evaluation</h1>
 </div>
-<div class="meta">{live}<span>{datetime.now().strftime("%H:%M:%S")} 갱신 · {refresh}초 자동 새로고침</span></div></header>
+<div class="meta">{live}<span>Updated {datetime.now().strftime("%H:%M:%S")} · auto-refresh every {refresh} s</span></div></header>
 {render_flow(out_dir, n, planned)}
 <div class="grid">
-<section class="col left" id="leftpanel"><h2><span id="lefttitle">최근 시나리오</span><button id="back" hidden>최신으로</button></h2><div class="lbody">{left}</div></section>
-<section class="col mid"><h2>지금까지 돌린 시나리오 ({n})</h2>{render_counts(records, commentary)}{listing}</section>
+<section class="col left" id="leftpanel"><h2><span id="lefttitle">Latest Scenario</span><button id="back" hidden>Back to latest</button></h2><div class="lbody">{left}</div></section>
+<section class="col mid"><h2>Scenarios Run ({n})</h2>{render_counts(records, commentary)}{listing}</section>
 <div class="stack">
 {render_hypotheses(out_dir)}
 {render_insights(insights, out_dir, records)}
 </div>
 </div>"""
-    return (f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
+    return (f'<!doctype html><html lang="en"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<noscript><meta http-equiv="refresh" content="{refresh}"></noscript><title>MPC → LQR 전환 안정성 평가</title><style>{CSS}</style></head>'
+            f'<noscript><meta http-equiv="refresh" content="{refresh}"></noscript><title>MPC → LQR Handover Stability Evaluation</title><style>{CSS}</style></head>'
             f'<body data-latest="{_e(latest)}" data-refresh="{refresh}">{body}{SCRIPT}</body></html>')
 
 
