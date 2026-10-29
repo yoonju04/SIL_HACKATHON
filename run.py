@@ -41,7 +41,8 @@ from engine.explainer import explain, stub_explanation, verify
 from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
 from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
-from engine.monitor import compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline, thresholds_from_config
+from engine.monitor import (attach_sr_checks, compute_run_record, evaluate as monitor_evaluate, load_av_stack_run,
+                            monitor_timeline, thresholds_from_config)
 from engine.surrogate import MetricGPs, acquisition_score, select_batch_scored
 from engine.dashboard import refresh as refresh_dashboard
 from engine.video import cover_times, extract_clip, ffmpeg_exe, key_times
@@ -58,18 +59,30 @@ ABLATIONS = {
 }
 
 
-SWITCH_METRIC = "switched_indicator"   # +1 switched / -1 no switch; S1 boundary only exists where a switch happens
+SWITCH_METRIC = "switched_indicator"   # 1 switched / 0 no switch (GP classifier: mean = P(switch))
+SR4_METRIC = "sr4_margin_score"        # SR monitor SR4 score: 1 kept, 0 at the lane edge, < 0 out (-2 collision); every run
+
+
+def gp_row_targets(r: dict) -> dict:
+    """GP training targets of one run_record: 02 metric_rules z (gp_targets), the SR4 lane-margin score and the switch label."""
+    tg = dict(r.get("gp_targets") or {})
+    s4 = (r.get("sr_scores") or {}).get("SR4")
+    if s4 is not None:
+        tg[SR4_METRIC] = float(s4)
+    tg[SWITCH_METRIC] = 1.0 if r.get("switch_time") is not None else 0.0
+    return tg
 
 
 def switch_aware_score(c: dict, obj: dict, beta: float, weight: float = 2.0) -> float | None:
-    """S1 straddle on recovery_success, penalised where the switch GP predicts no switch (no S1 target there)."""
+    """Objective acquisition. For a post-switch target (needs_switch, e.g. recovery_success) it is penalised where
+    the switch classifier predicts no switch, since there is no target there; the SR4 target exists for every run."""
     s = acquisition_score(c, obj, beta)
-    mu_sw = (c.get("gp_mean") or {}).get(SWITCH_METRIC)
-    if mu_sw is None:
+    p_sw = (c.get("gp_mean") or {}).get(SWITCH_METRIC)
+    if p_sw is None or not obj.get("needs_switch", True):
         return s
     if s is None:   # no recovery GP yet: prefer uncertain/likely-switch candidates
-        return min(0.0, mu_sw) * weight + (c.get("gp_std") or {}).get(SWITCH_METRIC, 0.0)
-    return s + weight * min(0.0, mu_sw)
+        return min(0.0, 2 * p_sw - 1) * weight + (c.get("gp_std") or {}).get(SWITCH_METRIC, 0.0)
+    return s + weight * min(0.0, 2 * p_sw - 1)
 
 
 def log(msg: str) -> None:
@@ -133,7 +146,7 @@ class CosmosGuard:
 class Loop:
     def __init__(self, *, mode: str, out: Path, ablation: str, video_on: bool, seed: int, cfg: dict | None = None,
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
-                 quiet: bool = False, no_reaction: bool | None = None):
+                 quiet: bool = False, no_reaction: bool | None = None, prior_runs: list[Path] | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -161,6 +174,12 @@ class Loop:
         self.obj_cfg = orch["objective_acquisition"]
         self.metric_rules = self.cfg["vulnerability_patterns"]["metric_rules"]
         self.gp_metrics = sorted({self.obj_cfg[o]["metric"] for o in self.objectives}) + [SWITCH_METRIC]
+        sg = (self.cfg.get("surrogate") or {}).get("surrogate") or {}
+        kb = sg.get("kernel_bounds") or {}
+        self.gp_kwargs = {"classify": tuple(sg.get("classify") or (SWITCH_METRIC,)),
+                          "min_train_points": int(sg.get("min_train_points", 4)),
+                          **({"length_scale_bounds": tuple(kb["length_scale"])} if kb.get("length_scale") else {}),
+                          **({"noise_bounds": tuple(kb["noise"])} if kb.get("noise") else {})}
         self.th = thresholds_from_config(self.cfg)
         nr = (self.cfg["paired_runs"]["runner"].get("no_reaction_run") or {})
         self.no_reaction_on = bool(nr.get("mock" if mode == "mock" else "real", False)) if no_reaction is None else no_reaction
@@ -176,11 +195,16 @@ class Loop:
         self.events_cache: dict[str, dict] = {}
         self.cf_queue: list[dict] = []
         self.stats: dict[str, Any] = {"a_calls": [], "rejected": [], "llm_errors": []}
+        # earlier campaigns (result/result_N): GP training rows only, never counted as runs of this campaign
+        self.prior: list[tuple[dict, dict]] = []
+        self.prior_dirs = [Path(d) for d in (prior_runs or [])]
         self.cosmos = CosmosGuard()       # main() swaps in the auto guard for --real --cosmos-power auto
         self.insights_next = False        # campaign insights follow the last round -> keep Cosmos on
         self.open_screen = False          # main(): --open-screen on -> open screen/campaign.html once at start
         self._setup_clients()
         self._setup_runner()
+        for d in self.prior_dirs:
+            self.load_prior(d)
 
     # ------------------------------------------------------------------ setup
     def say(self, msg: str) -> None:
@@ -363,7 +387,7 @@ class Loop:
                     ok, tags, _ = SC.gate(self.space, p, self.route_ids, self.route_events(p), lat, mw)
                     if ok:
                         p["tags"] = tags; expanded.append(p)
-        seen = set(self.candidates) | {r["scenario_id"] for r in self.records}
+        seen = set(self.candidates) | {r["scenario_id"] for r in self.records} | {c["scenario_id"] for c, _ in self.prior}
         uniq, ids = [], set()
         for c in expanded:
             if c["scenario_id"] in seen or c["scenario_id"] in ids:
@@ -404,21 +428,56 @@ class Loop:
             self.b_cache[k] = {"answers": NM.aggregate_b(samples, self.questions, sizes), "n_samples": len(samples), "context": ctx}
 
     # ------------------------------------------------------------------ 06 + 07
-    def fit_gp(self, round_index: int) -> MetricGPs | None:
-        if not self.flags["use_gp"]:
-            return None
-        rows = []
+    def load_prior(self, camp: Path) -> int:
+        """GP rows from an earlier campaign folder (run_records_regraded.jsonl if there, else run_records.jsonl).
+
+        Its baselines give the route events (DF features, and the BUG-028 onset check before any baseline of this
+        campaign exists) and its 05b answers fill the Nemotron B cache, so its runs get the same features as ours."""
+        camp = Path(camp)
+        f = camp / "run_records_regraded.jsonl"
+        f = f if f.is_file() else camp / "run_records.jsonl"
+        n = 0
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            p = r.get("parameters") or {}
+            if r.get("sim_status") != "ok" or not p.get("fault") or p.get("route_id") not in self.route_ids \
+                    or p["fault"].get("fault_id") not in self.fault_pool:
+                continue
+            c = {"scenario_id": r["scenario_id"], "source": "prior:" + camp.name, **p}
+            key = str(self.runner.baseline_dir(c))
+            bdir = camp / "runs" / "baselines" / Path(key).name
+            if key not in self.events_cache and (bdir / ".complete").is_file():
+                run = load_av_stack_run(bdir)
+                self.events_cache[key] = SC.detect_route_events(run.ticks, run.dt, **(self.cfg["paired_runs"].get("event_detection") or {}))
+            self.prior.append((c, r))
+            n += 1
+        for a in sorted(camp.glob("round_*/05b_answers.json")):
+            for k, v in json.loads(a.read_text(encoding="utf-8")).items():
+                self.b_cache.setdefault(k, v)
+        self.say(f"[prior] {camp}: {n} runs for GP training")
+        return n
+
+    def gp_rows(self) -> list[tuple[list[float], dict]]:
+        rows = [(self.features(c)[0], gp_row_targets(r)) for c, r in self.prior]
         for r in self.records:
             c = self.candidates.get(r["scenario_id"])
             if c is None or r.get("sim_status") != "ok":
                 continue
-            x, _ = self.features(c, train_round=r.get("round", 0) + 1)
-            tg = dict(r.get("gp_targets") or {})
-            tg[SWITCH_METRIC] = 1.0 if r.get("switch_time") is not None else -1.0
-            rows.append((x, tg))
-        gps = MetricGPs(self.gp_metrics, self.seed)
+            rows.append((self.features(c, train_round=r.get("round", 0) + 1)[0], gp_row_targets(r)))
+        return rows
+
+    def fit_gp(self, round_index: int) -> MetricGPs | None:
+        if not self.flags["use_gp"]:
+            return None
+        rows = self.gp_rows()
+        gps = MetricGPs(self.gp_metrics, self.seed, **self.gp_kwargs)
         counts = gps.fit(rows)
-        self.stats.setdefault("gp_train_counts", []).append({"round": round_index, **counts})
+        self.stats.setdefault("gp_train_counts", []).append({"round": round_index, "prior_rows": len(self.prior), **counts})
+        some = self.prior[0][0] if self.prior else next(iter(self.candidates.values()), None)
+        names = self.features(some)[1] if some is not None else None
+        self.stats.setdefault("gp_kernels", []).append({"round": round_index, **gps.diagnostics(names)})
         return gps
 
     def stage_07(self, pool: list[dict], gps: MetricGPs | None, round_index: int) -> list[dict]:
@@ -583,7 +642,7 @@ class Loop:
     def feature_schema(self) -> str:
         parts = ["num"] + (["df"] if self.flags["use_df"] else []) + (["b"] if self.flags["use_b"] else []) + \
                 (["mech"] if self.video_on else [])
-        return "1.1+" + "+".join(parts)
+        return "1.2+" + "+".join(parts)   # 1.2: per-fault parameter columns, no GP re-scaling
 
     # ------------------------------------------------------------------ 10 video explainer
     def stage_10(self, new: list[dict], round_index: int) -> None:
@@ -809,9 +868,9 @@ def boundary_accuracy(loop: Loop) -> dict | None:
         return None
     metric = loop.obj_cfg[loop.objectives[0]]["metric"]
     rows = [(loop.candidates[r["scenario_id"]], r) for r in loop.records
-            if r.get("sim_status") == "ok" and metric in (r.get("gp_targets") or {})]
+            if r.get("sim_status") == "ok" and metric in gp_row_targets(r)]
     if len(rows) < 6:
-        return {"n": len(rows), "accuracy": None, "note": "too few switched runs"}
+        return {"n": len(rows), "accuracy": None, "note": "too few runs with the objective target"}
     if loop.mode == "mock":
         gps = loop.fit_gp(loop.rounds + 1)
         if metric not in gps.models:
@@ -829,8 +888,10 @@ def boundary_accuracy(loop: Loop) -> dict | None:
             d = write_run_folder(tmp / f"t{i}", route=c["route_id"], max_speed_kmh=c["environment"]["max_speed_kmh"],
                                  fault=SC.fault_dict_for_sim(loop.space, c, onset), seed=loop.runner.seed,
                                  stop_after_fault_s=loop.runner.stop_after_fault_s, record_front=False)
-            rec = compute_run_record(load_av_stack_run(d), load_av_stack_run(base), candidate=c, metric_rules=loop.metric_rules, th=loop.th)
-            y = (rec.get("gp_targets") or {}).get(metric)
+            run_d, run_b = load_av_stack_run(d), load_av_stack_run(base)
+            rec = compute_run_record(run_d, run_b, candidate=c, metric_rules=loop.metric_rules, th=loop.th)
+            attach_sr_checks(rec, run_d, run_b, None, loop.cfg["safety_spec"])
+            y = gp_row_targets(rec).get(metric) if rec.get("sim_status") == "ok" else None
             if y is None:
                 continue
             mu = gps.predict([loop.features(c)[0]])[0][0].get(metric)
@@ -840,12 +901,12 @@ def boundary_accuracy(loop: Loop) -> dict | None:
     ok = 0
     for i in range(len(rows)):
         train = rows[:i] + rows[i + 1:]
-        g = MetricGPs([metric], loop.seed)
-        g.fit([(loop.features(c)[0], r["gp_targets"]) for c, r in train])
+        g = MetricGPs([metric], loop.seed, **loop.gp_kwargs)
+        g.fit([(loop.features(c)[0], gp_row_targets(r)) for c, r in train + loop.prior])
         if metric not in g.models:
             return None
         mu = g.predict([loop.features(rows[i][0])[0]])[0][0][metric]
-        ok += int((mu >= 0) == (rows[i][1]["gp_targets"][metric] >= 0))
+        ok += int((mu >= 0) == (gp_row_targets(rows[i][1])[metric] >= 0))
     return {"n": len(rows), "accuracy": ok / len(rows), "truth": "leave-one-out on observed runs"}
 
 
@@ -995,6 +1056,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="SR1 FTTI runs (same fault, --controller mpc_unprotected); default 08 paired_runs.yaml no_reaction_run")
     ap.add_argument("--conditions", nargs="*")
     ap.add_argument("--repeats", type=int)
+    ap.add_argument("--prior-runs", nargs="*", type=Path, default=[],
+                    help="earlier campaign folders (e.g. result/result_2 ...): their runs are added to the GP training data")
     args = ap.parse_args(argv)
     if args.check and not args.real:
         from engine.config_check import cmd_check
@@ -1017,7 +1080,8 @@ def main(argv: list[str] | None = None) -> int:
             ap.error("NEBIUS_API_KEY is not set")
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
-                no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on")
+                no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
+                prior_runs=args.prior_runs)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":

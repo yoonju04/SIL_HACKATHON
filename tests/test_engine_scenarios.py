@@ -44,6 +44,21 @@ def test_gate_rejects_onset_too_close_to_route_end(space):
     assert SC.gate(space, c, ROUTES, ev, 3.0)[0]                      # no minimum given: old behaviour
 
 
+def test_each_fault_parameter_has_its_own_feature_column(space):
+    # integration4: drift rate, saturate duration and bias size used to share param_u0, and two drift runs with
+    # different rates got the same GP prediction
+    base = SC.space_filling(space, ROUTES, POOL, 1, random.Random(3))[0]
+    drift = lambda r: dict(base, fault={"fault_id": "F-05", "mode": "drift", "params": {"rate_rad_s": r}})
+    (xa, names), (xb, _) = SC.numeric_features(drift(0.035), space, ROUTES, POOL), SC.numeric_features(drift(0.044), space, ROUTES, POOL)
+    assert "param_u0" not in names and "F-05.rate_rad_s" in names
+    diff = [n for n, a, b in zip(names, xa, xb) if a != b]
+    assert diff == ["F-05.rate_rad_s"]
+    sat = dict(base, fault={"fault_id": "F-06", "mode": "saturate", "params": {"duration_s": 0.5, "side": "positive"}})
+    xs, _ = SC.numeric_features(sat, space, ROUTES, POOL)
+    assert xs[names.index("F-05.rate_rad_s")] == 0.0 and 0.0 < xs[names.index("F-06.duration_s")] < 1.0
+    assert all(0.0 <= v <= 1.0 for v in xa + xs)
+
+
 def test_cli_mapping(space):
     c = SC.make_candidate(space, route_id="town10_long", speed=30, fault_id="F-04", params={"magnitude_rad": 0.05, "duration_s": 2.0},
                           onset_event="straight", offset=0.5, source="t")
