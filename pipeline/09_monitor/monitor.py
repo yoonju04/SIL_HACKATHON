@@ -478,7 +478,9 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
         whole_rate = np.abs(np.diff(np.asarray(fault.steer_cmd_rad, float))) / np.diff(t)
         rate = float(np.degrees(np.max(whole_rate[w[1:]]))) if np.any(w[1:]) else 0.0
         rob = min(1 - peak / max_steer, 1 - rate / cfg.sr6_max_rate_dps)
-        sr["SR6"] = {"applies": True, "pass": rob >= -1e-9, "robustness": rob,
+        # BUG-026: a command held exactly at the limiter's bound reads 90.00002 deg/s after the rad<->deg round trip;
+        # 1e-6 relative is far below anything physical and keeps that from counting as a violation
+        sr["SR6"] = {"applies": True, "pass": rob >= -1e-6, "robustness": rob,
                      "max_steer_deg": math.degrees(peak), "max_rate_dps": rate,
                      "limit_rate_dps": cfg.sr6_max_rate_dps, "limit_steer_deg": math.degrees(max_steer),
                      "enforced": cfg.sr6_enforce}
