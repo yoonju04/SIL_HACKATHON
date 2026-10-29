@@ -82,7 +82,10 @@ def test_b_key_bins_only_declared_params(bank):
     assert NM.param_bin_suffix(bank, {"duration_s": 0.9}) == "|duration_s#1"
     assert NM.param_bin_suffix(bank, {"duration_s": 0.9, "ramp_s": 0.0}) == "|duration_s#1|ramp_s#0"
     assert NM.param_bin_suffix(bank, {"duration_s": 0.9, "ramp_s": 0.1}) == "|duration_s#1|ramp_s#1"
-    assert NM.param_bin_suffix(bank, {"magnitude_rad": 0.05}) == ""
+    # laya-judge: bias magnitude is binned at the tight supervisor's 90 deg/s rate check (4.5 deg = 0.0785 rad per tick)
+    assert NM.param_bin_suffix(bank, {"magnitude_rad": 0.05}) == "|magnitude_rad#0"
+    assert NM.param_bin_suffix(bank, {"magnitude_rad": 0.09}) == "|magnitude_rad#1"
+    assert NM.param_bin_suffix(bank, {"on_s": 0.3, "rate_rad_s": 0.04}) == ""
 
 
 def test_hallucination_check(bank):

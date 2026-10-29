@@ -55,10 +55,21 @@ flowchart LR
 ## 3. 시스템 구조
 
 <p align="center">
-  <img src="docs/images/system_pipeline.png" alt="시스템 구조: Safety profile → Hypotheses → Nemotron A → 타당성 검사 + 후보 확장 → 결정론적 feature / Nemotron B → GP surrogate → Orchestrator 선택 → CARLA 짝 실행 → Monitor → Error table" width="640">
+  <img src="docs/images/system_pipeline.png" alt="시스템 구조: Safety profile → Hypotheses → Nemotron A → 타당성 검사 + 후보 확장 → 결정론적 feature / Laya ×25 판정 + 회귀 → GP surrogate (safety_margin) → Orchestrator 선택 (level-set) → CARLA 짝 실행 → Monitor → Error table → Cosmos 영상 해설" width="640">
 </p>
 
-단계별 설정 파일은 [pipeline/README.md](pipeline/README.md)에 정리되어 있습니다.
+단계별 설정 파일은 [pipeline/README.md](pipeline/README.md)에 정리되어 있습니다. 그림은 `python docs/images/draw_pipeline.py` 로 다시 그립니다.
+
+**05b 코드 판정자 (laya-judge):** Nemotron B(글 생성 + 인용) 대신 System One 형 판정 모델에 판정 25개를 한 요청으로
+병렬로 묻고(질문 J1~J9 × 표현·언어·보기 순서·관점 변형), 질문별 로지스틱 회귀가 그 확률을 하나의 확률로 모읍니다
+(Quantitative LLM Judges 방식). 판정자에게는 **숫자로 계산되는 질문을 묻지 않습니다**: 코드를 읽어야 아는 질문
+(J1 감지 경로, J3 간헐 고장의 유지 조건 회피, J4 전환 전 조향, J7 LQR 인계 연속성, J8 고장이 LQR 경로에 닿는지,
+J9 재전환)은 코드 정답 키를, 결과 질문(J2 감지 지연 구간, J5 감지 전 차선 이탈 위험, J6 LQR 첫 명령 속도 제한)은
+끝난 실행의 결과를 회귀 라벨로 씁니다 (state 에는 결과가 들어가지 않음). 파라미터로 계산되는 값(첫 틱 조향 점프 / 90 °/s,
+켜짐 시간 / 유지 시간, 감지 전 오프셋 / LQR 한 틱)은 결정론 feature DF-07~09 로 GP 에 바로 들어갑니다.
+기본 백엔드는 오픈소스 **Laya**(로컬 `laya-serve`, 키 없음), 같은 `/v1/systemone` 프로토콜로 호스팅 **Jev**
+(`TYPESAFE_API_KEY`), Token Factory **Nemotron** 을 System One 판정자로 쓰는 에뮬레이션도 있습니다
+(`--judge-b laya|jev|nemotron`, 예전 생성형 Nemotron B 는 `nemotron_b`). 자세한 내용과 result_8 오프라인 검증: [docs/JUDGES.md](docs/JUDGES.md).
 
 | 구성요소 | 역할 | 경계 |
 |---|---|---|
@@ -182,6 +193,8 @@ SIL_HACKATHON/
 ├── README.md
 ├── docs/
 │   ├── ARCHITECTURE.md            # 모듈 · 데이터 흐름 · 인터페이스
+│   ├── JUDGES.md                  # 05b 판정자 J1~J9 ×25 + 회귀, DF-07~09, result_8 평가 (KO + EN)
+│   ├── images/                    # system_pipeline.png + draw_pipeline.py (그림 생성 스크립트)
 │   ├── RESEARCH.md                # 가설 · 지표 · 베이스라인 · 한계
 │   ├── ROADMAP.md                 # 구현 단계 체크리스트
 │   └── REFERENCES.md              # 공식 문서 · 출처
@@ -191,8 +204,9 @@ SIL_HACKATHON/
 │   ├── 02_hypotheses/             # 지표 정의 + search_objectives/ (S1~S4 탐색 목표, A 분석층, R 회귀). 옛 H-01~11은 superseded
 │   ├── 03_nemotron_a/             # Nemotron A: 시나리오 생성
 │   ├── 04_feasibility_expansion/  # 타당성 검사 G-01~04 + 후보 확장, scenario space
-│   ├── 05a_deterministic_features/# DF-01~05
-│   ├── 05b_nemotron_b/            # Nemotron B: 코드 질문
+│   ├── 05a_deterministic_features/# DF-01~09 (DF-07~09 = 고장 역학, 판정자 대신 계산)
+│   ├── 05b_judges/                # 05b 판정자: 질문 은행 J1~J9 (questions.yaml) + Laya / Jev / Nemotron ×25 + 회귀 (docs/JUDGES.md)
+│   ├── 05b_nemotron_b/            # 예전 Nemotron B 와 그 질문 은행 Q-B1~5 (--judge-b nemotron_b 비교용)
 │   ├── 06_gp_surrogate/           # 지표별 GP (정규화 z)
 │   ├── 07_orchestrator/           # LCB 선택 · 예산
 │   ├── 08_carla_paired_run/       # baseline vs fault 짝 실행
@@ -206,10 +220,12 @@ SIL_HACKATHON/
 │   ├── fault_catalog.py · fault_args.py · av_stack_probe.py  # av_stack 고장 목록 검증 · run_benchmark 인자 · CARLA 차선 probe
 │   ├── config.py · config_check.py# YAML·av_stack 경로 해석 · null 항목 점검 (python run.py --check)
 │   ├── surrogate.py · scenarios.py · nemotron.py · llm.py · carla_runner.py · video.py · explainer.py · feedback.py
+│   ├── judges.py                  # 05b 판정자: /v1/systemone 클라이언트 (Laya·Jev·Nemotron), 25 판정, state, 결과 라벨, 회귀, GP feature
 │   ├── fixtures/                  # mock 전용 합성 시뮬레이터 · scenario space (SYNTHETIC)
 │   ├── hypothesis_tools/          # 가설 생성기 · 후보 샘플러 (+ examples/)
 │   └── prior_tools/               # Nemotron prior payload · 횡가속도 스크리닝
-├── run.py                         # 한 번에 실행: python run.py --mock | --real | --check
+├── run.py                         # 한 번에 실행: python run.py --mock | --real | --check  (--judge-b laya|jev|nemotron|nemotron_b)
+├── tools/judges_offline_eval.py   # 끝난 캠페인의 실행마다 판정자 25개를 물어 질문별 정확도·회귀 CV·고장 모드 기준선을 잼
 ├── tests/                         # python -m pytest -q (unittest 테스트 포함)
 ├── requirements-pipeline.txt      # 루프용 패키지 (CARLA는 sim-eval .venv-tfpp)
 ├── configs/
@@ -299,7 +315,7 @@ flowchart LR
     A --> G["04 G-01~03 게이트 + 섭동"]
     SF["space filling"] --> G
     CF["counterfactual 큐"] --> G
-    G --> B["05b Nemotron B<br/>Ultra x3, 코드만 봄"]
+    G --> B["05b 판정자 ×25 (J1–J9) + 회귀<br/>/v1/systemone, 결과는 라벨로만<br/>(Laya 기본 · Jev · Nemotron)"]
     G --> D["05a DF"]
     B --> GP["06 GP (sklearn)<br/>Matern5/2 ARD"]
     D --> GP
@@ -317,7 +333,7 @@ flowchart LR
     MO -- "재학습" --> GP
 ```
 
-역할 분리: A 만 실패 사례를 본다 · B 는 코드만 본다 · 해설기는 영상과 맥락(고장·전환 시각)만 보고
+역할 분리: A 만 실패 사례를 본다 · B 판정자(Laya/Jev)는 코드 발췌와 시나리오 입력만 본다 (정답 키는 회귀 라벨로만) · 해설기는 영상과 맥락(고장·전환 시각)만 보고
 이탈·충돌·오프셋은 못 본다 · 판정은 09 monitor 만 한다. 해설이 판정을 바꾸지 않는다.
 
 ### 출력 (`outputs/<mode>_<시각>/`)

@@ -39,6 +39,7 @@ STAGE_FILES = {
     "feasibility_expansion": "04_feasibility_expansion/feasibility_expansion.yaml",
     "deterministic_features": "05a_deterministic_features/deterministic_features.yaml",
     "nemotron_b": "05b_nemotron_b/nemotron_b.yaml",
+    "judges": "05b_judges/judges.yaml",                # laya-judge: Laya / Jev x25 + regression (05b B judge)
     "surrogate": "06_gp_surrogate/surrogate.yaml",
     "orchestrator": "07_orchestrator/orchestrator.yaml",
     "paired_runs": "08_carla_paired_run/paired_runs.yaml",

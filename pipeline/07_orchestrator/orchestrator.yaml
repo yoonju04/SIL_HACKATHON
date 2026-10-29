@@ -7,6 +7,11 @@ meta:
   status: template_unverified
   updated: '2026-10-27 실행 엔진(run.py) 연결: objective_acquisition, fault_pool, candidate_pool 추가'
 
+# laya-judge: 05b B 판정자 = 질문 J1~J9 25 판정 병렬 + 회귀 (05b_judges/). laya = 오픈소스 Laya (기본, 로컬 laya-serve)
+#   | jev = 호스팅 TypeSafe Jev (같은 /v1/systemone 프로토콜, TYPESAFE_API_KEY) | nemotron = Token Factory Nemotron 을
+#   System One 판정자로 (NEBIUS_API_KEY) | nemotron_b = 예전 생성형 Nemotron B 와 Q-B 은행 (비교용)
+judge_b: laya                                   # run.py --judge-b 가 덮어씀
+
 cold_start:
   gp_enabled: false
   # integration3 #8c: 고정값 24(근거 없는 예시) 대신 규칙. null 이면 rule, 숫자면 그 값 (run.py --cold-start 가 둘 다 덮어씀).

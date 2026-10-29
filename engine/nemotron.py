@@ -500,7 +500,7 @@ def normalize_questions(questions: list[dict]) -> list[dict]:
             for k, v in e.items():
                 if k == "cases":
                     out[k] = [dict(c, expect=norm_exp(c.get("expect"))) for c in (v or [])]
-                elif k in ("by_fault_mode",):
+                elif k in ("by_fault_mode", "by_supervisor"):
                     out[k] = {m: norm_exp(x) for m, x in (v or {}).items()}
                 elif k == "default":
                     out[k] = norm_exp(v)
@@ -541,6 +541,9 @@ def param_bin_suffix(questions: list[dict], params: dict) -> str:
     return ("|" + "|".join(parts)) if parts else ""
 
 
+DEFAULT_SUPERVISOR = "tight"
+
+
 def _case_holds(when: dict, params: dict) -> bool:
     v = (params or {}).get(when.get("param"))
     if not isinstance(v, (int, float)) or isinstance(v, bool):
@@ -552,8 +555,12 @@ def _case_holds(when: dict, params: dict) -> bool:
 
 def expected_answers(q: dict, ctx: dict | None) -> list[str] | None:
     """Acceptable answers the code decides for this question in this scenario context, or None (not decided).
-    expected_from_code: 'x' | ['x', 'y'] | {by_fault_mode: {mode: spec}} with spec 'x' | [..] | {cases, default}."""
+    expected_from_code: 'x' | ['x', 'y'] | {by_fault_mode: {mode: spec}} with spec 'x' | [..] | {cases, default},
+    optionally wrapped in {by_supervisor: {tight: .., legacy: ..}} (laya-judge: the answer key depends on the
+    supervisor profile; ctx['supervisor'], default 'tight' = run_benchmark.py's default)."""
     e = q.get("expected_from_code")
+    if isinstance(e, dict) and "by_supervisor" in e:
+        e = e["by_supervisor"].get(str((ctx or {}).get("supervisor") or DEFAULT_SUPERVISOR))
     if isinstance(e, dict) and "by_fault_mode" in e:
         e = e["by_fault_mode"].get((ctx or {}).get("fault_mode"))
     if isinstance(e, dict):

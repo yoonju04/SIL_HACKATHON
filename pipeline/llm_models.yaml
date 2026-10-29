@@ -33,6 +33,8 @@ roles:
     top_p: 0.95
     max_tokens: 16000
     response_format: json_schema
+  # laya-judge: 05b 기본 판정자는 Laya / Jev x25 + 회귀 (05b_judges/judges.yaml, Token Factory 아님).
+  # 아래 B 는 --judge-b nemotron (System One 판정자 에뮬레이션) 또는 nemotron_b (예전 생성형 B, 비교용) 일 때만 쓴다.
   B:                                    # 05b 코드 질문 (결과 비참조)
     model: nvidia/Nemotron-3-Ultra-550b-a55b
     model_env_override: NEMOTRON_B_MODEL_ID

@@ -33,6 +33,9 @@ import yaml
 
 from engine import judgment as J
 from engine import nemotron as NM
+from engine import judges as JDG
+
+JUDGE_NAME = {"laya": "Laya", "jev": "Jev", "nemotron": "Nemotron (System One)", "nemotron_b": "Nemotron B"}
 from engine import scenarios as SC
 from engine.carla_runner import CarlaRunner, MockRunner, carla_reachable
 from engine.config import (REPO_ROOT, load_stage_configs, load_yaml, resolve_av_stack,
@@ -163,7 +166,7 @@ class Loop:
     def __init__(self, *, mode: str, out: Path, ablation: str, video_on: bool, seed: int, cfg: dict | None = None,
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
                  quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None,
-                 supervisor: str | None = None, gp_target: str | None = None):
+                 supervisor: str | None = None, gp_target: str | None = None, judge_b: str | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -211,14 +214,24 @@ class Loop:
         self.no_reaction_on = bool(nr.get("mock" if mode == "mock" else "real", False)) if no_reaction is None else no_reaction
         self.vcfg = self.cfg["video_explainer"]
         self.taxonomy = self.vcfg["mechanism_taxonomy"]
+        # laya-judge: 05b B judge = laya (open-source Laya, default) | jev (hosted TypeSafe Jev, same protocol) | nemotron
+        # (Token Factory Nemotron as a System One judge): 25 typed judges over J1..J9 (05b_judges/questions.yaml) +
+        # regression. nemotron_b = the earlier generative Nemotron B over its own Q-B1..5 bank (comparison only).
+        self.judge_b = str(judge_b or self.cfg["orchestrator"].get("judge_b") or "laya")
+        if self.judge_b not in (*JDG.BACKENDS, "nemotron_b"):
+            raise SystemExit(f"--judge-b must be laya, jev, nemotron or nemotron_b, not {self.judge_b!r}")
         # integration3 #6: yes/no as strings, scope (per_scenario | static) and gp_feature defaults
-        self.questions = NM.normalize_questions(self.cfg["nemotron_b"]["B_question_answering"]["question_bank"])
+        self.questions = (JDG.load_bank() if self.judge_b in JDG.BACKENDS else
+                          NM.normalize_questions(self.cfg["nemotron_b"]["B_question_answering"]["question_bank"]))
         self.av_stack = resolve_av_stack()
         self.records: list[dict] = []
         self.candidates: dict[str, dict] = {}
         self.features_of: dict[str, list[float]] = {}
         self.explanations: dict[str, dict] = {}
         self.b_cache: dict[str, dict] = {}
+        self.jev_raw: dict[str, dict] = {}
+        self.jev_reg = None
+        self.jev_drop: set[str] = set()
         self.events_cache: dict[str, dict] = {}
         self.cf_queue: list[dict] = []
         self.stats: dict[str, Any] = {"a_calls": [], "rejected": [], "llm_errors": []}
@@ -271,6 +284,11 @@ class Loop:
         self.a_settings = role_settings(llm_cfg, "A")
         self.a_refine = role_settings(llm_cfg, "A_refine")
         self.b_settings = role_settings(llm_cfg, "B")
+        if self.judge_b in JDG.BACKENDS:
+            jc = self.cfg["judges"]
+            self.jev_questions, self.jev_meta = JDG.judge_questions(self.questions, jc, JDG.state_views(jc, self.judge_b))
+            self.jev_client, self.jev_backend = JDG.make_client(self.judge_b, jc, self.mode, self.questions, self.jev_meta,
+                                                                seed=self.seed, log_path=self.llm_log, llm_cfg=llm_cfg)
 
     def _setup_runner(self) -> None:
         rc = self.runner_cfg
@@ -507,8 +525,20 @@ class Loop:
                 v = df.get(k)
                 names += [k, f"{k}_missing"]
                 x += [0.0 if v is None else float(v) / scale_by, 1.0 if v is None else 0.0]
+            fm = self.cfg["deterministic_features"].get("fault_mechanics_features") or {}
+            if fm.get("enabled", False):
+                # laya-judge v2: computable fault mechanics (first-tick jump vs the 90 deg/s rate check, on-time vs hold,
+                # applied offset vs the LQR takeover step) as DFs instead of judge questions
+                fd = J.fault_dfs(c["fault"], self.supervisor, {"saturate_max_steer_rad": fm.get("saturate_max_steer_rad", 1.2217)})
+                for k in ("DF-07", "DF-08", "DF-09"):
+                    v = fd.get(k)
+                    names += [k, f"{k}_missing"]
+                    x += [0.0 if v is None else min(5.0, float(v) / float((fm.get("scale") or {}).get(k, 1.0))),
+                          1.0 if v is None else 0.0]
         if self.flags["use_b"]:
-            bx, bn = NM.b_features((self.b_cache.get(self.b_key(c)) or {}).get("answers"), self.questions)
+            ans = (self.b_cache.get(self.b_key(c)) or {}).get("answers")
+            bx, bn = JDG.jev_features(ans, self.questions, self.jev_drop) if self.judge_b in JDG.BACKENDS else \
+                NM.b_features(ans, self.questions)
             x += bx; names += bn
         if self.video_on and self.vcfg["feedback"]["gp_categorical_features"]["enabled"]:
             ex = self.explanations if train_round is None else {k: e for k, e in self.explanations.items() if e["round"] < train_round}
@@ -518,7 +548,15 @@ class Loop:
 
     def b_key(self, c: dict) -> str:
         # integration3 #6/#8: + bins of the fault parameters a question depends on (Q-B4: saturate duration_s <= 0.15 s, ramp_s 0)
-        return f"{c['fault']['mode']}|{c['onset_event']}" + NM.param_bin_suffix(self.questions, c["fault"].get("params") or {})
+        k = f"{c['fault']['mode']}|{c['onset_event']}" + NM.param_bin_suffix(self.questions, c["fault"].get("params") or {})
+        if self.judge_b in JDG.BACKENDS:
+            # laya-judge v2: outcome questions (J2 J5 J6) depend on speed and road -> speed bin + route in the cache key
+            kc = (self.cfg["judges"].get("key") or {})
+            v = float((c.get("environment") or {}).get("max_speed_kmh") or 0.0)
+            k += f"|v#{sum(v > e for e in kc.get('speed_bins_kmh') or [])}"
+            if kc.get("include_route", True):
+                k += f"|{c.get('route_id')}"
+        return k
 
     # ------------------------------------------------------------------ 03 Nemotron A
     def stage_03(self, n: int, round_index: int, near: list[dict] | None = None,
@@ -602,6 +640,8 @@ class Loop:
     def stage_05b(self, cands: list[dict]) -> None:
         if not self.flags["use_b"]:
             return
+        if self.judge_b in JDG.BACKENDS:
+            return self.stage_05b_judges(cands)
         b_cfg = self.cfg["nemotron_b"]
         files = b_cfg["code_context"]["files"]
         code, sizes = NM.code_context(self.av_stack, files) if self.av_stack else ("", {})
@@ -614,7 +654,7 @@ class Loop:
         if static_q and B_STATIC_KEY not in self.b_cache:
             # static: one fixed code fact per campaign (Q-B2 latch, Q-B3 takeover), not per scenario
             jobs.append((B_STATIC_KEY, static_q, {"scope": "static (whole supervisor, any fault)", "planner": "pdm",
-                                                  "controller": "supervised"}))
+                                                  "controller": "supervised", "supervisor": self.supervisor}))
         seen = set()
         for c in cands:
             k = self.b_key(c)
@@ -622,7 +662,8 @@ class Loop:
                 continue
             seen.add(k)
             jobs.append((k, per_q, {"fault_mode": c["fault"]["mode"], "fault_params": c["fault"]["params"],
-                                    "onset_event": c["onset_event"], "planner": "pdm", "controller": "supervised"}))
+                                    "onset_event": c["onset_event"], "planner": "pdm", "controller": "supervised",
+                                    "supervisor": self.supervisor}))
         for k, qs, ctx in jobs:
             schema = NM.b_schema(qs, list(sizes))
             samples = []
@@ -641,6 +682,68 @@ class Loop:
             self.b_cache[k] = {"answers": NM.aggregate_b(samples, qs, sizes, ctx=ctx, regions=regions),
                                "n_samples": len(samples), "context": ctx}
         self.stats["nemotron_b"] = NM.b_hallucination_summary([e.get("answers") for e in self.b_cache.values()])
+        self.stats["b_hallucination_rate"] = self.stats["nemotron_b"]["b_hallucination_rate"]
+
+    def judge_ctx(self, c: dict) -> dict:
+        """Judge state inputs for a candidate: fault, onset, speed / road / friction, supervisor profile. Never outcomes."""
+        env = c.get("environment") or {}
+        return {"fault_mode": c["fault"]["mode"], "fault_params": c["fault"]["params"], "onset_event": c["onset_event"],
+                "onset_offset_s": c.get("onset_offset_s"), "route_id": c.get("route_id"),
+                "max_speed_kmh": env.get("max_speed_kmh"), "tire_friction_scale": env.get("tire_friction_scale", 1.0),
+                "planner": "pdm", "controller": "supervised", "supervisor": self.supervisor}
+
+    def judge_labels(self, k: str, ctx: dict) -> dict[str, list[str] | None]:
+        """Regression labels for one judge-cache key: code questions from the answer key, outcome questions from the
+        finished runs whose candidate maps to this key (majority label; ties -> the first seen)."""
+        recs = [r for r in self.records if r.get("scenario_id") in self.candidates
+                and self.b_key(self.candidates[r["scenario_id"]]) == k]
+        out = JDG.labels_for(self.questions, ctx, None)
+        for q in self.questions:
+            if q.get("label_source") == "outcome" and JDG.applies(q, ctx.get("fault_mode")):
+                labs = [JDG.outcome_label(q, r) for r in recs]
+                labs = [x for x in labs if x]
+                out[q["id"]] = [max(dict.fromkeys(labs), key=labs.count)] if labs else None
+        return out
+
+    def stage_05b_judges(self, cands: list[dict]) -> None:
+        """laya-judge: one /v1/systemone request (Laya, Jev or Nemotron-as-System-One) per new judge key with the 25
+        judges over J1..J9 (pipeline/05b_judges/), then the per-question regression is refit on every cached state with
+        code-key labels (J1 J3 J4 J7) and finished-run labels (J2 J5 J6), and every cached answer is re-aggregated.
+        J8 / J9 are single-answer code facts: reported, not regressed."""
+        from engine.fixtures.synthetic_sim import SUPERVISOR_PROFILES
+        jc = self.cfg["judges"]
+        prof = SUPERVISOR_PROFILES.get(self.supervisor)
+        for c in cands:
+            k = self.b_key(c)
+            if k in self.jev_raw:
+                continue
+            ctx = self.judge_ctx(c)
+            state = JDG.make_state(jc, self.judge_b, self.av_stack, ctx, prof)
+            qs_req = JDG.questions_for(self.jev_questions, self.jev_meta, self.questions, ctx["fault_mode"])
+            try:
+                resp = self.jev_client.system_one(state, qs_req, tag=f"B_judge:{k}")
+            except JDG.JevError as e:
+                self.stats["llm_errors"].append({"role": "B_judge", "key": k, "error": str(e)[:200]})
+                continue
+            self.jev_raw[k] = {"parsed": JDG.parse_answers(resp, self.jev_meta), "context": ctx,
+                               "model": resp.get("model"), "usage": resp.get("usage")}
+        qs = {q["id"]: q for q in self.questions}
+        variants_of = {qid: list(v) for qid, v in jc["judges"].items()}
+        options_of = {qid: [str(o) for o in qs[qid]["answer"]] for qid in variants_of}
+        report_only = {qid for qid in variants_of if qs[qid].get("regress") is False}
+        sources = {qid: qs[qid].get("label_source", "code") for qid in variants_of}
+        keys = {k: self.judge_labels(k, e["context"]) for k, e in self.jev_raw.items()}
+        self.jev_reg = JDG.JudgeRegression(jc.get("regression") or {}, variants_of, options_of, seed=self.seed,
+                                           report_only=report_only).fit(
+            [(e["parsed"], keys[k]) for k, e in self.jev_raw.items()])
+        low = float((jc.get("regression") or {}).get("low_confidence", 0.5))
+        for k, e in self.jev_raw.items():
+            self.b_cache[k] = {"judge": self.judge_b, "model": e["model"], "context": e["context"],
+                               "answers": JDG.aggregate(e["parsed"], self.jev_reg, keys[k], low, sources)}
+        g = jc.get("gp_features") or {}
+        self.jev_drop = JDG.constant_columns(list(self.b_cache.values()), self.questions, float(g.get("constant_tol", 1e-6))) \
+            if g.get("drop_constant", True) else set()
+        self.stats["nemotron_b"] = JDG.summary(list(self.b_cache.values()), self.jev_reg)
         self.stats["b_hallucination_rate"] = self.stats["nemotron_b"]["b_hallucination_rate"]
 
     # ------------------------------------------------------------------ 06 + 07
@@ -1081,6 +1184,11 @@ class Loop:
         dump(self.out / "run_config.json", {"mode": self.mode, "ablation": self.ablation, "flags": self.flags,
                                             "video_explainer": self.video_on, "seed": self.seed, "cold_start": self.cold,
                                             "supervisor": self.supervisor, "gp_target": self.gp_target_choice,
+                                            "judge_b": self.judge_b,
+                                            "judges": ({"backend": self.judge_b, "model": self.jev_client.model,
+                                                        "client": self.jev_backend,
+                                                        "judges_per_state": len(self.jev_questions)}
+                                                       if self.judge_b in JDG.BACKENDS else None),
                                             "batch_size": self.batch, "rounds": self.rounds, "synthetic": self.mode == "mock",
                                             "scenario_space": str(self.space_path), "av_stack": str(self.av_stack)})
         self.screen("시작: 사전 지식 정리 중")
@@ -1152,7 +1260,8 @@ class Loop:
                                                                     "onset_event", "onset_offset_s", "tags", "evidence_ids",
                                                                     "expected_mechanism", "expected_side", "range_extremes",
                                                                     "extreme_justification")} for c in pool])
-            self.screen(f"라운드 {rnd}: Nemotron B가 후보 {len(pool)}개 검토 중")
+            self.screen(f"라운드 {rnd}: " + (f"{JUDGE_NAME.get(self.judge_b)} 판정자 {len(getattr(self, 'jev_questions', {}))}개 + 회귀가"
+                                              if self.judge_b in JDG.BACKENDS else "Nemotron B가") + f" 후보 {len(pool)}개 검토 중")
             self.stage_05b(pool)
             dump(rdir / "05b_answers.json", self.b_cache)
             if rnd == 0:
@@ -1248,6 +1357,8 @@ def nemotron_b_metrics(loop: Loop) -> dict:
     columns actually vary over the GP training runs (a column constant over all runs carries no information)."""
     if not loop.flags["use_b"]:
         return {"enabled": False}
+    if loop.judge_b in JDG.BACKENDS:
+        return jev_metrics(loop)
     out = NM.b_hallucination_summary([e.get("answers") for e in loop.b_cache.values()])
     out["per_question"] = {q: {k: d[k] for k in ("asked", "checked", "hallucinated", "distinct_answers", "answers")}
                            for q, d in out["per_question"].items()}
@@ -1266,6 +1377,31 @@ def nemotron_b_metrics(loop: Loop) -> dict:
         out["gp_b_constant_fraction"] = len(const) / len(cols) if cols else None
         out["gp_b_questions"] = sorted({n.split("=")[0] for n in cols})
     out["b_keys"] = sum(1 for k in loop.b_cache if k != B_STATIC_KEY)
+    return out
+
+
+def jev_metrics(loop: Loop) -> dict:
+    """laya-judge: agreement of the regressed Laya / Jev answers with the (profile-aware) answer key, out-of-fold calibration
+    per question, low-confidence share, and how many GP columns the Jev probabilities give (constant ones dropped)."""
+    out = JDG.summary(list(loop.b_cache.values()), loop.jev_reg)
+    out["backend"] = loop.jev_backend
+    out["judges_per_state"] = len(loop.jev_questions)
+    out["requests"] = len(loop.jev_raw)
+    out["input_tokens"] = sum(int((e.get("usage") or {}).get("input_tokens") or 0) for e in loop.jev_raw.values())
+    out["cost_usd"] = round(out["input_tokens"] / 1e6 * float(loop.cfg["judges"]["backends"][loop.judge_b].get("price_per_mtok_usd", 0.0)), 6)
+    cols, rows = None, []
+    for r in loop.records:
+        c = loop.candidates.get(r.get("scenario_id"))
+        if r.get("sim_status") != "ok" or c is None:
+            continue
+        bx, bn = JDG.jev_features((loop.b_cache.get(loop.b_key(c)) or {}).get("answers"), loop.questions, loop.jev_drop)
+        cols = bn; rows.append(bx)
+    out["gp_b_columns"] = len(cols or [])
+    out["gp_b_dropped_constant_columns"] = sorted(loop.jev_drop)
+    if rows and cols:
+        out["gp_b_constant_over_runs"] = sum(1 for j in range(len(cols)) if len({row[j] for row in rows}) <= 1)
+        out["gp_b_questions"] = sorted({n.split("=")[0] for n in cols})
+    out["b_keys"] = len(loop.jev_raw)
     return out
 
 
@@ -1436,6 +1572,17 @@ def _sign_detail(pairs: list[tuple[bool, bool]]) -> dict:
             "predicted_safe_fraction": sum(p for p, _ in pairs) / len(pairs)}
 
 
+def _b_judge_line(b: dict, loop: Loop) -> str:
+    """laya-judge: one report line for the 05b B judge (Laya / Jev x25 + regression, or Nemotron B)."""
+    if b.get("enabled") is False:
+        return "- 05b 판정자: 꺼짐 (이 ablation은 B를 쓰지 않음)"
+    if getattr(loop, "judge_b", "nemotron") in JDG.BACKENDS:
+        return (f"- 05b 판정자: {JUDGE_NAME.get(loop.judge_b)} ×{b.get('judges_per_state')} + 질문별 회귀 ({b.get('backend')}); 요청 {b.get('requests')}회, "
+                f"입력 {b.get('input_tokens')} tok, ${b.get('cost_usd')}; 코드 일치 {b.get('agreement_with_code')}, "
+                f"저신뢰 {b.get('low_confidence_rate')}, 확신 오답 {b.get('b_hallucination_rate')}; GP B열 {b.get('gp_b_columns')}개")
+    return f"- 05b 판정자: Nemotron B; B 환각률 {b.get('b_hallucination_rate')}"
+
+
 def write_report(out: Path, m: dict, loop: Loop) -> None:
     syn = "SYNTHETIC (mock 모드: CARLA·LLM 호출 없음, 수치는 실측이 아님)" if loop.mode == "mock" else "실측 (CARLA + Token Factory)"
     lines = [f"# 파이프라인 실행 보고서 ({loop.ablation} {ABLATIONS[loop.ablation]['name']}, 영상 해설 {'on' if loop.video_on else 'off'})",
@@ -1446,6 +1593,7 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
              f"- GP 경계 부호 정확도: {m.get('gp_boundary_sign_accuracy')}",
              f"- GP 부호 vs final_safe_recovery (#9): {(m.get('gp_boundary_sign_accuracy') or {}).get('vs_final_safe')}",
              f"- 영상 해설: {m['explanations']}건, 검증 통과 {m['explanations_accepted']}건 (환각률 {m['hallucination_rate']})",
+             _b_judge_line(m.get("nemotron_b") or {}, loop),
              f"- recovery_outcome 분포: {m['outcome_counts']}", f"- trigger_source 분포: {m['trigger_counts']}",
              f"- SR 검사 (engine/sr_checks.py, 참고) sr_outcome 분포: {m.get('sr_outcome_counts')}; 화면: `screen/campaign.html`",
              "", "## 경계 지표 (integration3)"] + _boundary_lines(m.get("boundary_metrics") or {}) + ["",
@@ -1605,6 +1753,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gp-target", choices=("safety_margin", "lrr"),
                     help="recovery GP target (default 02 metric_rules.recovery_success.gp.target = safety_margin; "
                          "lrr = lane_recovery_robustness, the target before integration3 #9)")
+    ap.add_argument("--judge-b", choices=("laya", "jev", "nemotron", "nemotron_b"),
+                    help="05b B judge (default orchestrator.yaml judge_b = laya: open-source Laya x25 judges + regression "
+                         "via laya-serve LAYA_BASE_URL, default http://127.0.0.1:8000; jev = hosted TypeSafe Jev, same "
+                         "protocol, key TYPESAFE_API_KEY; nemotron = Token Factory Nemotron as a System One judge over the "
+                         "same 25 questions; nemotron_b = the earlier generative Nemotron B, for comparison). "
+                         "--mock, or no server / no key -> deterministic SYNTHETIC stub")
     ap.add_argument("--gp-history", action="append", metavar="GLOB",
                     help="pool earlier campaigns' run_records.jsonl (glob, repeatable) into GP training (warm start)")
     args = ap.parse_args(argv)
@@ -1630,7 +1784,8 @@ def main(argv: list[str] | None = None) -> int:
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
-                gp_history=args.gp_history, supervisor=args.supervisor, gp_target=args.gp_target)
+                gp_history=args.gp_history, supervisor=args.supervisor, gp_target=args.gp_target,
+                judge_b=args.judge_b)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":

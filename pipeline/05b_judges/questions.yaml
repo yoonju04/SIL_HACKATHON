@@ -1,0 +1,289 @@
+# questions.yaml — 05b 판정자 질문 은행 J1~J9 (laya-judge, 판정자 질문의 단일 원본)
+# 05b judge question bank J1-J9 (single source of the judge questions; judges.yaml only lists variants per id).
+#
+# 원칙 (사용자 결정 2026-10-29):
+#   - 파라미터만으로 계산되는 것은 묻지 않는다 → 결정론적 feature (05a DF-07~09) 로 GP 에 바로 넣는다.
+#   - 모델에게는 코드·로직을 읽어야 답할 수 있고 안전 평가에 쓸모 있는 질문만 묻는다.
+#   - label_source: code    = 회귀 라벨 = 코드가 정한 정답 키 (expected_from_code, 감독기 프로필별)
+#     label_source: outcome = 회귀 라벨 = 실제 런 결과 (감지 지연, 감지 전 차선 여유, LQR 속도 제한 걸림).
+#     결과는 판정자 입력(state)에 절대 넣지 않고 회귀 학습 라벨로만 쓴다 (독립 검증 원칙).
+#   - regress: false = 정답이 한 종류뿐인 코드 사실 (J8, J9). 회귀 대상이 아니라 일치율만 보고한다.
+#   - applies_to: 이 고장 모드에서만 묻는다 (없으면 모든 모드).
+# Principles: never ask what the scenario parameters compute (those are DF-07..09); ask what needs reading the code;
+# outcome-labelled questions see inputs only, their run results are regression labels only.
+#
+# expected_from_code 형식은 Nemotron B 와 같다: 'x' | [허용 답..] | {by_supervisor: {tight|legacy: {by_fault_mode: {mode:
+#   'x' | [..] | {cases: [{when: {param, le|lt|ge|gt}, expect}], default}}}}}. 목록 = 코드가 하나로 정하지 않음 (학습 라벨 아님).
+# 감독기 tight: tracking 0.6 m / 0.35 rad 0.15 s 유지 + MPC 명령 속도 > 90 °/s (틱 0.05 s → 4.5° = 0.0785 rad) 즉시.
+#        legacy: 1.0 m / 0.6 rad 0.25 s 유지, 속도 검사 없음.  (av_stack integration/supervised_lateral.py SUPERVISOR_PROFILES)
+
+meta:
+  schema_version: '2.0'
+  replaces: 05b_nemotron_b/nemotron_b.yaml Q-B1..Q-B5 (Nemotron B 비교 경로 --judge-b nemotron_b 는 옛 은행을 계속 쓴다)
+
+question_bank:
+  - id: J1
+    title: detection_path
+    scope: per_scenario
+    label_source: code
+    gp_feature: true
+    question: "감독기는 이 고장을 어떤 경로로 잡는가? 출력 자체를 보는 즉시 검사(조향 속도·solver·stale 등)로 첫 고장 틱에 잡는가, 추적 오차가 쌓인 뒤에만 잡는가, 이 고장을 겨냥한 검사가 없는가?"
+    question_en: "How does the supervisor catch this fault: by an immediate check on the output itself (steer rate, solver flag, stale sequence, ...) on the first fault tick, only after tracking error has accumulated, or is there no check aimed at this fault at all?"
+    answer: ['immediate_check', 'deviation_accumulation', 'no_dedicated_check', 'unknown']
+    answer_notes:
+      immediate_check: "첫 고장 틱에 출력 검사가 걸려 바로 LQR 로 전환"
+      deviation_accumulation: "출력 검사는 통과하고, 추적 오차가 임계값을 유지 시간 이상 넘어야 전환"
+      no_dedicated_check: "출력이 정상처럼 보여 이 고장을 겨냥한 검사가 없음 (사각지대)"
+    answer_notes_en:
+      immediate_check: "an output check fires on the first fault tick and the switch to LQR is immediate"
+      deviation_accumulation: "the output passes every check; only a tracking error held above threshold switches"
+      no_dedicated_check: "the output looks healthy and no check targets this fault (blind spot)"
+    param_bins: {magnitude_rad: [0.0785], ramp_s: [0.0]}
+    expected_from_code:
+      by_supervisor:
+        tight:
+          by_fault_mode:
+            solver_fail: 'immediate_check'          # inspect: ok False -> solver_failure
+            stale: 'immediate_check'                # same seq -> stale_sequence
+            bias:
+              cases: [{when: {param: magnitude_rad, gt: 0.0785}, expect: 'immediate_check'}]   # onset jump > 4.5 deg/tick
+              default: 'deviation_accumulation'
+            intermittent_bias:
+              cases: [{when: {param: magnitude_rad, gt: 0.0785}, expect: 'immediate_check'}]
+              default: 'deviation_accumulation'
+            drift: 'deviation_accumulation'         # rate x tick << 4.5 deg
+            saturate:
+              cases: [{when: {param: ramp_s, le: 0.0}, expect: 'immediate_check'}]          # step to level x max steer
+              default: ['immediate_check', 'deviation_accumulation']                         # per-tick ramp step decides
+            output_delay: 'no_dedicated_check'      # fresh seq / stamp, delayed steer AND state -> blind spot
+        legacy:
+          by_fault_mode:
+            solver_fail: 'immediate_check'
+            stale: 'immediate_check'
+            bias: 'deviation_accumulation'
+            intermittent_bias: 'deviation_accumulation'
+            drift: 'deviation_accumulation'
+            saturate: 'deviation_accumulation'
+            output_delay: 'no_dedicated_check'
+
+  - id: J3
+    title: intermittent_evades_hold
+    scope: per_scenario
+    label_source: code
+    gp_feature: true
+    applies_to: [intermittent_bias, saturate]
+    question: "켜졌다 꺼지는(또는 짧게 한 번 켜지는) 이 고장이 추적 발산 검사의 '유지 시간' 조건을 피할 수 있는가? 꺼진 동안 오차가 임계값 아래로 돌아오면 타이머가 초기화되는지 코드로 판단하라."
+    question_en: "Can this on/off (or single short pulse) fault evade the sustained-duration condition of the tracking-divergence check? Judge from the code whether the hold timer resets when the error drops back under the threshold while the fault is off."
+    answer: ['caught_by_rate_check', 'can_evade', 'cannot_evade', 'unknown']
+    answer_notes:
+      caught_by_rate_check: "유지 시간 이전에 조향 속도 검사가 켜지는 순간을 잡는다"
+      can_evade: "켜진 시간이 유지 시간보다 짧아 타이머가 다 차기 전에 초기화될 수 있다"
+      cannot_evade: "오차가 유지 시간 이상 이어져 추적 발산 검사가 걸린다"
+    answer_notes_en:
+      caught_by_rate_check: "the steer-rate check catches the on-edge before any hold time matters"
+      can_evade: "each on period is shorter than the hold time, so the timer can reset before it completes"
+      cannot_evade: "the error stays above threshold for the full hold time and divergence fires"
+    param_bins: {magnitude_rad: [0.0785], ramp_s: [0.0], on_s: [0.15, 0.25], duration_s: [0.15, 0.25]}
+    expected_from_code:
+      by_supervisor:
+        tight:
+          by_fault_mode:
+            intermittent_bias:
+              cases:
+                - {when: {param: magnitude_rad, gt: 0.0785}, expect: 'caught_by_rate_check'}
+                - {when: {param: on_s, le: 0.15}, expect: 'can_evade'}
+              default: ['can_evade', 'cannot_evade']          # vehicle dynamics decide
+            saturate:
+              cases:
+                - {when: {param: ramp_s, le: 0.0}, expect: 'caught_by_rate_check'}
+                - {when: {param: duration_s, le: 0.15}, expect: 'can_evade'}
+              default: ['caught_by_rate_check', 'cannot_evade']
+        legacy:
+          by_fault_mode:
+            intermittent_bias:
+              cases: [{when: {param: on_s, le: 0.25}, expect: 'can_evade'}]
+              default: ['can_evade', 'cannot_evade']
+            saturate:
+              cases: [{when: {param: duration_s, le: 0.25}, expect: 'can_evade'}]
+              default: 'cannot_evade'
+
+  - id: J4
+    title: steering_before_switch
+    scope: per_scenario
+    label_source: code
+    gp_feature: true
+    question: "이 고장이 시작된 뒤 감독기가 전환하기 전까지 어떤 조향 명령이 차량에 나가는가?"
+    question_en: "From the fault onset until the supervisor switches, which steering command reaches the vehicle?"
+    answer: ['hold_last', 'zero', 'stale_mpc', 'corrupted_mpc', 'lqr_early', 'unknown']
+    answer_notes:
+      corrupted_mpc: "고장이 바꾼 MPC 조향값이 감지 전까지 그대로 나간다"
+      stale_mpc: "몇 틱 전에 계산한 MPC 조향값이 나간다"
+      lqr_early: "첫 고장 틱에 바로 감지되어 그 틱부터 LQR 조향이 나간다 (고장 값은 차량에 가지 않음)"
+    answer_notes_en:
+      corrupted_mpc: "the fault-modified MPC steering reaches the car until detection"
+      stale_mpc: "MPC steering computed some ticks earlier reaches the car"
+      lqr_early: "detected on the first fault tick; LQR steers from that tick (the faulted value never reaches the car)"
+    param_bins: {magnitude_rad: [0.0785], ramp_s: [0.0]}
+    expected_from_code:                       # = 옛 Q-B1 (프로필별 키)
+      by_supervisor:
+        tight:
+          by_fault_mode:
+            solver_fail: 'lqr_early'
+            stale: 'lqr_early'
+            bias:
+              cases: [{when: {param: magnitude_rad, gt: 0.0785}, expect: 'lqr_early'}]
+              default: 'corrupted_mpc'
+            drift: 'corrupted_mpc'
+            intermittent_bias:
+              cases: [{when: {param: magnitude_rad, gt: 0.0785}, expect: 'lqr_early'}]
+              default: 'corrupted_mpc'
+            saturate:
+              cases: [{when: {param: ramp_s, le: 0.0}, expect: 'lqr_early'}]
+              default: ['lqr_early', 'corrupted_mpc']
+            output_delay: 'stale_mpc'
+        legacy:
+          by_fault_mode:
+            solver_fail: 'lqr_early'
+            stale: 'lqr_early'
+            bias: 'corrupted_mpc'
+            drift: 'corrupted_mpc'
+            intermittent_bias: 'corrupted_mpc'
+            saturate: 'corrupted_mpc'
+            output_delay: 'stale_mpc'
+
+  - id: J7
+    title: lqr_takeover_continuity
+    scope: per_scenario
+    label_source: code
+    gp_feature: true
+    question: "이 시나리오에서 전환 순간 LQR 인계가 조향 불연속을 만드는가? LQR 첫 명령이 어떤 조향값을 기준으로 속도 제한되는지(고장 전 정상 명령인지, 이미 차량에 나간 고장 명령인지) 코드로 판단하라."
+    question_en: "In this scenario, does the LQR takeover at the switch create a steering discontinuity? Judge from the code which applied steering the first LQR command is rate-limited from: the last clean MPC command, or a faulted command that already reached the car."
+    answer: ['continuous_from_clean', 'continuous_from_faulted', 'discontinuous', 'unknown']
+    answer_notes:
+      continuous_from_clean: "불연속 없음. 고장 값이 차량에 나가기 전에 전환되어 정상 명령에서 이어진다"
+      continuous_from_faulted: "불연속 없음. 하지만 이미 나간 고장 명령에서 속도 제한으로 천천히 되돌아온다"
+      discontinuous: "전환 순간 조향이 속도 제한보다 크게 뛴다"
+    answer_notes_en:
+      continuous_from_clean: "no jump; the switch happens before any faulted value reaches the car"
+      continuous_from_faulted: "no jump, but LQR unwinds slowly (rate-limited) from a faulted command already applied"
+      discontinuous: "steering jumps by more than the takeover rate limit at the switch"
+    param_bins: {magnitude_rad: [0.0785], ramp_s: [0.0]}
+    expected_from_code:                       # SupervisedLateral.step: LQR steer clipped to last applied +- 60 deg/s x dt
+      by_supervisor:
+        tight:
+          by_fault_mode:
+            solver_fail: 'continuous_from_clean'
+            stale: 'continuous_from_clean'
+            bias:
+              cases: [{when: {param: magnitude_rad, gt: 0.0785}, expect: 'continuous_from_clean'}]
+              default: 'continuous_from_faulted'
+            intermittent_bias:
+              cases: [{when: {param: magnitude_rad, gt: 0.0785}, expect: 'continuous_from_clean'}]
+              default: 'continuous_from_faulted'
+            drift: 'continuous_from_faulted'
+            saturate:
+              cases: [{when: {param: ramp_s, le: 0.0}, expect: 'continuous_from_clean'}]
+              default: ['continuous_from_clean', 'continuous_from_faulted']
+            output_delay: 'continuous_from_faulted'
+        legacy:
+          by_fault_mode:
+            solver_fail: 'continuous_from_clean'
+            stale: 'continuous_from_clean'
+            bias: 'continuous_from_faulted'
+            intermittent_bias: 'continuous_from_faulted'
+            drift: 'continuous_from_faulted'
+            saturate: 'continuous_from_faulted'
+            output_delay: 'continuous_from_faulted'
+
+  - id: J8
+    title: fault_reaches_lqr_path
+    scope: per_scenario
+    label_source: code
+    regress: false                             # 모든 모드에서 같은 답 (주입은 MPC 출력에만) → 일치율만 보고
+    gp_feature: false
+    question: "전환 뒤에도 이 고장이 LQR 경로에 영향을 주는가? 고장 주입 위치가 두 제어기 모두의 상류(예: 센서·상태 입력)인지, MPC 출력에만 있는지 코드로 판단하라."
+    question_en: "After the switch, does this fault still affect the LQR path? Judge from the code whether the injection sits upstream of both controllers (e.g. sensor or state input) or only on the MPC output."
+    answer: ['mpc_output_only', 'also_reaches_lqr', 'unknown']
+    answer_notes:
+      mpc_output_only: "주입은 MPC 출력에만, 전환 뒤 LQR 은 깨끗한 상태로 계산"
+      also_reaches_lqr: "주입이 LQR 도 쓰는 입력에 있어 전환 뒤에도 영향"
+    answer_notes_en:
+      mpc_output_only: "injection wraps only the MPC output; after the switch LQR computes from clean state"
+      also_reaches_lqr: "injection sits on an input LQR also uses, so it still acts after the switch"
+    expected_from_code: 'mpc_output_only'      # step(): injector.apply(mpc.compute(..)); LQR step_controller uses raw state
+
+  - id: J9
+    title: switch_back_allowed
+    scope: per_scenario
+    label_source: code
+    regress: false                             # 코드 고정 사실 (복귀 없음) → 일치율만 보고
+    gp_feature: false
+    question: "복귀 로직이 반복 전환(MPC→LQR→MPC)을 허용하는가?"
+    question_en: "Does the supervisor ever switch back from LQR to MPC, allowing repeated MPC<->LQR switching?"
+    answer: ['latched_no_return', 'returns_to_mpc', 'unknown']
+    answer_notes:
+      latched_no_return: "한 번 LQR 로 가면 MPC 로 돌아오지 않는다 (mpc→lqr→safe_stop 만)"
+      returns_to_mpc: "조건이 좋아지면 MPC 로 돌아온다"
+    answer_notes_en:
+      latched_no_return: "once on LQR it never returns to MPC (only mpc -> lqr -> safe_stop)"
+      returns_to_mpc: "it returns to MPC when conditions recover"
+    expected_from_code: 'latched_no_return'
+
+  - id: J2
+    title: detection_delay
+    scope: per_scenario
+    label_source: outcome
+    gp_feature: true
+    gp_encoding: ordinal                  # 순서 있는 결과 구간 -> GP 열 1개 (기대 구간 번호)
+    question: "이 고장·파라미터·속도·도로에서, 고장 시작 뒤 감독기가 LQR 로 전환하기까지 얼마나 걸리겠는가?"
+    question_en: "For this fault, its parameters, the speed and the road at onset, how long after the fault onset will the supervisor switch to LQR?"
+    answer: ['under_0_5s', '0_5_to_2s', '2_to_5s', 'over_5s_or_never']
+    answer_notes:
+      under_0_5s: "0.5 s 안에 전환"
+      0_5_to_2s: "0.5~2 s"
+      2_to_5s: "2~5 s"
+      over_5s_or_never: "5 s 넘게 걸리거나 전환하지 않음"
+    answer_notes_en:
+      under_0_5s: "switches within 0.5 s"
+      0_5_to_2s: "0.5 to 2 s"
+      2_to_5s: "2 to 5 s"
+      over_5s_or_never: "more than 5 s, or never switches"
+    outcome_label: {kind: detection_delay_bucket, edges_s: [0.5, 2.0, 5.0]}   # switch_time - actual_fault_onset; no switch -> last
+
+  - id: J5
+    title: lane_departure_risk_before_detection
+    scope: per_scenario
+    label_source: outcome
+    gp_feature: true
+    gp_encoding: ordinal                  # 순서 있는 결과 구간 -> GP 열 1개 (기대 구간 번호)
+    question: "감독기가 고장을 잡기 전까지 차량이 차선을 벗어날 위험은 어느 정도인가?"
+    question_en: "Before the supervisor detects the fault, how close does the vehicle get to leaving its lane?"
+    answer: ['low', 'moderate', 'high', 'near_or_departed']
+    answer_notes:
+      low: "횡오차 0.15 m 미만"
+      moderate: "0.15~0.4 m"
+      high: "0.4~0.7 m"
+      near_or_departed: "0.7 m 이상 (차선 여유 0.83~1.08 m 에 근접) 또는 이탈"
+    answer_notes_en:
+      low: "lateral error below 0.15 m"
+      moderate: "0.15 to 0.4 m"
+      high: "0.4 to 0.7 m"
+      near_or_departed: "0.7 m or more (in-lane margin is 0.83 to 1.08 m) or leaves the lane"
+    outcome_label: {kind: pre_switch_lateral_error_bucket, edges_m: [0.15, 0.4, 0.7]}   # metrics.pre_switch_max_lateral_error_m
+
+  - id: J6
+    title: lqr_first_command_rate_limited
+    scope: per_scenario
+    label_source: outcome
+    gp_feature: true
+    gp_encoding: ordinal                  # 순서 있는 결과 구간 -> GP 열 1개 (기대 구간 번호)
+    question: "전환 직후 LQR 조향 명령이 인계 조향 속도 제한에 걸리는가? (LQR 이 제한보다 빠른 조향 변화를 요구하는가)"
+    question_en: "Right after the switch, is the LQR steering command held at the takeover steering-rate limit, i.e. does LQR ask for a faster steering change than the limit allows?"
+    answer: ['rate_limited', 'within_limit']
+    answer_notes:
+      rate_limited: "전환 뒤 1 s 안에 속도 제한에 걸린다"
+      within_limit: "제한 안에서 움직인다"
+    answer_notes_en:
+      rate_limited: "held at the rate limit within 1 s after the switch"
+      within_limit: "stays within the limit"
+    outcome_label: {kind: post_switch_rate_saturation}   # handover_saturation.rate_saturation_ratio > 0 (no switch -> no label)

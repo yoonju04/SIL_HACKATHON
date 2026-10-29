@@ -16,7 +16,7 @@ ablations:
     - id: X-4
       name: gp_plus_deterministic_features      # 질문 feature 제외
     - id: X-5
-      name: full_code_aware                     # Nemotron A + DF + Nemotron B + GP
+      name: full_code_aware                     # Nemotron A + DF + 05b 판정자 (기본 Laya x25 + 회귀, --judge-b) + GP
     - id: X-6
       name: full_code_aware_plus_video_explainer   # X-5 + 10 video explainer 피드백 (mech feature, few-shot, counterfactual)
   factors:

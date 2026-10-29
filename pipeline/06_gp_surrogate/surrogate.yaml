@@ -1,5 +1,5 @@
 # surrogate.yaml — GP surrogate (지표별 GP)
-# 입력: 05a 결정론적 feature + 05b 질문 답변 (+ ODD·고장 수치)
+# 입력: 05a 결정론적 feature + 05b 판정자 답 (laya/jev: 회귀 확률 연속값, 상수 열 제외 | nemotron: one-hot) (+ ODD·고장 수치)
 # 타깃: 가설마다 주 지표가 다르므로 지표마다 GP를 하나씩 둔다.
 #       지표 목록·타깃 형태·스케일의 원본은 02 vulnerability_patterns.yaml metric_rules[*].gp
 # 출력: 지표별 평균·불확실성(정규화 z) → 07 Orchestrator

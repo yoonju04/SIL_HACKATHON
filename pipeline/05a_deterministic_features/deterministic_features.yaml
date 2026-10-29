@@ -1,4 +1,4 @@
-# deterministic_features.yaml — 결정론적 feature (DF-01~06) + GP 입력 구성
+# deterministic_features.yaml — 결정론적 feature (DF-01~09) + GP 입력 구성
 # 프로필 + 시나리오로 코드가 계산한다. LLM을 쓰지 않는다.
 # 출력 → 06 GP surrogate
 
@@ -33,6 +33,23 @@ deterministic_features:
     formula: "speed_mps^2 * road_curvature_per_m / (0.9 * environment.tire_friction_scale * 9.81)"
     requires: [environment.tire_friction_scale]  # 없으면 1.0 (CARLA 기본 타이어). 곡률이 없으면 DF-05 와 같이 missing
     note: "mu = 0.9 x scale (09 safety_spec P-02 lateral_acc_formula). 1.0 = 명목 타이어 한계, 0.5 = P-02 한계. CARLA tire_friction 은 상대값"
+  # laya-judge v2 (2026-10-29): 파라미터로 계산되는 고장 역학은 판정자에게 묻지 않고 여기서 계산한다 (engine/judgment.py fault_dfs)
+  - id: DF-07
+    name: first_tick_jump_over_rate_check
+    formula: "고장이 한 틱에 만드는 최대 조향 점프 / (90 °/s × 0.05 s = 0.0785 rad)"
+    note: "bias·intermittent = magnitude_rad, saturate = level×최대각 (ramp 0) 또는 level×최대각×tick/ramp_s, drift = rate×tick,
+           solver_fail·stale = 0, output_delay = 없음 (MPC 동역학에 달림). > 1 이면 tight 속도 검사가 그 틱에 걸린다"
+  - id: DF-08
+    name: fault_on_time_over_hold
+    formula: "intermittent on_s 또는 saturate duration_s / 감독기 유지 시간 (tight 0.15 s, legacy 0.25 s)"
+  - id: DF-09
+    name: applied_offset_over_lqr_step
+    formula: "감지 전 차량에 나가는 조향 오프셋 / LQR 인계 속도 제한 한 틱 (60 °/s × 0.05 s)"
+    note: "tight 에서 DF-07 > 1 이면 고장 값이 차량에 안 나가므로 0. LQR 이 되돌리는 데 걸리는 틱 수 (J6 의 계산 가능한 부분)"
+fault_mechanics_features:                       # run.py features() 에 DF-07~09 (+ _missing) 를 넣을지
+  enabled: true
+  scale: {DF-07: 3.0, DF-08: 4.0, DF-09: 10.0}  # GP 입력 스케일 (대략 0~1)
+  saturate_max_steer_rad: 1.2217                # CARLA 차량 최대 조향 (run record handover_saturation.max_steer_rad)
 # run.py features(): 실제 GP 입력은 DF-03 (delay 고장만), DF-05, DF-06 + 각 _missing 지시자. DF-01/02 는 프로필 값이 null (설계점 없음),
 # DF-04 는 계산 함수만 있고 GP 입력에 넣지 않는다.
 missing_profile_value_policy:

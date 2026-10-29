@@ -40,15 +40,41 @@ B_question_answering:
         stale_mpc: "몇 틱 전에 계산한 MPC 조향값이 나간다"
         lqr_early: "첫 고장 틱에 바로 감지되어 그 틱부터 LQR 조향이 나간다 (고장 값은 차량에 가지 않음)"
       refs: [S2]
+      # jev-judge: 정답 키를 감독기 프로필별로 나눔 (by_supervisor). 예전 키는 legacy(속도 검사 없음) 기준이라 tight 에서 틀렸다.
+      #   tight 의 속도 검사: |Δsteer|/dt > 90 °/s, 틱 0.05 s → 한 틱 4.5° = 0.0785 rad 넘게 뛰면 첫 고장 틱에 걸린다.
+      #   bias / intermittent_bias 는 시작(켜짐) 순간 magnitude 만큼 뛴다 → > 0.0785 rad 이면 lqr_early.
+      #   (MPC 자체가 그 틱에 최대 3° 움직이므로 0.0785 근처는 근사; param_bins 로 구간을 나눈다)
+      #   saturate ramp_s 0 은 최대각×level(≥ 0.2 → ≥ 6°)로 한 틱에 뛴다 → lqr_early. ramp 가 있으면 level/ramp 에 따라 다름.
+      param_bins: {magnitude_rad: [0.0785], ramp_s: [0.0]}
       expected_from_code:
-        by_fault_mode:
-          solver_fail: 'lqr_early'               # fault_injection.py:111 ok=False → supervised_lateral.py:52-53 같은 틱 → :116-123 LQR
-          stale: 'lqr_early'                     # fault_injection.py:107-108,112 직전 정상 출력(같은 seq) → supervised_lateral.py:65-66 stale_sequence
-          bias: 'corrupted_mpc'                  # fault_injection.py:79-82,113 steer 만 바뀜 → supervised_lateral.py:139-142 그대로 적용
-          drift: 'corrupted_mpc'                 # fault_injection.py:114
-          intermittent_bias: 'corrupted_mpc'     # fault_injection.py:84-88,115
-          saturate: 'corrupted_mpc'              # fault_injection.py:90-97,116 (ramp_s 동안 MPC 명령과 섞임)
-          output_delay: 'stale_mpc'              # fault_injection.py:99-102,117 k틱 전 steer, 새 seq/stamp
+        by_supervisor:
+          tight:
+            by_fault_mode:
+              solver_fail: 'lqr_early'           # fault_injection.py ok=False → supervised_lateral.py inspect 첫 검사 → 같은 틱 LQR
+              stale: 'lqr_early'                 # 직전 정상 출력(같은 seq) → stale_sequence
+              bias:
+                cases:
+                  - {when: {param: magnitude_rad, gt: 0.0785}, expect: 'lqr_early'}   # 첫 틱 점프 > 4.5° → steer_rate_exceeded
+                default: 'corrupted_mpc'
+              drift: 'corrupted_mpc'             # 0.05 rad/s ≈ 0.14°/틱: 속도 검사 불가
+              intermittent_bias:
+                cases:
+                  - {when: {param: magnitude_rad, gt: 0.0785}, expect: 'lqr_early'}
+                default: 'corrupted_mpc'
+              saturate:
+                cases:
+                  - {when: {param: ramp_s, le: 0.0}, expect: 'lqr_early'}             # 한 틱 점프 ≥ 6° > 4.5°
+                default: ['lqr_early', 'corrupted_mpc']                              # level/ramp_s 에 따라 (코드가 하나로 정하지 않음)
+              output_delay: 'stale_mpc'          # k틱 전 steer, 새 seq/stamp
+          legacy:                                # 속도 검사 없음 (SupervisorConfig(1.0, 0.6, 0.25, None)) = 예전 정답 키
+            by_fault_mode:
+              solver_fail: 'lqr_early'
+              stale: 'lqr_early'
+              bias: 'corrupted_mpc'
+              drift: 'corrupted_mpc'
+              intermittent_bias: 'corrupted_mpc'
+              saturate: 'corrupted_mpc'
+              output_delay: 'stale_mpc'
       evidence_regions:
         - {file: integration/fault_injection.py, function: MPCFaultInjector}
         - {file: integration/supervised_lateral.py, function: MPCSupervisor.inspect}
@@ -65,21 +91,42 @@ B_question_answering:
       # integration3 #8: 기대 답은 감독기 tight 프로파일 기준 (run_benchmark.py --supervisor 기본, paired_runs.yaml runner.supervisor).
       #   tight: tracking_divergence 0.6 m / 0.35 rad 0.15 s 유지 + MPC 명령 속도 > 90 °/s 즉시 (steer_rate_exceeded).
       #   expected answers are for the tight profile (default); legacy (1.0 m / 0.6 rad / 0.25 s, no rate check) differs.
-      param_bins: {duration_s: [0.15], ramp_s: [0.0]}   # 지속 조건 0.15 s / ramp 0 = 한 틱 점프 (속도 검사)
+      param_bins: {duration_s: [0.15], ramp_s: [0.0], magnitude_rad: [0.0785]}   # 지속 0.15 s / ramp 0 = 한 틱 점프 / bias 점프 > 4.5°
       expected_from_code:
-        by_fault_mode:
+       by_supervisor:
+        tight:
+         by_fault_mode:
           solver_fail: 'solver_failure'          # supervised_lateral.py MPCSupervisor.inspect 첫 검사 (ok = False)
           stale: 'stale_sequence'                # stamp 차 0.05 s ≤ 0.1 이라 stale_output 아님, seq 같음 → stale_sequence (속도 검사보다 앞)
-          # 아래는 코드가 '불가능한 답'만 정한다 → 허용 답 목록 (어느 쪽이 먼저인지는 차량 동역학이 정함)
-          # 속도 검사: |Δsteer| / dt > 90 °/s (0.05 s 틱이면 한 틱에 4.5°). MPC 자체는 60 °/s(틱당 3°)로 제한
-          bias: ['steer_out_of_range', 'steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']   # 시작 순간 magnitude 만큼 점프 (0.02~0.1 rad)
+          # 아래는 코드가 '불가능한 답'만 정하면 허용 답 목록 (어느 쪽이 먼저인지는 차량 동역학이 정함)
+          # 속도 검사: |Δsteer| / dt > 90 °/s (0.05 s 틱이면 한 틱에 4.5° = 0.0785 rad). MPC 자체는 60 °/s(틱당 3°)로 제한
+          bias:                                  # 시작 순간 magnitude 만큼 점프 (0.02~0.1 rad)
+            cases:
+              - {when: {param: magnitude_rad, gt: 0.0785}, expect: 'steer_rate_exceeded'}   # jev-judge: 점프 > 4.5° → 첫 틱
+            default: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']
           drift: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']   # 0.05 rad/s ≈ 2.9 °/s + MPC 60 °/s < 90 °/s → 속도 검사 불가
-          intermittent_bias: ['steer_out_of_range', 'steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']   # 켜질/꺼질 때마다 점프 (0.05~0.15 rad)
+          intermittent_bias:                     # 켜질/꺼질 때마다 점프 (0.05~0.15 rad)
+            cases:
+              - {when: {param: magnitude_rad, gt: 0.0785}, expect: 'steer_rate_exceeded'}
+            default: ['steer_out_of_range', 'steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']
           output_delay: ['steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']    # 시작 순간 k틱 전 명령으로 되돌아감 (최대 k×3°)
           saturate:                              # target = level×최대각, level ≤ 1 → 최대각 '초과' 검사 통과
             cases:
+              - {when: {param: ramp_s, le: 0.0}, expect: 'steer_rate_exceeded'}   # jev-judge: 한 틱 점프 ≥ 6° (level ≥ 0.2)
               - {when: {param: duration_s, le: 0.15}, expect: ['steer_rate_exceeded', 'none_during_fault']}   # 0.15 s 유지 조건을 고장 중에 못 채움
-            default: ['steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']   # ramp_s 0 은 보통 한 틱 점프지만 MPC가 이미 그 각도 근처면 아님
+            default: ['steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']
+        legacy:                                  # 속도 검사 없음, 추적 발산 1.0 m / 0.6 rad 0.25 s 유지
+         by_fault_mode:
+          solver_fail: 'solver_failure'
+          stale: 'stale_sequence'
+          bias: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']
+          drift: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']
+          intermittent_bias: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']
+          output_delay: ['tracking_divergence', 'none_during_fault']
+          saturate:
+            cases:
+              - {when: {param: duration_s, le: 0.25}, expect: 'none_during_fault'}   # 0.25 s 유지 조건을 고장 중에 못 채움
+            default: ['tracking_divergence', 'none_during_fault']
       evidence_regions:
         - {file: integration/supervised_lateral.py, function: MPCSupervisor.inspect}
         - {file: integration/fault_injection.py, function: MPCFaultInjector}

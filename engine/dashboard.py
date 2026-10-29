@@ -451,7 +451,7 @@ SIDE_KO = {"recover": "회복", "fail": "실패", "boundary": "경계"}
 def load_method(out_dir: Path) -> dict:
     """How this campaign worked, from the files run.py already writes next to screen/ (no new outputs needed).
 
-    code: 01_profile_summary.json (code observations Nemotron A reads) + round_*/05b_answers.json (files Nemotron B cited)
+    code: 01_profile_summary.json (code observations Nemotron A reads) + round_*/05b_answers.json (files Nemotron B cited, or Jev judges per state)
     hypotheses: Nemotron A proposals in round_*/03_04_pool.json (expected_side + expected_mechanism)
     check: run_records.jsonl outcomes vs expected_side, evaluation_metrics.json GP leave-one-out sign accuracy."""
     camp = Path(out_dir).parent
@@ -464,9 +464,13 @@ def load_method(out_dir: Path) -> dict:
     prof = rj(camp / "01_profile_summary.json", {}) or {}
     rounds = sorted(camp.glob("round_*"))
     b_files, b_cands, a_props = set(), 0, {}
+    b_judge, b_judges = "nemotron_b", 0
     for rd in rounds:
         for key, row in (rj(rd / "05b_answers.json", {}) or {}).items():
             b_cands += not str(key).startswith("__")      # __static__ = once-per-campaign questions (integration3 #6)
+            if row.get("judge") in ("laya", "jev", "nemotron"):   # laya-judge: System One judges x25 + regression
+                b_judge = row["judge"]
+                b_judges = max(b_judges, sum(int(a.get("n_judges") or 0) for a in (row.get("answers") or {}).values()))
             for ans in (row.get("answers") or {}).values():
                 for ev in ans.get("evidence") or []:
                     if ev.get("file"):
@@ -498,7 +502,7 @@ def load_method(out_dir: Path) -> dict:
                       "hit": hit, "lrr": lrr, "why": c.get("expected_mechanism")})
     gp = (rj(camp / "evaluation_metrics.json", {}) or {}).get("gp_boundary_sign_accuracy") or {}
     return {"n_obs": prof.get("observations"), "n_verified": prof.get("verified"), "b_files": sorted(b_files),
-            "b_cands": b_cands, "n_props": len(a_props),
+            "b_cands": b_cands, "b_judge": b_judge, "b_judges": b_judges, "n_props": len(a_props),
             "sides": {SIDE_KO.get(k, k): sum(1 for c in a_props.values() if c.get("expected_side") == k)
                       for k in ("recover", "fail", "boundary")},
             "tests": tests, "gp": gp}
@@ -517,9 +521,15 @@ def render_method(out_dir: Path = Path(".")) -> str:
     sides = " · ".join(f"{k} {v}" for k, v in m["sides"].items() if v)
     steps = (
         f'<li><b>코드 읽기</b>: Nemotron A는 제어 코드에서 파일·줄 근거와 함께 뽑아 둔 관찰 {_e(m["n_obs"] if m["n_obs"] is not None else "–")}개'
-        f'(사람 검토 전이라 "단서"로만 씀)와 사전 지식을 읽습니다. Nemotron B는 av_stack 소스 '
-        f'{_e(len(m["b_files"]) or "–")}개 파일({_e(", ".join(Path(f).name for f in m["b_files"]) or "–")})을 줄번호째 읽고 '
-        f'후보 {_e(m["b_cands"])}개마다 질문 3개에 3번씩 답합니다.</li>'
+        f'(사람 검토 전이라 "단서"로만 씀)와 사전 지식을 읽습니다. '
+        + (f'{ {"laya": "Laya", "jev": "Jev", "nemotron": "Nemotron(System One)"}.get(m.get("b_judge"), "판정자")}는 av_stack 코드 발췌와 시나리오 파라미터를 상태로 받아 판정 키 {_e(m["b_cands"])}개마다 '
+           f'판정 {_e(m["b_judges"] or "–")}개(코드 질문 J1·J3·J4·J7·J8·J9 + 결과 질문 J2·J5·J6, 표현·관점 변형)에 한 번의 요청으로 확률을 내고, '
+           f'질문별 로지스틱 회귀(코드 정답 또는 끝난 실행의 결과를 라벨로)가 그 확률을 하나의 답으로 모읍니다. 계산되는 값(첫 틱 조향 점프 등)은 DF-07~09 로 따로 계산합니다.</li>'
+           if m.get("b_judge") in ("laya", "jev", "nemotron") else
+           f'Nemotron B는 av_stack 소스 '
+           f'{_e(len(m["b_files"]) or "–")}개 파일({_e(", ".join(Path(f).name for f in m["b_files"]) or "–")})을 줄번호째 읽고 '
+           f'후보 {_e(m["b_cands"])}개마다 질문 3개에 3번씩 답합니다.</li>')
+        +
         f'<li><b>가설 세우기</b>: A가 시나리오 {_e(m["n_props"])}개를 내면서 각각 "회복/실패/경계" 예상과 이유를 붙였습니다'
         f'{f" ({_e(sides)})" if sides else ""}.</li>'
         f'<li><b>통계로 확인</b>: CARLA에서 고장 없는 기준 실행과 짝으로 돌리고, 모니터가 규칙대로 채점합니다. '

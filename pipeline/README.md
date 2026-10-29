@@ -12,9 +12,9 @@ flowchart TD
     SS["Scenario space<br/>ODD × 고장"] --> FE
     FE["04 타당성 검사 + 후보 확장<br/>G-01~04, 시드당 섭동 10개"] --> DF & NB
     DF["05a 결정론적 feature<br/>DF-01~05"] --> GP
-    NB["05b Nemotron B: 질문<br/>결과 비참조"] --> GP
+    NB["05b 판정자 ×25 (J1–J9) + 회귀<br/>코드 질문 + 결과 질문, 결과는 라벨로만<br/>(Laya 기본 · Jev · Nemotron)"] --> GP
     GP["06 GP surrogate<br/>지표별 GP, 정규화 z 평균·불확실성"] --> OR
-    OR["07 Orchestrator 선택<br/>LCB + 다양성 + 무작위 25%"] --> CR
+    OR["07 Orchestrator 선택<br/>level-set 경계 + 다양성 + 무작위"] --> CR
     CR["08 CARLA 짝 실행<br/>baseline(캐시) vs fault, Nebius 병렬"] --> MO
     SPEC["Safety spec<br/>P-01~03"] --> MO
     MO["09 Monitor → Error table<br/>결과 5분류 + 복구 판정<br/>(recovery_outcome · 라벨)"]
@@ -51,7 +51,8 @@ flowchart TD
 | ↳ Scenario space | [`04_feasibility_expansion/scenario_space.yaml`](04_feasibility_expansion/scenario_space.yaml) | ODD 변수, 고장 F-01~03, 주입 시점 (가설 도구용 팀 템플릿) |
 | ↳ av_stack 고장 목록 | [`04_feasibility_expansion/scenario_space_av_stack.yaml`](04_feasibility_expansion/scenario_space_av_stack.yaml) | 고장 F-01~07 × 시점 × 환경 (루프가 실제로 쓰는 목록, 팀원 sim-eval) |
 | 05a 결정론적 feature | [`05a_deterministic_features/deterministic_features.yaml`](05a_deterministic_features/deterministic_features.yaml) | DF-01~05, GP 입력 구성 |
-| 05b Nemotron B | [`05b_nemotron_b/nemotron_b.yaml`](05b_nemotron_b/nemotron_b.yaml) | 코드 질문 Q-B1~3 (결과 비참조) |
+| 05b 판정자 | [`05b_judges/judges.yaml`](05b_judges/judges.yaml) · [`questions.yaml`](05b_judges/questions.yaml) | 질문 은행 J1~J9 (코드 정답 키 / 결과 라벨), Laya(기본) · Jev · Nemotron ×25 판정 + 질문별 회귀, state 구성, GP feature ([docs/JUDGES.md](../docs/JUDGES.md)) |
+| ↳ Nemotron B (예전) | [`05b_nemotron_b/nemotron_b.yaml`](05b_nemotron_b/nemotron_b.yaml) | 생성형 Nemotron B 와 그 질문 Q-B1~5, `--judge-b nemotron_b` 비교용 |
 | 06 GP surrogate | [`06_gp_surrogate/surrogate.yaml`](06_gp_surrogate/surrogate.yaml) | 가설 주 지표마다 GP 1개, 방향·스케일 정규화 z 회귀 |
 | 07 Orchestrator | [`07_orchestrator/orchestrator.yaml`](07_orchestrator/orchestrator.yaml) | cold start, LCB 획득, 예산·중단 조건 |
 | 08 CARLA 짝 실행 | [`08_carla_paired_run/paired_runs.yaml`](08_carla_paired_run/paired_runs.yaml) | CARLA 설정, baseline vs fault 매칭 |

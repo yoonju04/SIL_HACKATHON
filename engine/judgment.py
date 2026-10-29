@@ -21,7 +21,7 @@ def _get(data: dict, *keys: str) -> Any:
         cur = cur.get(key)
     return cur
 
-# 05b Nemotron B 질문 은행. B는 실패 사례·CARLA 결과·GP 예측을 보지 않는다.
+# 05b 질문 은행 (판정자 Laya/Jev x25 또는 Nemotron B). B는 실패 사례·CARLA 결과·GP 예측을 보지 않는다.
 QUESTION_BANK = {
     "Q-B1": ["hold_last", "zero", "stale_mpc", "lqr_early", "unknown"],
     "Q-B2": ["yes", "no", "unknown"],
@@ -542,3 +542,52 @@ def build_run_record(**kwargs: Any) -> dict[str, Any]:
     if unknown:
         raise ValueError(f"run_record 스키마에 없는 필드: {unknown}")
     return record
+
+
+# laya-judge v2: what the scenario parameters COMPUTE is a deterministic feature, not a judge question (user decision
+# 2026-10-29). Constants mirror av_stack integration/supervised_lateral.py (SupervisorConfig, SupervisedLateral.rate_dps)
+# and fault_injection.py (saturate target = level x max steer, ramp blends from frac 0 on the first fault tick).
+FAULT_DF_DEFAULTS = {"tick_s": 0.05, "rate_check_dps": 90.0, "lqr_takeover_rate_dps": 60.0,
+                     "saturate_max_steer_rad": 1.2217}
+SUPERVISOR_HOLD_S = {"tight": 0.15, "legacy": 0.25}
+
+
+def fault_dfs(fault: dict, supervisor: str = "tight", consts: dict | None = None) -> dict[str, float | None]:
+    """DF-07 first_tick_jump_over_rate_check: largest one-tick steering jump the fault injects / (90 deg/s x tick)
+          (> 1 = the tight rate check fires on that tick; computed for legacy too as a size measure).
+       DF-08 fault_on_time_over_hold: intermittent on_s or saturate duration_s / the profile's divergence hold time.
+       DF-09 applied_offset_over_lqr_step: steering offset that reaches the car before detection (0 when DF-07 > 1 under
+          tight: the faulted value is never applied) / LQR takeover step (60 deg/s x tick) = ticks LQR needs to unwind.
+    None = not defined for this fault mode (the caller adds a _missing indicator)."""
+    c = dict(FAULT_DF_DEFAULTS, **(consts or {}))
+    mode, p = fault.get("mode"), dict(fault.get("params") or {})
+    tick = float(c["tick_s"])
+    rate_step = math.radians(float(c["rate_check_dps"])) * tick
+    lqr_step = math.radians(float(c["lqr_takeover_rate_dps"])) * tick
+    jump = offset = on = None
+    if mode in ("bias", "intermittent_bias"):
+        mag = abs(float(p.get("magnitude_rad", p.get("magnitude", 0.0)) or 0.0))
+        jump, offset = mag, mag
+        if mode == "intermittent_bias" and p.get("on_s") is not None:
+            on = float(p["on_s"])
+    elif mode == "drift":
+        rate = abs(float(p.get("rate_rad_s", p.get("magnitude", 0.0)) or 0.0))
+        jump = rate * tick
+    elif mode == "saturate":
+        level = abs(float(p.get("level", p.get("magnitude", 1.0)) or 1.0))
+        target = level * float(c["saturate_max_steer_rad"])
+        ramp = float(p.get("ramp_s", 0.0) or 0.0)
+        jump = target if ramp <= 0 else target * min(1.0, tick / ramp)
+        offset = target
+        if p.get("duration_s") is not None:
+            on = float(p["duration_s"])
+    # output_delay: the onset jump is the MPC's own change over k ticks (vehicle dynamics), not computable -> None
+    elif mode in ("solver_fail", "stale"):
+        jump = 0.0
+    df07 = None if jump is None else jump / rate_step
+    df08 = None if on is None else on / SUPERVISOR_HOLD_S.get(supervisor, 0.15)
+    df09 = None
+    if offset is not None:
+        caught = supervisor == "tight" and df07 is not None and df07 > 1.0
+        df09 = 0.0 if caught else offset / lqr_step
+    return {"DF-07": df07, "DF-08": df08, "DF-09": df09}
