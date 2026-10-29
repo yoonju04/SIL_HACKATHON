@@ -1,0 +1,17 @@
+{
+  "observations": 25,
+  "verified": 0,
+  "triggers": [
+    "solver_failure",
+    "missing_steer",
+    "nonfinite_output",
+    "steer_out_of_range",
+    "deadline_miss",
+    "stale_output",
+    "stale_sequence",
+    "tracking_divergence",
+    "controller_exception",
+    "steer_rate_exceeded"
+  ],
+  "note": "unverified observations go to Nemotron A only as 'unreviewed leads' (nemotron_a.yaml include_unreviewed_observations)"
+}

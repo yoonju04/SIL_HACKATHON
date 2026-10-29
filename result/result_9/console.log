@@ -1,0 +1,45 @@
+[06] --gp-history: 80 earlier runs from 1 file(s) pooled into GP training, skipped {'not sim_status ok': 2, 'safety_margin: unsettled run without settle_hold_max_s (logged before #9)': 2}
+[cosmos-power] auto: endpoint dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq is started only for stage 10 / insights
+live screen opened: C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\results\real_int3_min2x_1029\screen\campaign.html
+[00-02] prior payload (25 unverified obs omitted), objectives ['S1'], scenario space C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\04_feasibility_expansion\scenario_space_av_stack.yaml
+[round 0] pool 18 -> batch 12 (X-5, video on)
+  [08/09] R00-0000-saturate bench2drive:28048 35km/h saturate @curve_entry-0.50s -> safe_recovery (margin=-0.16[lat_jerk], lrr=0.83, trigger=31.10s, detected=steer_rate_exceeded, sr=pass, sel=cold_start_nemotron_a)
+  [08/09] R00-0001-bias bench2drive:24206 35km/h bias @curve_entry-0.80s -> safe_recovery (margin=-2.00[lat_jerk], lrr=0.25, trigger=6.30s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=cold_start_nemotron_a)
+  [08/09] R00-0002-saturate town10_long 40km/h saturate @curve_entry-0.90s -> safe_recovery (margin=0.39[lat_jerk], lrr=0.89, trigger=33.95s, detected=steer_rate_exceeded, sr=pass, sel=cold_start_nemotron_a)
+  [08/09] R00-0003-drift bench2drive:28048 30km/h drift @curve_entry-0.60s -> safe_recovery (margin=-2.00[lat_jerk], lrr=0.36, trigger=31.00s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=cold_start_nemotron_a)
+  [08/09] R00-0004-bias town10_long 20km/h bias @curve_exit-0.88s -> no_switch (margin=None[-], lrr=None, trigger=37.60s, detected=None, sr=pass, sel=cold_start_space_filling)
+  [08/09] R00-0005-drift town10_long 15km/h drift @curve_apex-0.56s -> simulation_invalid (margin=None[-], lrr=None, trigger=39.45s, detected=tracking_divergence, sr=invalid, sel=cold_start_space_filling)
+  [08/09] R00-0006-saturate town10_long 25km/h saturate @curve_exit+0.93s -> safe_recovery (margin=0.37[lat_jerk], lrr=0.87, trigger=41.90s, detected=steer_rate_exceeded, sr=pass, sel=cold_start_space_filling)
+  [08/09] R00-0007-intermittent_bias bench2drive:24206 35km/h intermittent_bias @curve_entry+0.24s -> safe_recovery (margin=0.61[lat_jerk], lrr=0.96, trigger=7.30s, detected=steer_rate_exceeded, sr=pass, sel=cold_start_space_filling)
+  [08/09] R00-0008-solver_fail town10_long 25km/h solver_fail @curve_apex-0.32s -> safe_recovery (margin=-1.17[lat_jerk], lrr=0.76, trigger=35.25s, detected=solver_failure, sr=pass, sel=cold_start_space_filling)
+  [08/09] R00-0009-output_delay bench2drive:28154 10km/h output_delay @straight-0.34s -> no_switch (margin=None[-], lrr=None, trigger=16.55s, detected=None, sr=pass, sel=cold_start_space_filling)
+  [08] skip SC-a26bbad60c bench2drive:28035 30km/h bias: route has no straight (baseline event detection)
+  [08/09] R00-0010-drift town10_long 35km/h drift @curve_exit-0.83s -> safe_recovery (margin=-1.35[lat_jerk], lrr=0.18, trigger=35.15s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=cold_start_space_filling)
+  [08] skip SC-6b549eeb4e bench2drive:24206 20km/h saturate: baseline failed
+  [08/09] R00-0011-intermittent_bias town10_long 30km/h intermittent_bias @curve_apex+0.70s -> safe_recovery (margin=-0.17[lat_jerk], lrr=0.78, trigger=38.20s, detected=steer_rate_exceeded, sr=pass, sel=replacement_for_SC-6b549eeb4e)
+[cosmos-power] starting Cosmos endpoint (stage_10 round 0); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 176s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (176s); waiting
+[cosmos-power] data plane answers after 187s (probe HTTP 200)
+  [10] R00-0000-saturate explained via video -> rejected ['departure_time_s', 'collision_seen']
+  [10] R00-0001-bias explained via contact_sheet -> rejected ['departure_time_s', 'tags_in_taxonomy']
+  [10] R00-0003-drift explained via video -> rejected ['departure_time_s', 'tags_in_taxonomy']
+  [10] R00-0008-solver_fail explained via video -> ACCEPTED []
+[cosmos-power] stop requested (stage_10 round 0); was enabled=True status=running readiness=ready ready_replicas=1
+[round 1] pool 193 -> batch 4 (X-5, video on)
+  [08/09] R01-0012-bias bench2drive:24206 35km/h bias @curve_entry-0.50s -> no_switch (margin=None[-], lrr=None, trigger=6.60s, detected=None, sr=pass, sel=nemotron_a_share)
+  [08/09] R01-0013-bias town10_long 15km/h bias @curve_entry-0.30s -> no_switch (margin=None[-], lrr=None, trigger=35.60s, detected=None, sr=pass, sel=nemotron_a_share)
+  [08/09] R01-0014-bias bench2drive:24206 35km/h bias @curve_entry-0.84s -> no_switch (margin=None[-], lrr=None, trigger=6.30s, detected=None, sr=pass, sel=acquisition)
+  [08/09] R01-0015-bias bench2drive:24206 30km/h bias @curve_entry-0.84s -> no_switch (margin=None[-], lrr=None, trigger=6.10s, detected=None, sr=pass, sel=acquisition)
+[cosmos-power] starting Cosmos endpoint (campaign insights); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 166s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (166s); waiting
+[cosmos-power] data plane answers after 177s (probe HTTP 200)
+campaign insights (C_cosmos): complete, 3 insights, 8 model calls -> results\real_int3_min2x_1029\insights\insights.json
+[cosmos-power] stop requested (campaign insights); was enabled=True status=running readiness=ready ready_replicas=1
+{"n_runs": 16, "n_switched": 9, "n_final_safe_recovery": 3, "n_failures": 6, "both_sides_observed": true, "boundary_band_runs": 2, "explanations": 4, "explanations_accepted": 1}
+outputs: results\real_int3_min2x_1029  (report.md, run_records.jsonl, screen/campaign.html, explanations.jsonl, monitor_rule_candidates.yaml, insights/insights.json, insights/campaign.html)
