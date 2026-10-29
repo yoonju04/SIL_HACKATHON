@@ -1,0 +1,181 @@
+{
+  "gp": {
+    "target": "lane_recovery_robustness",
+    "metric_id": "recovery_success",
+    "n_train": 4,
+    "units": "dimensionless lane_recovery_robustness (NOT metres): lane margin / (lane_width/2 - vehicle half width)",
+    "level": 0.0,
+    "training_std": 1.237,
+    "meaning": "lane_recovery_robustness = min over the window of lane margin / (lane_width/2 - vehicle half width), dimensionless: 1 = centred, 0 = body at the lane edge (the boundary), < 0 departed, clipped to [-2, 1], collision <= -2",
+    "ranking": "acquisition_score = max(recovery level-set score in training-std units - switch_penalty * (1 - p_switch), switch-classifier level-set score); the orchestrator picks runs with the same score",
+    "unexplored_rule": "gp_uncertainty_vs_training_std >= 0.75"
+  },
+  "boundary_regions": [
+    {
+      "fault_id": "F-04",
+      "fault_mode": "bias",
+      "params": {
+        "magnitude_rad": 0.04
+      },
+      "route_id": "bench2drive:24206",
+      "max_speed_kmh": 30.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.0,
+      "tire_friction_scale": 0.5,
+      "predicted_lane_recovery_robustness": -0.087,
+      "predicted_lane_recovery_robustness_std": 0.183,
+      "p_below_level": 0.683,
+      "p_switch": 0.107,
+      "gp_uncertainty_vs_training_std": 0.15,
+      "acquisition_score": 1.174,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": false,
+        "recovery_outcome": "no_switch",
+        "final_safe_recovery": false,
+        "lane_margin_min_m": 0.288,
+        "lat_acc_margin_mps2": 0.18
+      }
+    },
+    {
+      "fault_id": "F-02",
+      "fault_mode": "stale",
+      "params": {},
+      "route_id": "bench2drive:28035",
+      "max_speed_kmh": 35.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": -0.403,
+      "tire_friction_scale": 0.5,
+      "predicted_lane_recovery_robustness": 0.812,
+      "predicted_lane_recovery_robustness_std": 0.018,
+      "p_below_level": 0.0,
+      "p_switch": 0.881,
+      "gp_uncertainty_vs_training_std": 0.01,
+      "acquisition_score": 1.123,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": true,
+        "switch_delay_s": 0.0,
+        "trigger": "stale_sequence",
+        "recovery_outcome": "safe_recovery",
+        "final_safe_recovery": false,
+        "lane_recovery_robustness": 0.812,
+        "lane_margin_min_m": 0.559,
+        "lat_acc_margin_mps2": -8.5,
+        "failed_reason": "lat_acc_or_jerk_excess"
+      }
+    },
+    {
+      "fault_id": "F-03",
+      "fault_mode": "output_delay",
+      "params": {
+        "delay_ticks": 1
+      },
+      "route_id": "town10_long",
+      "max_speed_kmh": 30.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.385,
+      "tire_friction_scale": 1.0,
+      "predicted_lane_recovery_robustness": 0.008,
+      "predicted_lane_recovery_robustness_std": 0.664,
+      "p_below_level": 0.495,
+      "p_switch": 0.126,
+      "gp_uncertainty_vs_training_std": 0.54,
+      "acquisition_score": 0.949,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": false,
+        "recovery_outcome": "no_switch",
+        "final_safe_recovery": false,
+        "lane_margin_min_m": 0.354,
+        "lat_acc_margin_mps2": 0.58
+      }
+    },
+    {
+      "fault_id": "F-06",
+      "fault_mode": "saturate",
+      "params": {
+        "duration_s": 0.6,
+        "side": "positive",
+        "magnitude": 0.5,
+        "ramp_s": 0.0
+      },
+      "route_id": "bench2drive:24206",
+      "max_speed_kmh": 30.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.0,
+      "tire_friction_scale": 0.8,
+      "predicted_lane_recovery_robustness": -2.0,
+      "predicted_lane_recovery_robustness_std": 0.018,
+      "p_below_level": 1.0,
+      "p_switch": 0.856,
+      "gp_uncertainty_vs_training_std": 0.01,
+      "acquisition_score": 0.593,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": true,
+        "switch_delay_s": 0.9,
+        "trigger": "tracking_divergence",
+        "recovery_outcome": "unrecovered",
+        "final_safe_recovery": false,
+        "lane_recovery_robustness": -2.0,
+        "lane_margin_min_m": -4.113,
+        "lat_acc_margin_mps2": -12.06,
+        "failed_reason": "unrecovered"
+      }
+    }
+  ],
+  "unexplored_regions": [],
+  "recent_outcomes_by_fault_mode": {
+    "saturate": {
+      "n": 1,
+      "switched": 1,
+      "never_switched": 0,
+      "recovered": 0,
+      "failed": 1,
+      "unlabelled": 0,
+      "invalid": 0,
+      "failed_reasons": {
+        "unrecovered": 1
+      },
+      "status": "failed_whenever_switched"
+    },
+    "bias": {
+      "n": 1,
+      "switched": 0,
+      "never_switched": 1,
+      "recovered": 0,
+      "failed": 0,
+      "unlabelled": 0,
+      "invalid": 0,
+      "status": "never_switched"
+    },
+    "stale": {
+      "n": 1,
+      "switched": 1,
+      "never_switched": 0,
+      "recovered": 0,
+      "failed": 1,
+      "unlabelled": 0,
+      "invalid": 0,
+      "failed_reasons": {
+        "lat_acc_or_jerk_excess": 1
+      },
+      "status": "failed_whenever_switched"
+    },
+    "output_delay": {
+      "n": 1,
+      "switched": 0,
+      "never_switched": 1,
+      "recovered": 0,
+      "failed": 0,
+      "unlabelled": 0,
+      "invalid": 0,
+      "status": "never_switched"
+    }
+  }
+}

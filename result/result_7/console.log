@@ -1,0 +1,36 @@
+[06] --gp-history: 56 earlier runs from 5 file(s) pooled into GP training, skipped {'route not in this campaign': 4}
+[cosmos-power] auto: endpoint dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq is started only for stage 10 / insights
+live screen opened: C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\results\real_int3c_1028\screen\campaign.html
+[00-02] prior payload (25 unverified obs omitted), objectives ['S1'], scenario space C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\04_feasibility_expansion\scenario_space_av_stack.yaml
+[round 0] pool 10 -> batch 4 (X-5, video on)
+  [08/09] R00-0000-saturate bench2drive:24206 30km/h saturate @curve_entry+0.00s -> unrecovered (lrr=-2.00, trigger=6.95s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=cold_start_nemotron_a)
+  [08/09] R00-0001-bias bench2drive:24206 30km/h bias @curve_entry+0.00s -> no_switch (lrr=None, trigger=6.90s, detected=None, sr=pass, sel=cold_start_nemotron_a)
+  [08/09] R00-0002-stale bench2drive:28035 35km/h stale @curve_entry-0.40s -> safe_recovery (lrr=0.81, trigger=46.30s, detected=stale_sequence, sr=pass, sel=cold_start_space_filling)
+  [08/09] R00-0003-output_delay town10_long 30km/h output_delay @curve_entry+0.39s -> no_switch (lrr=None, trigger=35.15s, detected=None, sr=pass, sel=cold_start_space_filling)
+[cosmos-power] starting Cosmos endpoint (stage_10 round 0); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 166s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (166s); waiting
+[cosmos-power]   control plane ready but chat/completions -> HTTP 429 (176s); waiting
+[cosmos-power] data plane answers after 187s (probe HTTP 200)
+  [10] R00-0000-saturate explained via video -> rejected ['departure_time_s']
+  [10] R00-0002-stale explained via video -> rejected ['departure_time_s']
+[cosmos-power] stop requested (stage_10 round 0); was enabled=True status=running readiness=ready ready_replicas=1
+[round 1] pool 193 -> batch 4 (X-5, video on)
+  [08/09] R01-0004-bias bench2drive:24206 30km/h bias @curve_entry+0.00s -> no_switch (lrr=None, trigger=6.90s, detected=None, sr=pass, sel=nemotron_a_share)
+  [08/09] R01-0005-bias bench2drive:24206 30km/h bias @curve_entry+0.00s -> unrecovered (lrr=-0.23, trigger=6.90s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=nemotron_a_share)
+  [08/09] R01-0006-bias bench2drive:24206 20km/h bias @straight+0.23s -> no_switch (lrr=None, trigger=25.60s, detected=None, sr=F3_not_recovered, sel=acquisition)
+  [08/09] R01-0007-bias bench2drive:28048 25km/h bias @curve_apex-0.89s -> no_switch (lrr=None, trigger=32.65s, detected=None, sr=F3_not_recovered, sel=acquisition)
+[cosmos-power] starting Cosmos endpoint (stage_10 round 1); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (11s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 166s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (166s); waiting
+[cosmos-power] data plane answers after 177s (probe HTTP 200)
+  [10] R01-0005-bias explained via video -> rejected ['departure_time_s']
+[cosmos-power] already on (campaign insights): enabled=True status=running readiness=ready ready_replicas=1
+campaign insights (C_cosmos): complete, 5 insights, 4 model calls -> results\real_int3c_1028\insights\insights.json
+[cosmos-power] stop requested (campaign insights); was enabled=True status=running readiness=ready ready_replicas=1
+{"n_runs": 8, "n_switched": 3, "n_final_safe_recovery": 0, "n_failures": 3, "both_sides_observed": false, "boundary_band_runs": 0, "explanations": 3, "explanations_accepted": 0}
+outputs: results\real_int3c_1028  (report.md, run_records.jsonl, screen/campaign.html, explanations.jsonl, monitor_rule_candidates.yaml, insights/insights.json, insights/campaign.html)

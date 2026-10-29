@@ -1,0 +1,52 @@
+{
+  "model": null,
+  "planner": "pdm",
+  "record_front": true,
+  "controller": "supervised",
+  "longitudinal": "tfpp",
+  "mpc_extension": "linear",
+  "speed_policy": "follow",
+  "mpc_fault": "none",
+  "fault_start": 20.0,
+  "fault_duration": 5.0,
+  "fault_magnitude": 0.05,
+  "fault_on_s": 0.2,
+  "fault_off_s": 0.2,
+  "fault_level": 1.0,
+  "fault_ramp_s": 0.0,
+  "stop_after_fault": null,
+  "max_speed_kmh": 30.0,
+  "tire_friction_scale": 0.5,
+  "comfort": true,
+  "monitor_period": 0.0,
+  "view": false,
+  "green_lights": false,
+  "out": "C:\\Users\\dongh\\Desktop\\junwoo\\SIL_HACKATHON\\results\\real_int3c_1028\\runs\\baselines\\e572d55c030e",
+  "device": "cuda",
+  "dt": 0.05,
+  "tire_friction": {
+    "scale": 0.5,
+    "applied": true,
+    "before": [
+      3.5,
+      3.5,
+      3.5,
+      3.5
+    ],
+    "after": [
+      1.75,
+      1.75,
+      1.75,
+      1.75
+    ]
+  },
+  "geometry": {
+    "mass": 1696.0,
+    "iz": 3347.178862870183,
+    "lf": 1.1642839305047656,
+    "lr": 1.6950954926213186,
+    "cf": 113066.66666666666,
+    "cr": 131911.1111111111,
+    "max_steer_rad": 1.2217303432379762
+  }
+}

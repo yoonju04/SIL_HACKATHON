@@ -1,0 +1,215 @@
+{
+  "n_runs": 8,
+  "n_valid": 8,
+  "n_switched": 3,
+  "n_final_safe_recovery": 0,
+  "n_failures": 3,
+  "both_sides_observed": false,
+  "boundary_band_runs": 0,
+  "boundary_band": 0.2,
+  "failures_per_simulation": 0.375,
+  "simulations_to_first_failure": 1,
+  "unique_failure_conditions": 3,
+  "outcome_counts": {
+    "unrecovered": 2,
+    "no_switch": 5,
+    "safe_recovery": 1
+  },
+  "trigger_counts": {
+    "tracking_divergence": 2,
+    "None": 5,
+    "stale_sequence": 1
+  },
+  "sr_outcome_counts": {
+    "F1_no_or_late_switch": 2,
+    "pass": 4,
+    "F3_not_recovered": 2
+  },
+  "explanations": 3,
+  "explanations_accepted": 0,
+  "explanation_acceptance_rate": 0.0,
+  "hallucination_rate": 1.0,
+  "boundary_metrics": {
+    "band": 0.2,
+    "boundary_band_runs": 0,
+    "boundary_band_runs_0.5": 1,
+    "n_lrr": 3,
+    "per_fault_mode": {
+      "saturate": {
+        "n": 1,
+        "outcomes": {
+          "unrecovered": 1
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "bias": {
+        "n": 5,
+        "outcomes": {
+          "no_switch": 4,
+          "unrecovered": 1
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "stale": {
+        "n": 1,
+        "outcomes": {
+          "safe_recovery": 1
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "output_delay": {
+        "n": 1,
+        "outcomes": {
+          "no_switch": 1
+        },
+        "final_safe": 0,
+        "mixed": false
+      }
+    },
+    "modes_with_mixed_outcome": [],
+    "gp_prediction_diversity": {
+      "recovery_success": {
+        "n": 4,
+        "distinct": 4,
+        "min": -0.871003,
+        "max": -0.294966,
+        "std": 0.28461780265559633
+      },
+      "switched_indicator": {
+        "n": 4,
+        "distinct": 3,
+        "min": 0.251185,
+        "max": 0.53886,
+        "std": 0.11445384257283589
+      }
+    },
+    "selection_sources": {
+      "nemotron_a": 4,
+      "space_filling": 4
+    },
+    "nemotron_a_share": 0.5
+  },
+  "gp_boundary_sign_accuracy": {
+    "n": 3,
+    "accuracy": null,
+    "note": "too few switched runs"
+  },
+  "a_schema_valid_items": 17,
+  "a_items_returned": 17,
+  "rejected_candidates": 1,
+  "nemotron_a": {
+    "proposals_in_pool": 4,
+    "executed": 4,
+    "share_of_executed_runs": 0.5,
+    "share_after_cold_start": 0.5,
+    "proposals_with_range_extreme": 2,
+    "proposals_extreme_unjustified": 1,
+    "mean_edge_distance": 0.125,
+    "expected_side": {
+      "boundary": 4
+    }
+  },
+  "nemotron_b": {
+    "b_hallucination_rate": 0.02702702702702703,
+    "b_code_agreement_rate": 0.9054054054054054,
+    "b_checked_answers": 74,
+    "b_hallucinated_answers": 2,
+    "b_unknown_when_code_decides": 5,
+    "citation_valid_rate": 0.9954954954954955,
+    "citation_relevant_rate": 0.9954954954954955,
+    "per_question": {
+      "Q-B2": {
+        "asked": 1,
+        "checked": 1,
+        "hallucinated": 0,
+        "distinct_answers": 1,
+        "answers": {
+          "no": 1
+        }
+      },
+      "Q-B3": {
+        "asked": 1,
+        "checked": 1,
+        "hallucinated": 0,
+        "distinct_answers": 1,
+        "answers": {
+          "no": 1
+        }
+      },
+      "Q-B1": {
+        "asked": 24,
+        "checked": 24,
+        "hallucinated": 0,
+        "distinct_answers": 3,
+        "answers": {
+          "corrupted_mpc": 18,
+          "lqr_early": 4,
+          "stale_mpc": 2
+        }
+      },
+      "Q-B4": {
+        "asked": 24,
+        "checked": 24,
+        "hallucinated": 2,
+        "distinct_answers": 5,
+        "answers": {
+          "none_during_fault": 12,
+          "unknown": 5,
+          "stale_output": 2,
+          "steer_out_of_range": 3,
+          "solver_failure": 2
+        }
+      },
+      "Q-B5": {
+        "asked": 24,
+        "checked": 24,
+        "hallucinated": 0,
+        "distinct_answers": 4,
+        "answers": {
+          "steer_value_only": 18,
+          "sequence_or_stamp": 2,
+          "steer_and_reported_state": 2,
+          "ok_flag": 2
+        }
+      }
+    },
+    "note": "hallucinated = majority answer outside expected_from_code (not 'unknown'); one row per b_key + static",
+    "gp_b_columns": 17,
+    "gp_b_constant_columns": 10,
+    "gp_b_constant_fraction": 0.5882352941176471,
+    "gp_b_questions": [
+      "Q-B1",
+      "Q-B4"
+    ],
+    "b_keys": 24
+  },
+  "llm_usage": {
+    "A": {
+      "calls": 2,
+      "prompt_tokens": 17488,
+      "completion_tokens": 3062,
+      "stub": false
+    },
+    "B": {
+      "calls": 75,
+      "prompt_tokens": 1553775,
+      "completion_tokens": 184134,
+      "stub": false
+    },
+    "C": {
+      "calls": 3,
+      "prompt_tokens": 22242,
+      "completion_tokens": 3548,
+      "stub": false
+    },
+    "A_refine": {
+      "calls": 1,
+      "prompt_tokens": 7485,
+      "completion_tokens": 8483,
+      "stub": false
+    }
+  }
+}
