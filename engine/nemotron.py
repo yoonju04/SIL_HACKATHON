@@ -500,7 +500,7 @@ def questions_of_scope(questions: list[dict], scope: str) -> list[dict]:
 
 def param_bin_suffix(questions: list[dict], params: dict) -> str:
     """b_key suffix: bin index of every fault parameter a per_scenario question declares in param_bins
-    ({duration_s: [0.25]} -> duration_s#0 for <= 0.25, #1 above). A fault without that parameter adds nothing
+    ({duration_s: [0.15]} -> duration_s#0 for <= 0.15, #1 above). A fault without that parameter adds nothing
     (bias / drift / ... run until the route ends), so the cache stays bounded (mode x onset x bins)."""
     bins: dict[str, list[float]] = {}
     for q in questions_of_scope(questions, "per_scenario"):
@@ -786,15 +786,20 @@ _STUB_B_TABLE = {
     "Q-B2": {}, "Q-B3": {},
 }
 _STUB_B_DEFAULT = {"Q-B1": "corrupted_mpc", "Q-B4": "tracking_divergence", "Q-B5": "steer_value_only", "Q-B2": "no", "Q-B3": "no"}
-_STUB_B_CITE = {"Q-B1": ("integration/fault_injection.py", 112), "Q-B4": ("integration/supervised_lateral.py", 42),
+_STUB_B_CITE = {"Q-B1": ("integration/fault_injection.py", 112), "Q-B4": ("integration/supervised_lateral.py", 74),
                 "Q-B5": ("integration/fault_injection.py", 101), "Q-B2": ("integration/supervised_lateral.py", 117),
                 "Q-B3": ("integration/supervised_lateral.py", 135)}
 
 
 def _stub_b_answer(qid: str, mode: str | None, params: dict, opts: list[str]) -> str:
     ans = _STUB_B_TABLE.get(qid, {}).get(mode, _STUB_B_DEFAULT.get(qid, opts[-1]))
-    if qid == "Q-B4" and mode == "saturate" and float(params.get("duration_s", 1.0)) <= 0.25:
-        ans = "none_during_fault"
+    if qid == "Q-B4" and mode == "saturate":
+        # integration3 #8 (tight supervisor): a step (ramp 0) trips the 90 deg/s rate check at once; a ramped
+        # saturate shorter than the 0.15 s divergence hold cannot fire during the fault
+        if float(params.get("ramp_s", 0.0) or 0.0) <= 0.0:
+            ans = "steer_rate_exceeded"
+        elif float(params.get("duration_s", 1.0)) <= 0.15:
+            ans = "none_during_fault"
     return ans if ans in opts else opts[-1]
 
 

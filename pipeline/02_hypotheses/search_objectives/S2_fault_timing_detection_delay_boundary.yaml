@@ -21,8 +21,9 @@ objective:
 # 코드 확인 결과:
 #   감지 후 전환은 같은 루프 반복 (switch_latency 0, O-021). 옛 H-06의 'F-04 전환 명령 지연' 같은
 #   supervisor 출력 지연 주입기는 없다 (fault_injection.py는 MPC 출력만 바꿈, :1). → 그 축은 미구현.
-#   지연은 '감지 지연'에서만 생긴다: 즉시 검사(T-01~07)를 피하고 tracking_divergence(T-08, |e_y|>1.0 m
-#   또는 |e_psi|>0.6 rad가 0.25 s)로만 잡히는 고장들.
+#   지연은 '감지 지연'에서만 생긴다: 즉시 검사(T-01~07, T-10 steer_rate_exceeded)를 피하고 tracking_divergence(T-08,
+#   tight |e_y|>0.6 m 또는 |e_psi|>0.35 rad가 0.15 s; legacy 1.0 m / 0.6 rad / 0.25 s)로만 잡히는 고장들.
+#   integration3 #8: tight 에서는 한 틱 점프(saturate ramp 0, bias·intermittent bias 의 큰 계단)가 T-10 으로 즉시 잡힘.
 #   옛 H-02의 hold_last 전제도 성립하지 않음: T-08 hold 동안 오염된 MPC 명령이 그대로 적용됨 (safety_profile O-023).
 
 search_dimensions:
@@ -45,7 +46,7 @@ switch_trigger:
   comparison_reference: solver_fail            # 지연 0 기준 (S1과 같은 고장)
 
 evaluation:
-  - {name: detection_delay_s, definition: 'switched_at_s - fault_start_s', source: 'summary/control log switched_at_s (supervised_lateral.py:140-144)', note: '전환 없으면 null'}
+  - {name: detection_delay_s, definition: 'switched_at_s - fault_start_s', source: 'summary/control log switched_at_s (supervised_lateral.py:171-175)', note: '전환 없으면 null'}
   - {name: pre_switch_max_lateral_error_m, defined_in: 'outcome_definitions.pre_switch_max_lateral_error_m'}
   - {name: lane_recovery_robustness, role: gp_target, defined_in: 'outcome_definitions.lane_recovery_robustness'}
   - {name: lat_acc_excess_mps2, role: gp_target_secondary, defined_in: 'outcome_definitions.lat_acc_excess_mps2'}

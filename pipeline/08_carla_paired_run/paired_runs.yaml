@@ -79,7 +79,7 @@ paired_runs:
   detector_cannot_see_injected_fault: true
   # 런마다 09 run_record로 넘길 감독기 기록 (sim-eval av_stack 로그 기준)
   supervisor_log_fields:
-    trigger_source: 'behavior.jsonl supervisor_reason / control log supervisor_reason (integration/monitor_logs.py:123-124, supervised_lateral.py:140-144)'
+    trigger_source: 'behavior.jsonl supervisor_reason / control log supervisor_reason (integration/monitor_logs.py:123-124, supervised_lateral.py:171-175)'
     switch_time: 'switched_at_s'
     switch_count: 'switch_count'
     fault_config: 'fault_mode, fault_magnitude, fault_injected (integration/pdm_agent.py:284-296)'
@@ -94,6 +94,12 @@ runner:
   python_exe: null                             # null이면 av_stack/.venv-tfpp/Scripts/python.exe → bin/python → 환경변수 AV_STACK_PYTHON
   planner: pdm                                 # scenario_space_av_stack.yaml 관측 조건 (사용자 확인 필요)
   controller: supervised
+  # integration3 #8: run_benchmark.py --supervisor (av_stack SUPERVISOR_PROFILES). tight = 0.6 m / 0.35 rad / 0.15 s
+  #   + MPC 조향 명령 속도 > 90 °/s 즉시 전환. legacy = 1.0 m / 0.6 rad / 0.25 s, 속도 검사 없음 (result_1~6 은 legacy).
+  #   tight = 0.6 m / 0.35 rad held 0.15 s + MPC command rate > 90 deg/s; legacy = the rule result_1..6 ran with.
+  #   baseline 캐시 키에는 넣지 않음: 고장 없는 baseline 44개(result_1~6)에 tight 규칙을 다시 돌려도 한 번도 안 걸림.
+  supervisor: tight
+  gp_history_same_supervisor: true             # --gp-history: 다른 감독기로 돈 런(이전 결과 = legacy)은 GP 학습에서 뺀다
   record_front: true                           # front.mp4 + front_frames.jsonl → 10 video explainer
   chase_view: false                            # true면 view.mp4도 기록 (창 필요). 기본 --no-view
   stop_after_fault_s: 15.0                     # PROVISIONAL: SR 평가 창 10 s (회복 창 3 s) + 여유. --stop-after-fault

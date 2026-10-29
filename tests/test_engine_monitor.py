@@ -18,7 +18,9 @@ def runs(tmp_path_factory):
                              stop_after_fault_s=15, record_front=False)
     big = write_run_folder(d / "sat", route="bench2drive:26956", max_speed_kmh=30,
                            fault=dict(mode="saturate", start=20.0, duration=500.0, magnitude=1.0),
-                           stop_after_fault_s=15, record_front=False)
+                           stop_after_fault_s=15, record_front=False, supervisor="legacy")
+    # integration3 #8: legacy supervisor on purpose - this fixture is the lane-departure case for the monitor; with the
+    # tight supervisor the saturate step trips the 90 deg/s rate check at once and the LQR recovers
     return base, small, big
 
 

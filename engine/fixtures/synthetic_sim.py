@@ -7,8 +7,10 @@ benchmark_recording.py) so that 09 monitor / 10 video explainer can be exercised
   front_frames.jsonl + front.mp4 (tiny top-down rendering, only if ffmpeg is available)
 
 The vehicle model is a kinematic error model (e_y' = v sin e_psi, e_psi' = v tan(delta)/L - v kappa)
-with a linear "MPC", the av_stack supervisor rules (tracking_divergence 1.0 m / 0.6 rad held 0.25 s,
-solver_failure same tick, latched) and an "LQR" with angle clip + 90 deg/s rate limit. Gains, route
+with a linear "MPC" (self-limited to 60 deg/s like mpc.py steer_rate_lim_dps), the av_stack supervisor rules
+(SUPERVISOR_PROFILES below = av_stack integration/supervised_lateral.py: tight 0.6 m / 0.35 rad held 0.15 s + MPC
+command rate > 90 deg/s, legacy 1.0 m / 0.6 rad held 0.25 s without a rate check; solver_failure same tick, latched)
+and an "LQR" with angle clip + 90 deg/s rate limit. Gains, route
 shapes and the collision rule are invented so that both recoveries and failures occur. Every file
 carries synthetic_fixture: true.
 """
@@ -30,6 +32,12 @@ MAX_STEER = 0.70           # rad, synthetic
 HALF_W, HALF_L, LANE_W = 0.93, 2.4, 3.5
 COLLISION_OFFSET_M = 3.2   # synthetic: |offset| beyond this = hit roadside object
 GRIP_MU = 0.9              # synthetic tyre: a_lat <= GRIP_MU * tire_friction_scale * g (integration3)
+
+# same numbers as av_stack integration/supervised_lateral.py SUPERVISOR_PROFILES (tests/test_integration3_supervisor.py
+# checks they match): e_y_m, e_psi_rad, hold_s, max_steer_rate_dps (None = no rate check)
+SUPERVISOR_PROFILES = {"tight": dict(e_y_m=0.6, e_psi_rad=0.35, hold_s=0.15, max_steer_rate_dps=90.0),
+                       "legacy": dict(e_y_m=1.0, e_psi_rad=0.6, hold_s=0.25, max_steer_rate_dps=None)}
+MPC_RATE_LIMIT_DPS = 60.0  # mpc.py MPCConfig.steer_rate_lim_dps
 
 # synthetic route curvature profiles: list of (length_m, curvature_1pm)
 ROUTES = {
@@ -64,11 +72,16 @@ def _gains(v: float, wn: float, zeta: float) -> tuple[float, float]:
 
 def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, seed: int = 17,
              stop_after_fault_s: float | None = None, max_time_s: float = 120.0,
-             supervised: bool = True, tire_friction_scale: float = 1.0) -> dict[str, Any]:
+             supervised: bool = True, tire_friction_scale: float = 1.0, supervisor: str = "tight") -> dict[str, Any]:
     """Return per-tick arrays + events. fault = {mode, start, duration, magnitude, on_s, off_s, level, ramp_s} or None.
     supervised=False is the no-reaction run (`--controller mpc_unprotected`): the MPC keeps steering (SR1 FTTI).
     tire_friction_scale (integration3, SYNTHETIC): the achievable lateral acceleration is capped at
-    GRIP_MU * scale * g; beyond it the car understeers (yaw rate follows the cap, not the steering)."""
+    GRIP_MU * scale * g; beyond it the car understeers (yaw rate follows the cap, not the steering).
+    supervisor: 'tight' (default, = run_benchmark.py --supervisor default) | 'legacy' (SUPERVISOR_PROFILES)."""
+    sup = SUPERVISOR_PROFILES[supervisor]
+    mpc_lim = math.radians(MPC_RATE_LIMIT_DPS) * DT
+    u_mpc = None      # the MPC's own (rate-limited) command before the fault injector
+    u_prev = None     # last MPC output the supervisor saw (after the injector)
     rng = random.Random(hash((route, round(max_speed_kmh, 3), seed)) & 0xFFFFFFFF)
     v_cap = max_speed_kmh / 3.6
     s = 0.0; v = 0.0; e_y = 0.0; e_psi = 0.0; delta = 0.0
@@ -95,7 +108,11 @@ def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, see
         status = "ok"
         if active == "mpc":
             a, b = _gains(v, 1.2, 0.9)
-            u = delta_ref - (a * e_y + b * e_psi)
+            u_lin = delta_ref - (a * e_y + b * e_psi)
+            # integration3 #8: the MPC limits its own command rate (mpc.py), so a healthy command never jumps
+            u = u_lin if u_mpc is None else max(u_mpc - mpc_lim, min(u_mpc + mpc_lim, u_lin))
+            u = max(-MAX_STEER, min(MAX_STEER, u))
+            u_mpc = u
             history.append(u)
             reported = (e_y, e_psi)
             ok = True
@@ -127,14 +144,19 @@ def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, see
                     lim = math.radians(60.0) * DT
                     delta = max(delta - lim, min(delta + lim, max(-MAX_STEER, min(MAX_STEER, u))))
             else:
+                rate_dps = sup["max_steer_rate_dps"]
                 if not ok:
                     reason = "stale_sequence" if mode == "stale" else "solver_failure"
-                elif abs(reported[0]) > 1.0 or abs(reported[1]) > 0.6:
+                elif rate_dps is not None and u_prev is not None and abs(u - u_prev) > math.radians(rate_dps) * DT + 1e-9:
+                    reason = "steer_rate_exceeded"   # av_stack MPCSupervisor.inspect: a jump the MPC cannot produce
+                elif abs(reported[0]) > sup["e_y_m"] or abs(reported[1]) > sup["e_psi_rad"]:
                     bad_since = t if bad_since is None else bad_since
-                    if t - bad_since >= 0.25 - 1e-9:
+                    if t - bad_since >= sup["hold_s"] - 1e-9:
                         reason = "tracking_divergence"
                 else:
                     bad_since = None
+                if ok:
+                    u_prev = u
                 if reason is not None:
                     active, switched_at, switch_count = "lqr", round(t, 4), 1
                 else:
@@ -206,11 +228,11 @@ def _ffmpeg() -> str | None:
 
 def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict[str, Any] | None,
                      seed: int = 17, stop_after_fault_s: float | None = None, record_front: bool = True,
-                     controller: str = "supervised", tire_friction_scale: float = 1.0) -> Path:
+                     controller: str = "supervised", tire_friction_scale: float = 1.0, supervisor: str = "tight") -> Path:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     sim = simulate(route, max_speed_kmh, fault, seed, stop_after_fault_s, supervised=controller == "supervised",
-                   tire_friction_scale=tire_friction_scale)
+                   tire_friction_scale=tire_friction_scale, supervisor=supervisor)
     rows = sim["rows"]
     f = fault or {"mode": "none", "start": 20.0, "duration": 5.0, "magnitude": 0.05}
     marker = {"synthetic_fixture": True, "generator": "engine/fixtures/synthetic_sim.py"}
@@ -219,7 +241,7 @@ def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict
                   fault_magnitude=f["magnitude"], fault_on_s=f.get("on_s", 0.2), fault_off_s=f.get("off_s", 0.2),
                   fault_level=f.get("level", 1.0), fault_ramp_s=f.get("ramp_s", 0.0),
                   stop_after_fault=stop_after_fault_s, max_speed_kmh=max_speed_kmh, dt=DT, out=str(out),
-                  tire_friction_scale=tire_friction_scale,
+                  tire_friction_scale=tire_friction_scale, supervisor=supervisor,
                   tire_friction=dict(scale=tire_friction_scale, applied=True, synthetic=True),
                   geometry=dict(max_steer_rad=MAX_STEER, lf=1.35, lr=1.55), **marker)
     (out / "agent_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")

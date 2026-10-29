@@ -47,10 +47,10 @@ results_schema:
                             simulation_invalid, no_switch]
   # trigger_source: 감독기가 전환한 이유 = av_stack supervisor_reason (behavior.jsonl, sim-eval
   #   integration/monitor_logs.py:123-124). 값은 safety_profile.yaml switching.triggers 이름과 같다
-  #   (integration/supervised_lateral.py:28-52, 109-112). 전환이 없으면 null.
+  #   (integration/supervised_lateral.py:28-83, 140-143). 전환이 없으면 null.
   trigger_source_values: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range,
                           deadline_miss, stale_output, stale_sequence, tracking_divergence,
-                          controller_exception, null]
+                          controller_exception, steer_rate_exceeded, null]   # integration3 #8 (T-10, tight)
   # trigger_attribution: 모니터가 사후에 계산 (감독기는 주입 여부를 보지 않음, supervised_lateral.py:20).
   #   fault 설정(mode, fault_start, duration)과 trigger_time을 비교한다. S3/S4 원인 구분용.
   trigger_attribution_values: [no_fault_configured, inside_fault_window, outside_fault_window, no_switch]
@@ -61,13 +61,13 @@ results_schema:
     e_psi_at_switch: {source: 'agent_controls.jsonl heading_error @ t = switched_at_s (pdm_agent.py:288)', available: true}
     e_y_dot_at_switch: {source: 'steps.jsonl vx, vy + heading_error, vx*sin(e_psi)+vy*cos(e_psi) (lqr_controller/reference.py:72)', available: derived}
     e_psi_dot_at_switch: {source: 'yaw_rate - kappa*vx (reference.py:73)', available: false, todo: 'kappa 로깅 (S1 logging_todo L-3)'}
-    normalized_switch_error: {source: 'max(|e_y|/1.0, |e_psi|/0.6), supervised_lateral.py:45 임계값', available: true}
+    normalized_switch_error: {source: 'max(|e_y|/e_y_th, |e_psi|/e_psi_th), 런의 감독기 프로파일 임계값 (tight 0.6/0.35, legacy 1.0/0.6; supervised_lateral.py:75, engine/monitor.py supervisor_thresholds)', available: true}
     speed_at_switch_mps: {source: 'steps.jsonl vx', available: true}
     kappa_at_switch: {source: null, available: false, todo: L-3}
   handover_saturation_fields:
     window_s: 1.0     # outcome_definitions.post_switch_saturation_ratio와 같은 창
     max_steer_rad: {source: 'agent_config.json geometry.max_steer_rad (integration/tfpp_benchmark.py:111-113)', available: true}
-    rate_limit_dps: {source: '구성 상수 PDM 90 (pdm_agent.py:86) / TF++ 60 (supervised_lateral.py:82)', available: 'config, 런 메타에는 없음 (L-2)'}
+    rate_limit_dps: {source: '구성 상수 PDM 90 (pdm_agent.py:86) / TF++ 60 (supervised_lateral.py:113)', available: 'config, 런 메타에는 없음 (L-2)'}
     angle_saturation_ratio: {source: 'agent_controls.jsonl steer, |steer| >= 1-eps (integration/carla_io.py:29-31)', available: true}
     rate_saturation_ratio: {source: '|Δsteer|*max_steer_rad/0.05 >= rate_limit-eps', available: true}
     time_in_saturation_s: {source: '각도 또는 속도 포화 틱 수 * 0.05', available: true}

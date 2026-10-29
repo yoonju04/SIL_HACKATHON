@@ -56,9 +56,11 @@ def test_fault_dict_for_sim_carries_level_and_ramp(space):
     assert d0["level"] == 1.0 and d0["ramp_s"] == 0.0
 
 
-def _peak_offset(level, ramp=0.0, duration=0.4, route="town10_long", speed=30.0):
+def _peak_offset(level, ramp=0.0, duration=0.4, route="town10_long", speed=30.0, supervisor="legacy"):
+    # integration3 #8: legacy supervisor here - this checks the fault shape itself; the tight profile's rate check
+    # switches at the step (tests/test_integration3_supervisor.py)
     fault = dict(mode="saturate", start=20.0, duration=duration, magnitude=1.0, level=level, ramp_s=ramp)
-    rows = SIM.simulate(route, speed, fault, seed=17)["rows"]
+    rows = SIM.simulate(route, speed, fault, seed=17, supervisor=supervisor)["rows"]
     return max(abs(r["e_y"]) for r in rows if r["t"] >= 20.0)
 
 

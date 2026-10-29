@@ -42,9 +42,9 @@ B_question_answering:
       refs: [S2]
       expected_from_code:
         by_fault_mode:
-          solver_fail: 'lqr_early'               # fault_injection.py:111 ok=False → supervised_lateral.py:29-30 같은 틱 → :116-123 LQR
-          stale: 'lqr_early'                     # fault_injection.py:107-108,112 직전 정상 출력(같은 seq) → supervised_lateral.py:42-43 stale_sequence
-          bias: 'corrupted_mpc'                  # fault_injection.py:79-82,113 steer 만 바뀜 → supervised_lateral.py:108-111 그대로 적용
+          solver_fail: 'lqr_early'               # fault_injection.py:111 ok=False → supervised_lateral.py:52-53 같은 틱 → :116-123 LQR
+          stale: 'lqr_early'                     # fault_injection.py:107-108,112 직전 정상 출력(같은 seq) → supervised_lateral.py:65-66 stale_sequence
+          bias: 'corrupted_mpc'                  # fault_injection.py:79-82,113 steer 만 바뀜 → supervised_lateral.py:139-142 그대로 적용
           drift: 'corrupted_mpc'                 # fault_injection.py:114
           intermittent_bias: 'corrupted_mpc'     # fault_injection.py:84-88,115
           saturate: 'corrupted_mpc'              # fault_injection.py:90-97,116 (ramp_s 동안 MPC 명령과 섞임)
@@ -55,26 +55,31 @@ B_question_answering:
         - {file: integration/supervised_lateral.py, function: SupervisedLateral.step}
     - id: Q-B4
       scope: per_scenario
-      gp_feature: true                           # 유일하게 파라미터(saturate duration_s)에 따라 정답이 바뀌는 질문
+      gp_feature: true                           # 유일하게 파라미터(saturate duration_s, ramp_s)에 따라 정답이 바뀌는 질문
       question: "이 고장 모드와 파라미터에서, 고장이 켜져 있는 동안 감독기의 어느 검사가 가장 먼저 걸리는가? (고장과 무관한 계산 시간 초과는 제외)"
       question_en: "For this fault mode and these parameters, which supervisor check fires first WHILE the fault is active? Ignore deadline misses caused by wall-clock compute time unrelated to the fault. Answer none_during_fault if no check can fire before the fault window ends."
       answer: ['solver_failure', 'missing_steer', 'nonfinite_output', 'steer_out_of_range', 'deadline_miss',
-               'stale_output', 'stale_sequence', 'tracking_divergence', 'controller_exception', 'none_during_fault', 'unknown']
+               'stale_output', 'stale_sequence', 'steer_rate_exceeded', 'tracking_divergence', 'controller_exception',
+               'none_during_fault', 'unknown']
       refs: [S1, S2]
-      param_bins: {duration_s: [0.25]}           # tracking_divergence 지속 조건 0.25 s (supervised_lateral.py:50)
+      # integration3 #8: 기대 답은 감독기 tight 프로파일 기준 (run_benchmark.py --supervisor 기본, paired_runs.yaml runner.supervisor).
+      #   tight: tracking_divergence 0.6 m / 0.35 rad 0.15 s 유지 + MPC 명령 속도 > 90 °/s 즉시 (steer_rate_exceeded).
+      #   expected answers are for the tight profile (default); legacy (1.0 m / 0.6 rad / 0.25 s, no rate check) differs.
+      param_bins: {duration_s: [0.15], ramp_s: [0.0]}   # 지속 조건 0.15 s / ramp 0 = 한 틱 점프 (속도 검사)
       expected_from_code:
         by_fault_mode:
-          solver_fail: 'solver_failure'          # supervised_lateral.py:29-30 (첫 검사)
-          stale: 'stale_sequence'                # :40-43 stamp 차 0.05 s ≤ 0.1 이라 stale_output 아님, seq 같음 → stale_sequence
+          solver_fail: 'solver_failure'          # supervised_lateral.py MPCSupervisor.inspect 첫 검사 (ok = False)
+          stale: 'stale_sequence'                # stamp 차 0.05 s ≤ 0.1 이라 stale_output 아님, seq 같음 → stale_sequence (속도 검사보다 앞)
           # 아래는 코드가 '불가능한 답'만 정한다 → 허용 답 목록 (어느 쪽이 먼저인지는 차량 동역학이 정함)
-          bias: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']         # :36 (|MPC+bias| > 최대각일 때만), :45-51
-          drift: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']
-          intermittent_bias: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']
-          output_delay: ['tracking_divergence', 'none_during_fault']    # fault_injection.py:101 옛 steer(mpc.py:246 에서 이미 최대각 안)·옛 state, 새 seq/stamp
-          saturate:                              # fault_injection.py:93 target = level×최대각, level ≤ 1 (:51-52) → :36 의 '초과' 검사 통과
+          # 속도 검사: |Δsteer| / dt > 90 °/s (0.05 s 틱이면 한 틱에 4.5°). MPC 자체는 60 °/s(틱당 3°)로 제한
+          bias: ['steer_out_of_range', 'steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']   # 시작 순간 magnitude 만큼 점프 (0.02~0.1 rad)
+          drift: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']   # 0.05 rad/s ≈ 2.9 °/s + MPC 60 °/s < 90 °/s → 속도 검사 불가
+          intermittent_bias: ['steer_out_of_range', 'steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']   # 켜질/꺼질 때마다 점프 (0.05~0.15 rad)
+          output_delay: ['steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']    # 시작 순간 k틱 전 명령으로 되돌아감 (최대 k×3°)
+          saturate:                              # target = level×최대각, level ≤ 1 → 최대각 '초과' 검사 통과
             cases:
-              - {when: {param: duration_s, le: 0.25}, expect: 'none_during_fault'}   # 지속 0.25 s 이하면 :50 조건을 고장 중에 못 채움
-            default: ['tracking_divergence', 'none_during_fault']
+              - {when: {param: duration_s, le: 0.15}, expect: ['steer_rate_exceeded', 'none_during_fault']}   # 0.15 s 유지 조건을 고장 중에 못 채움
+            default: ['steer_rate_exceeded', 'tracking_divergence', 'none_during_fault']   # ramp_s 0 은 보통 한 틱 점프지만 MPC가 이미 그 각도 근처면 아님
       evidence_regions:
         - {file: integration/supervised_lateral.py, function: MPCSupervisor.inspect}
         - {file: integration/fault_injection.py, function: MPCFaultInjector}
@@ -95,7 +100,7 @@ B_question_answering:
           drift: 'steer_value_only'
           intermittent_bias: 'steer_value_only'
           saturate: 'steer_value_only'           # :97
-          output_delay: 'steer_and_reported_state'   # :101 state 도 옛 값 → 추적 오차 검사(supervised_lateral.py:45)도 k틱 늦게 봄
+          output_delay: 'steer_and_reported_state'   # :101 state 도 옛 값 → 추적 오차 검사(supervised_lateral.py:75)도 k틱 늦게 봄
       evidence_regions:
         - {file: integration/fault_injection.py, function: MPCFaultInjector}
     - id: Q-B2
@@ -105,7 +110,7 @@ B_question_answering:
       question_en: "Does the supervisor ever switch back from LQR to MPC, allowing repeated MPC<->LQR switching?"
       answer: ['yes', 'no', 'unknown']
       refs: [S3]
-      expected_from_code: 'no'                   # supervised_lateral.py:99,116-117 active 는 mpc→lqr→safe_stop 만 (복귀 코드 없음)
+      expected_from_code: 'no'                   # supervised_lateral.py:130,147-148 active 는 mpc→lqr→safe_stop 만 (복귀 코드 없음)
       evidence_regions:
         - {file: integration/supervised_lateral.py, function: SupervisedLateral.step}
     - id: Q-B3
@@ -115,7 +120,7 @@ B_question_answering:
       question_en: "Can the LQR takeover at the switch instant create a steering discontinuity (a jump larger than the post-takeover rate limit)?"
       answer: ['yes', 'no', 'unknown']
       refs: [S1]
-      expected_from_code: 'no'                   # lqr.py:158-174 내부 적분 상태 없음, supervised_lateral.py:134-136 직전 적용 조향 기준 60°/s 제한
+      expected_from_code: 'no'                   # lqr.py:158-174 내부 적분 상태 없음, supervised_lateral.py:165-167 직전 적용 조향 기준 60°/s 제한
       evidence_regions:
         - {file: integration/supervised_lateral.py, function: SupervisedLateral.step}
         - {file: lqr_controller/lqr.py, function: LQRLateralController.compute}

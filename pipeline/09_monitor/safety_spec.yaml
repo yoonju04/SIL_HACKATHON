@@ -59,7 +59,7 @@ safety_specification:
   category_mapping:
     simulation_invalid: simulation_invalid
     no_trigger: "no_switch (감독기 사유 없음. 감지 못 한 고장 포함 → P-01/P-03은 evaluation_window로 따로 기록)"
-    triggered_no_switch: "no_switch (사유는 있으나 LQR로 안 넘어감. av_stack은 같은 틱 전환이라 현재 발생 안 함: supervised_lateral.py:113-117)"
+    triggered_no_switch: "no_switch (사유는 있으나 LQR로 안 넘어감. av_stack은 같은 틱 전환이라 현재 발생 안 함: supervised_lateral.py:144-148)"
     switched_safe: "final_safe_recovery == true"
     switched_unsafe: "전환했고 final_safe_recovery == false (recovered_after_departure, unsettled, unrecovered, 또는 safe_recovery + 가속도/저크 라벨)"
   infraction_reference: "CARLA Leaderboard 2.1 (02 references E-03): 충돌 → collisions.json / evaluation_events.json, 경로 이탈 → evaluation_events.json"

@@ -195,10 +195,10 @@ def footprint_margin_m(r: dict) -> float:
 
 
 def _rate_limit_dps(run: RunData) -> tuple[float, str]:
-    # pdm_agent.py:86 TAKEOVER_RATE_DPS = 90 for the PDM path; SupervisedLateral default 60 (supervised_lateral.py:82)
+    # pdm_agent.py:86 TAKEOVER_RATE_DPS = 90 for the PDM path; SupervisedLateral default 60 (supervised_lateral.py:113)
     if (run.config.get("planner") or run.manifest.get("planner")) == "pdm":
         return 90.0, "config:pdm_agent.py:86 (not in run meta, logging L-2)"
-    return 60.0, "config:supervised_lateral.py:82 (not in run meta, logging L-2)"
+    return 60.0, "config:supervised_lateral.py:113 (not in run meta, logging L-2)"
 
 
 def _rmse(xs: list) -> float | None:
@@ -220,7 +220,7 @@ def compute_events(run: RunData, th: dict[str, float] | None = None) -> dict[str
     ev["planned_fault_onset"] = fault["start"] if fault["mode"] != "none" else None
     ev["actual_fault_onset"] = actual
     # trigger / switch: behavior.jsonl active_controller leaves 'mpc' on the switch tick (same-tick switch,
-    # supervised_lateral.py:113-117); agent_controls switched_at_s is the supervisor's own stamp.
+    # supervised_lateral.py:144-148); agent_controls switched_at_s is the supervisor's own stamp.
     sw_row = next((r for r in ticks if r.get("active_controller") not in (None, "mpc")), None)
     detect_row = next((r for r in ticks if r.get("supervisor_reason")), None)
     # trigger = the fault first changed the MPC output (runner contract: no_trigger = fault had no effect).
@@ -272,6 +272,20 @@ def compute_events(run: RunData, th: dict[str, float] | None = None) -> dict[str
 
 def _window(rows: list[dict], t0: float, t1: float) -> list[dict]:
     return [r for r in rows if t0 - 1e-9 <= r["t"] <= t1 + 1e-9]
+
+
+# integration3 #8: av_stack supervisor profiles (integration/supervised_lateral.py SUPERVISOR_PROFILES):
+# tracking_divergence (|e_y| m, |e_psi| rad). Runs written before `--supervisor` existed have no key = legacy.
+SUPERVISOR_DIVERGENCE = {"tight": (0.6, 0.35), "legacy": (1.0, 0.6)}
+
+
+def supervisor_profile(run: RunData) -> str:
+    return str((run.config or {}).get("supervisor") or "legacy")
+
+
+def supervisor_thresholds(run: RunData) -> tuple[float, float]:
+    """(e_y_m, e_psi_rad) of the tracking_divergence rule the run was recorded with (normalized_switch_error)."""
+    return SUPERVISOR_DIVERGENCE.get(supervisor_profile(run), SUPERVISOR_DIVERGENCE["legacy"])
 
 
 def compute_run_record(run: RunData, baseline: RunData | None = None, *, candidate: dict | None = None,
@@ -386,7 +400,8 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
         ey_sw, epsi_sw = r_sw.get("ctrl_tracking_error"), r_sw.get("ctrl_heading_error")
         vx, vy = r_sw.get("vx"), r_sw.get("vy")
         eydot = (vx * math.sin(epsi_sw) + vy * math.cos(epsi_sw)) if all(_finite(x) for x in (vx, vy, epsi_sw)) else None
-        nse = max(abs(ey_sw) / 1.0, abs(epsi_sw) / 0.6) if _finite(ey_sw) and _finite(epsi_sw) else None
+        ey_th, epsi_th = supervisor_thresholds(run)
+        nse = max(abs(ey_sw) / ey_th, abs(epsi_sw) / epsi_th) if _finite(ey_sw) and _finite(epsi_sw) else None
         switch_state = dict(e_y_at_switch=ey_sw, e_psi_at_switch=epsi_sw, e_y_dot_at_switch=eydot,
                             e_psi_dot_at_switch=None, normalized_switch_error=nse, speed_at_switch_mps=vx,
                             kappa_at_switch=None, lane_offset_at_switch=r_sw.get("lane_offset_m"),
@@ -413,7 +428,7 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
                      t_sw if switched else end_t)
     elapsed = [r.get("ctrl_primary_elapsed_ms") for r in ewin if r.get("active_controller") == "mpc"
                and _finite(r.get("ctrl_primary_elapsed_ms"))]
-    deadline_ms = 1000.0 * dt  # supervised_lateral.py:74 deadline_ms = dt*1000
+    deadline_ms = 1000.0 * dt  # supervised_lateral.py:105 deadline_ms = dt*1000
     metrics = {
         "recovery_success": None if final is None else float(final),
         "lane_recovery_robustness": lrr,
@@ -464,6 +479,7 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
         P01=p01, P02=p02, P03=p03, margin_delta_m=mdelta, switch_state_label=None, metrics=metrics,
         baseline_metrics=baseline_metrics, gp_targets=gp_t, gp_mean=cand.get("gp_mean"), gp_std=cand.get("gp_std"),
         sim_status="invalid" if outcome == "simulation_invalid" else "ok", invalid_reason=invalid_reason)
+    record["supervisor_profile"] = supervisor_profile(run)
     return record
 
 

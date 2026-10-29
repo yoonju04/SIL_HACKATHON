@@ -63,7 +63,11 @@ def test_expected_answers_by_mode_and_param(bank):
     assert NM.expected_answers(b1, {"fault_mode": "stale"}) == ["lqr_early"]
     assert NM.expected_answers(b1, {"fault_mode": "bias"}) == ["corrupted_mpc"]
     assert NM.expected_answers(b1, {"fault_mode": "output_delay"}) == ["stale_mpc"]
-    assert NM.expected_answers(b4, {"fault_mode": "saturate", "fault_params": {"duration_s": 0.2}}) == ["none_during_fault"]
+    # integration3 #8 (tight supervisor): <= 0.15 s cannot satisfy the divergence hold; the rate check still can
+    assert NM.expected_answers(b4, {"fault_mode": "saturate", "fault_params": {"duration_s": 0.1}}) == ["steer_rate_exceeded", "none_during_fault"]
+    assert "tracking_divergence" in NM.expected_answers(b4, {"fault_mode": "saturate", "fault_params": {"duration_s": 0.2}})
+    assert "steer_rate_exceeded" not in NM.expected_answers(b4, {"fault_mode": "drift"})   # 0.05 rad/s + MPC 60 deg/s < 90
+    assert "steer_rate_exceeded" in NM.expected_answers(b4, {"fault_mode": "intermittent_bias"})
     assert "tracking_divergence" in NM.expected_answers(b4, {"fault_mode": "saturate", "fault_params": {"duration_s": 0.6}})
     assert "steer_out_of_range" not in NM.expected_answers(b4, {"fault_mode": "saturate", "fault_params": {"duration_s": 0.6}})
     assert NM.expected_answers(b4, {"fault_mode": "unknown_mode"}) is None
@@ -74,14 +78,16 @@ def test_expected_answers_by_mode_and_param(bank):
 
 
 def test_b_key_bins_only_declared_params(bank):
-    assert NM.param_bin_suffix(bank, {"duration_s": 0.2, "magnitude": 0.7}) == "|duration_s#0"
+    assert NM.param_bin_suffix(bank, {"duration_s": 0.1, "magnitude": 0.7}) == "|duration_s#0"
     assert NM.param_bin_suffix(bank, {"duration_s": 0.9}) == "|duration_s#1"
+    assert NM.param_bin_suffix(bank, {"duration_s": 0.9, "ramp_s": 0.0}) == "|duration_s#1|ramp_s#0"
+    assert NM.param_bin_suffix(bank, {"duration_s": 0.9, "ramp_s": 0.1}) == "|duration_s#1|ramp_s#1"
     assert NM.param_bin_suffix(bank, {"magnitude_rad": 0.05}) == ""
 
 
 def test_hallucination_check(bank):
     qs = [_q(bank, "Q-B1"), _q(bank, "Q-B2")]
-    sizes = {"integration/supervised_lateral.py": 147, "integration/fault_injection.py": 122}
+    sizes = {"integration/supervised_lateral.py": 178, "integration/fault_injection.py": 122}
     ev = [{"file": "integration/fault_injection.py", "line": 112}]
     def sample(a1, a2):
         return {"answers": [{"id": "Q-B1", "answer": a1, "evidence": ev, "rationale": ""},
@@ -104,8 +110,8 @@ def test_citation_relevance(bank):
     regions = NM.resolve_regions(AV_STACK, bank)
     for q in bank:
         assert regions[q["id"]], f"{q['id']}: evidence_regions do not resolve in av_stack (renamed function?)"
-    sizes = {"integration/supervised_lateral.py": 147, "integration/fault_injection.py": 122, "lqr_controller/lqr.py": 174}
-    inside = {"evidence": [{"file": "integration/supervised_lateral.py", "line": 42}]}          # MPCSupervisor.inspect
+    sizes = {"integration/supervised_lateral.py": 178, "integration/fault_injection.py": 122, "lqr_controller/lqr.py": 174}
+    inside = {"evidence": [{"file": "integration/supervised_lateral.py", "line": 74}]}          # MPCSupervisor.inspect
     outside = {"evidence": [{"file": "lqr_controller/lqr.py", "line": 1}]}
     out_of_range = {"evidence": [{"file": "integration/supervised_lateral.py", "line": 9999}]}
     r4 = regions["Q-B4"]

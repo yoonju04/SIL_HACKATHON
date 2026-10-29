@@ -171,20 +171,32 @@ switching:
       evidence_ids: [O-023]
     - id: T-08
       name: tracking_divergence
-      condition: 'abs(e_y) > 1.0 or abs(e_psi) > 0.6, 0.25 s 이상 연속 (정상 샘플 하나면 타이머 리셋)'
-      threshold: {e_y_m: 1.0, e_psi_rad: 0.6, hold_s: 0.25}
-      consecutive_cycles: null   # 시간 기준 0.25 s (50 ms 주기면 약 5틱)
+      # integration3 #8: tight 프로파일 (run_benchmark.py --supervisor 기본). legacy = 1.0 m / 0.6 rad / 0.25 s (result_1~6)
+      condition: 'abs(e_y) > 0.6 or abs(e_psi) > 0.35, 0.15 s 이상 연속 (정상 샘플 하나면 타이머 리셋)'
+      condition_en: 'abs(e_y) > 0.6 or abs(e_psi) > 0.35 held for 0.15 s (one healthy sample resets the timer); legacy profile 1.0 m / 0.6 rad / 0.25 s'
+      threshold: {e_y_m: 0.6, e_psi_rad: 0.35, hold_s: 0.15}
+      legacy_threshold: {e_y_m: 1.0, e_psi_rad: 0.6, hold_s: 0.25}
+      consecutive_cycles: null   # 시간 기준 0.15 s (50 ms 주기면 4틱)
       evidence_ids: [O-023]
-      note: 'MPC가 보고한 오차(output.state, 계획 경로 기준)를 씀'
+      note: 'MPC가 보고한 오차(output.state, 계획 경로 기준)를 씀. 고장 없는 baseline 최대 |e_y| 0.46 m, |e_psi| 0.24 rad (result_1~6, 44개)'
     - id: T-09
       name: controller_exception
       condition: 'RuntimeError/ValueError/FloatingPointError/LinAlgError raised in MPC compute or injector'
       threshold: null
       consecutive_cycles: 1
       evidence_ids: [O-024]
+    - id: T-10
+      name: steer_rate_exceeded
+      # integration3 #8: tight 프로파일에만 있음 (legacy: 검사 없음)
+      condition: '|output.steer - 직전 output.steer| / dt > 90 °/s (MPC 출력, 고장 주입 뒤)'
+      condition_en: '|output.steer - previous output.steer| / dt > 90 deg/s (MPC output after the fault injector); tight profile only'
+      threshold: {max_steer_rate_dps: 90.0}
+      consecutive_cycles: 1
+      evidence_ids: [O-023]
+      note: 'MPC 자체가 60 °/s로 제한 (mpc.py steer_rate_lim_dps). 고장 없는 baseline 최대 61 °/s'
   failure_detection_period_ms: 50        # O-021: 매 제어 주기 검사. required_for: [DF-04, H-02, H-06]
   switch_latency_ms: 0                   # O-021: 감지한 같은 루프 반복에서 LQR 명령. required_for: [H-06]
-  command_during_detection_delay: null   # 즉시 검사(T-01~07, T-09)는 지연 없음. T-08 hold 0.25 s 동안은 MPC 명령이 그대로 적용됨(O-023). hold_last 아님. required_for: [H-02]
+  command_during_detection_delay: null   # 즉시 검사(T-01~07, T-09, T-10)는 지연 없음. T-08 hold 0.15 s (legacy 0.25 s) 동안은 MPC 명령이 그대로 적용됨(O-023). hold_last 아님. required_for: [H-02]
   handover:
     state_source_for_lqr: same_carla_state_each_tick   # O-019
     steering_blending: rate_limited_from_last_applied_steer   # O-017
@@ -306,8 +318,8 @@ code_evidence:
       source: {file: pipeline/08_carla_paired_run/av_stack/integration/supervised_lateral.py, line_start: 74, line_end: 74, symbol: 'MPCSupervisor(..., deadline_ms=dt * 1000)', commit: 9b51151}
       extraction_method: static
       verified: false
-      note: '감독기 deadline. 검사는 호출 반환 후 (supervised_lateral.py:38-39, 102; SUPERVISOR.md:13-14 "not a process watchdog"). 솔버 자체 time limit은 없음'
-      note_en: "Supervisor deadline, checked after the call returns (supervised_lateral.py:38-39, 100-105; SUPERVISOR.md:13-14 'not a process watchdog'). The solver has no time limit of its own"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
+      note: '감독기 deadline. 검사는 호출 반환 후 (supervised_lateral.py:61-62, 133; SUPERVISOR.md:13-14 "not a process watchdog"). 솔버 자체 time limit은 없음'
+      note_en: "Supervisor deadline, checked after the call returns (supervised_lateral.py:61-62, 131-136; SUPERVISOR.md:13-14 'not a process watchdog'). The solver has no time limit of its own"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
     - id: O-011
       field: controllers.mpc.solver_runtime.infeasible_handling
       observed_value: status_error_sets_ok_false
@@ -361,8 +373,8 @@ code_evidence:
       source: {file: pipeline/08_carla_paired_run/av_stack/integration/pdm_agent.py, line_start: 86, line_end: 86, symbol: TAKEOVER_RATE_DPS, commit: 9b51151}
       extraction_method: static
       verified: false
-      note: 'pdm_agent.py:229 lateral.rate_dps=90. 기본값 60 (supervised_lateral.py:82, SUPERVISOR.md:17). 적용: supervised_lateral.py:131-133 직전 적용 조향 기준 clip'
-      note_en: "pdm_agent.py:86, 231 sets lateral.rate_dps = 90 (default 60 at supervised_lateral.py:82). Applied as a clip around the last applied steering (supervised_lateral.py:134-136)"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
+      note: 'pdm_agent.py:229 lateral.rate_dps=90. 기본값 60 (supervised_lateral.py:113, SUPERVISOR.md:17). 적용: supervised_lateral.py:162-164 직전 적용 조향 기준 clip'
+      note_en: "pdm_agent.py:86, 231 sets lateral.rate_dps = 90 (default 60 at supervised_lateral.py:113). Applied as a clip around the last applied steering (supervised_lateral.py:165-167)"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
     - id: O-018
       field: controllers.lqr.constraints_and_behavior.output_clipping
       observed_value: true
@@ -392,8 +404,8 @@ code_evidence:
       source: {file: pipeline/08_carla_paired_run/av_stack/SUPERVISOR.md, line_start: 11, line_end: 12, symbol: 'A bad sample selects LQR within that same loop iteration and latches until a new run', commit: 9b51151}
       extraction_method: static
       verified: false
-      note: 'supervised_lateral.py:97 MPC는 active=="mpc"일 때만 호출, 113-117에서 active="lqr"로 바꾼 뒤 되돌리는 코드 없음. 같은 반복 전환 → switch_latency 0, 매 주기 검사 → detection period 50 ms'
-      note_en: "MPC is called only while active == 'mpc'; after active becomes 'lqr' (supervised_lateral.py:116-117) no code switches back. Same-iteration switch -> switch latency 0; checked every period -> detection period 50 ms"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
+      note: 'supervised_lateral.py:128 MPC는 active=="mpc"일 때만 호출, 113-117에서 active="lqr"로 바꾼 뒤 되돌리는 코드 없음. 같은 반복 전환 → switch_latency 0, 매 주기 검사 → detection period 50 ms'
+      note_en: "MPC is called only while active == 'mpc'; after active becomes 'lqr' (supervised_lateral.py:147-148) no code switches back. Same-iteration switch -> switch latency 0; checked every period -> detection period 50 ms"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
     - id: O-022
       field: switching.failure_detector_inputs
       observed_value: see field
@@ -404,12 +416,12 @@ code_evidence:
       note_en: "'this monitor has no fault-injector input' (supervised_lateral.py:20); SUPERVISOR.md:9-11"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
     - id: O-023
       field: switching.triggers
-      observed_value: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range, deadline_miss, stale_output, stale_sequence, tracking_divergence]
-      source: {file: pipeline/08_carla_paired_run/av_stack/integration/supervised_lateral.py, line_start: 28, line_end: 52, symbol: MPCSupervisor.inspect, commit: 9b51151}
+      observed_value: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range, deadline_miss, stale_output, stale_sequence, steer_rate_exceeded, tracking_divergence]
+      source: {file: pipeline/08_carla_paired_run/av_stack/integration/supervised_lateral.py, line_start: 51, line_end: 83, symbol: MPCSupervisor.inspect, commit: d26144d}
       extraction_method: static
       verified: false
-      note: 'tracking_divergence: 45-51 (|e_y|>1.0 or |e_psi|>0.6, 0.25 s). scenario_space_av_stack.yaml:21-29에 같은 내용'
-      note_en: "tracking_divergence: lines 45-51 (|e_y| > 1.0 or |e_psi| > 0.6 held 0.25 s); same as scenario_space_av_stack.yaml supervisor"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
+      note: 'integration3 #8 (tight): steer_rate_exceeded 71-74 (MPC 출력 조향 속도 > 90 °/s), tracking_divergence 75-82 (|e_y|>0.6 or |e_psi|>0.35, 0.15 s). legacy = 1.0 / 0.6 / 0.25 s, 속도 검사 없음. scenario_space_av_stack.yaml supervisor에 같은 내용'
+      note_en: "integration3 #8 (tight profile, default): steer_rate_exceeded lines 71-74 (MPC output steering rate > 90 deg/s), tracking_divergence lines 75-82 (|e_y| > 0.6 or |e_psi| > 0.35 held 0.15 s). Legacy profile: 1.0 / 0.6 / 0.25 s, no rate check. Same as scenario_space_av_stack.yaml supervisor"  # integration3 #7: English for the Nemotron A prompt; line refs re-checked 2026-10-28
     - id: O-024
       field: switching.triggers
       observed_value: controller_exception

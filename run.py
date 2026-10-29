@@ -141,7 +141,8 @@ class CosmosGuard:
 class Loop:
     def __init__(self, *, mode: str, out: Path, ablation: str, video_on: bool, seed: int, cfg: dict | None = None,
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
-                 quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None):
+                 quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None,
+                 supervisor: str | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -161,6 +162,8 @@ class Loop:
         self.routes = [r for r in pr["carla"]["routes"] if r.get("enabled", True)]
         self.route_ids = [r["route_id"] for r in self.routes]
         self.runner_cfg = pr["runner"]
+        # integration3 #8: av_stack supervisor profile (run_benchmark.py --supervisor; mock: synthetic_sim.SUPERVISOR_PROFILES)
+        self.supervisor = str(supervisor or self.runner_cfg.get("supervisor") or "tight")
         self.fault_pool = orch["fault_pool"]
         # BUG-025: control faults (solver_fail, stale) always switch at once; at most this many per round
         self.control_ids = {f["id"] for f in self.space.get("faults", []) if f.get("group") == "control"}
@@ -233,7 +236,7 @@ class Loop:
     def _setup_runner(self) -> None:
         rc = self.runner_cfg
         common = dict(out_root=self.out / "runs", routes=self.routes, seed=int(rc["seed"]), space=self.space,
-                      stop_after_fault_s=float(rc["stop_after_fault_s"]))
+                      stop_after_fault_s=float(rc["stop_after_fault_s"]), supervisor=self.supervisor)
         if self.mode == "mock":
             self.runner = MockRunner(**common)
         else:
@@ -452,7 +455,7 @@ class Loop:
         return x, names
 
     def b_key(self, c: dict) -> str:
-        # integration3 #6: + bins of the fault parameters a question depends on (Q-B4: saturate duration_s <= 0.25 s)
+        # integration3 #6/#8: + bins of the fault parameters a question depends on (Q-B4: saturate duration_s <= 0.15 s, ramp_s 0)
         return f"{c['fault']['mode']}|{c['onset_event']}" + NM.param_bin_suffix(self.questions, c["fault"].get("params") or {})
 
     # ------------------------------------------------------------------ 03 Nemotron A
@@ -602,6 +605,11 @@ class Loop:
                     why = "route not in this campaign"
                 elif fault.get("fault_id") not in self.fault_pool or fault.get("fault_id") not in faults:
                     why = "fault not in this pool"
+                elif (self.runner_cfg.get("gp_history_same_supervisor", True)
+                      and str(r.get("supervisor_profile") or "legacy") != self.supervisor):
+                    # integration3 #8: a run graded under another supervisor switches at a different time (tight
+                    # switches earlier), so its switch / recovery labels do not describe this campaign
+                    why = f"supervisor {r.get('supervisor_profile') or 'legacy'} != {self.supervisor}"
                 if why is None:
                     spec = faults[fault["fault_id"]].get("params") or {}
                     params = {k: (fault.get("params") or {}).get(k, v.get("default")) for k, v in spec.items()}
@@ -968,6 +976,7 @@ class Loop:
         self.out.mkdir(parents=True, exist_ok=True)
         dump(self.out / "run_config.json", {"mode": self.mode, "ablation": self.ablation, "flags": self.flags,
                                             "video_explainer": self.video_on, "seed": self.seed, "cold_start": self.cold,
+                                            "supervisor": self.supervisor,
                                             "batch_size": self.batch, "rounds": self.rounds, "synthetic": self.mode == "mock",
                                             "scenario_space": str(self.space_path), "av_stack": str(self.av_stack)})
         self.screen("시작: 사전 지식 정리 중")
@@ -1436,7 +1445,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="open OUT/screen/campaign.html in the default browser at start; it is re-drawn after every run "
                          "and stage, and the page reloads itself every 5 s")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--cold-start", type=int)
+    ap.add_argument("--cold-start", type=int, help="cold start runs (default: orchestrator.yaml cold_start rule)")
+    ap.add_argument("--supervisor", choices=("tight", "legacy"),
+                    help="av_stack supervisor profile (default: paired_runs.yaml runner.supervisor, tight)")
     ap.add_argument("--batch-size", type=int)
     ap.add_argument("--rounds", type=int, help="rounds after the cold start (default from orchestrator budget)")
     ap.add_argument("--ablation-suite", action="store_true", help="mock only: run evaluation/ablations.yaml mock_suite")
@@ -1469,7 +1480,7 @@ def main(argv: list[str] | None = None) -> int:
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
-                gp_history=args.gp_history)
+                gp_history=args.gp_history, supervisor=args.supervisor)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":
