@@ -42,7 +42,7 @@ def evaluate(options: argparse.Namespace, agent_config: Path) -> int:
     import carla
     from leaderboard import leaderboard_evaluator as upstream
     from leaderboard.leaderboard_evaluator import LeaderboardEvaluator
-    from integration.carla_io import flatten_steering_curve, vehicle_geometry
+    from integration.carla_io import flatten_steering_curve, scale_tire_friction, vehicle_geometry
     from leaderboard.utils.route_indexer import RouteIndexer
     from leaderboard.utils.statistics_manager import StatisticsManager
     from leaderboard.scenarios.scenario_manager import ScenarioManager
@@ -109,6 +109,13 @@ def evaluate(options: argparse.Namespace, agent_config: Path) -> int:
                     if options.controller != "original":  # TF++ PID was tuned on the default curve
                         flatten_steering_curve(ego, carla)
                     payload = json.loads(agent_config.read_text(encoding="utf-8"))
+                    scale = float(getattr(options, "tire_friction_scale", 1.0))
+                    if abs(scale - 1.0) > 1e-9:  # integration3: --tire-friction-scale, after spawn, all wheels
+                        payload["tire_friction"] = scale_tire_friction(ego, scale)
+                        state = "applied" if payload["tire_friction"]["applied"] else "NOT applied"
+                        print(f"[tire-friction] scale {scale:.2f} {state}: {payload['tire_friction']}")
+                    else:
+                        payload["tire_friction"] = {"scale": 1.0, "applied": True, "before": None, "after": None}
                     payload["geometry"] = vehicle_geometry(ego)
                     agent_config.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 

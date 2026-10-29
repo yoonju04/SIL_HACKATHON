@@ -29,6 +29,21 @@ def faults_by_id(space: dict) -> dict[str, dict]:
     return {f["id"]: f for f in space.get("faults", [])}
 
 
+FRICTION = "tire_friction_scale"
+
+
+def friction_axis(space: dict) -> dict | None:
+    """environment.tire_friction_scale when run_benchmark.py can apply it (has a `cli:` flag; integration3), else None."""
+    spec = (space.get("environment") or {}).get(FRICTION)
+    return spec if isinstance(spec, dict) and spec.get("cli") and "range" in spec else None
+
+
+def friction_of(c: dict) -> float:
+    """Tire friction scale of a candidate (1.0 = CARLA default tyres, also for candidates made before integration3)."""
+    v = (c.get("environment") or {}).get(FRICTION)
+    return 1.0 if v is None else float(v)
+
+
 def _param_unit(spec: dict, value: Any) -> float | None:
     if "range" in spec:
         lo, hi = spec["range"]
@@ -56,9 +71,12 @@ def _param_from_unit(spec: dict, u: float) -> Any:
 
 def make_candidate(space: dict, *, route_id: str, speed: float, fault_id: str, params: dict, onset_event: str,
                    offset: float, source: str, objective: str = "S1", round_index: int = 0,
-                   seed_scenario_id: str | None = None, **extra) -> dict:
+                   seed_scenario_id: str | None = None, friction: float | None = None, **extra) -> dict:
     f = faults_by_id(space)[fault_id]
-    c = dict(route_id=route_id, environment={"max_speed_kmh": round(float(speed), 2)},
+    env = {"max_speed_kmh": round(float(speed), 2)}
+    if friction_axis(space) is not None:   # integration3: --tire-friction-scale (default 1.0 = CARLA tyres)
+        env[FRICTION] = round(float(1.0 if friction is None else friction), 3)
+    c = dict(route_id=route_id, environment=env,
              fault={"fault_id": fault_id, "mode": f["injector_mode"],
                     "params": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in params.items()}},
              onset_event=onset_event, onset_offset_s=round(float(offset), 3), hypothesis_ids=[objective],
@@ -82,17 +100,22 @@ def space_filling(space: dict, routes: list[str], fault_pool: list[str], n: int,
     env = space["environment"]["max_speed_kmh"]["range"]
     events = space["fault_timing"]["onset_event"]["values"]
     off = space["fault_timing"]["offset_s"]["range"]
-    strata = [rng.sample(range(n), n) for _ in range(3)]
+    fax = friction_axis(space)
+    strata = [rng.sample(range(n), n) for _ in range(4 if fax else 3)]
     out = []
     for i in range(n):
         u_speed, u_par, u_off = ((strata[d][i] + rng.random()) / n for d in range(3))
+        friction = None
+        if fax:
+            flo, fhi = fax["range"]
+            friction = flo + (strata[3][i] + rng.random()) / n * (fhi - flo)
         fid = fault_pool[(i + rng.randrange(len(fault_pool))) % len(fault_pool)]
         f = faults_by_id(space)[fid]
         params = {k: _param_from_unit(spec, u_par if j == 0 else rng.random()) for j, (k, spec) in enumerate((f.get("params") or {}).items())}
         out.append(make_candidate(space, route_id=routes[i % len(routes)] if i < len(routes) else rng.choice(routes),
                                   speed=env[0] + u_speed * (env[1] - env[0]), fault_id=fid, params=params,
                                   onset_event=rng.choice(events), offset=off[0] + u_off * (off[1] - off[0]),
-                                  source=source, objective=objective, round_index=round_index))
+                                  source=source, objective=objective, round_index=round_index, friction=friction))
     return out
 
 
@@ -107,12 +130,17 @@ def perturb(space: dict, seed: dict, n: int, rng: random.Random, scale: float = 
         of = min(off[1], max(off[0], seed["onset_offset_s"] + rng.gauss(0, scale) * (off[1] - off[0])))
         params = {}
         for k, spec in (f.get("params") or {}).items():
-            u = _param_unit(spec, seed["fault"]["params"].get(k))
+            u = _param_unit(spec, seed["fault"]["params"].get(k, spec.get("default")))
             params[k] = _param_from_unit(spec, (u if u is not None else 0.5) + rng.gauss(0, scale))
+        fr = None
+        fax = friction_axis(space)
+        if fax:
+            flo, fhi = fax["range"]
+            fr = min(fhi, max(flo, friction_of(seed) + rng.gauss(0, scale) * (fhi - flo)))
         out.append(make_candidate(space, route_id=seed["route_id"], speed=sp, fault_id=f["id"], params=params,
                                   onset_event=seed["onset_event"], offset=of, source="perturbation",
                                   objective=(seed.get("hypothesis_ids") or ["S1"])[0], round_index=seed.get("round", 0),
-                                  seed_scenario_id=seed["seed_scenario_id"]))
+                                  seed_scenario_id=seed["seed_scenario_id"], friction=fr))
     return out
 
 
@@ -131,6 +159,13 @@ def validate_against_space(space: dict, c: dict, routes: list[str]) -> list[str]
     sp = (c.get("environment") or {}).get("max_speed_kmh")
     if not isinstance(sp, (int, float)) or not lo <= sp <= hi:
         problems.append(f"max_speed_kmh {sp} outside [{lo},{hi}]")
+    fr = (c.get("environment") or {}).get(FRICTION)
+    if fr is not None:
+        fax = friction_axis(space)
+        if fax is None:
+            problems.append("tire_friction_scale given but run_benchmark has no flag for it in this space")
+        elif not isinstance(fr, (int, float)) or not fax["range"][0] - 1e-9 <= fr <= fax["range"][1] + 1e-9:
+            problems.append(f"tire_friction_scale {fr} outside {fax['range']}")
     if c.get("onset_event") not in space["fault_timing"]["onset_event"]["values"]:
         problems.append(f"onset_event {c.get('onset_event')}")
     olo, ohi = space["fault_timing"]["offset_s"]["range"]
@@ -164,9 +199,11 @@ def gate(space: dict, c: dict, routes: list[str], route_events: dict | None, lat
         v = min(c["environment"]["max_speed_kmh"] / 3.6, (route_events.get("speed_at") or {}).get(c["onset_event"], 1e9))
         nominal = v * v * abs(k)
     c["nominal_lateral_acc_mps2"] = nominal
+    # integration3: P-02 limit 0.5*mu*g scales with the tyre friction of the candidate (mu = 0.9 * scale)
+    lat_th = None if lat_acc_threshold is None else lat_acc_threshold * friction_of(c)
     ok, tags = J.feasibility_gate(dict(c, nominal_lateral_acc_mps2=nominal),
                                   events if events is not None else [c.get("onset_event")],
-                                  lat_acc_threshold, carla_mapping_ok=not problems)
+                                  lat_th, carla_mapping_ok=not problems)
     if events is None and ok:
         tags.append("G-01_pending_baseline")
     # BUG-028: an onset closer to the route end than the minimum evaluation window can never be graded (09 V-03);
@@ -196,6 +233,10 @@ def numeric_features(c: dict, space: dict, routes: list[str], fault_pool: list[s
         names.append(f"route={r}"); x.append(1.0 if c.get("route_id") == r else 0.0)
     lo, hi = space["environment"]["max_speed_kmh"]["range"]
     names.append("max_speed_u"); x.append((c["environment"]["max_speed_kmh"] - lo) / (hi - lo))
+    fax = friction_axis(space)
+    if fax:
+        flo, fhi = fax["range"]
+        names.append("tire_friction_u"); x.append((friction_of(c) - flo) / (fhi - flo))
     for fid in fault_pool:
         names.append(f"fault={fid}"); x.append(1.0 if c["fault"]["fault_id"] == fid else 0.0)
     f = faults_by_id(space)[c["fault"]["fault_id"]]

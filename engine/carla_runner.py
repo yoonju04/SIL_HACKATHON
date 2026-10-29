@@ -9,6 +9,7 @@ run_benchmark.py arguments used (read from sim-eval 9b51151 run_benchmark.py:21-
   --routes, --route-id, --max-speed, --no-view, --green-lights, --controller, --planner, --record-front,
   --out (must be a new folder), --host, --port, --traffic-manager-port, --seed, --timeout,
   --mpc-fault, --fault-magnitude, --fault-on, --fault-off, --fault-start, --fault-duration, --stop-after-fault
+  integration3: --saturate-level, --fault-ramp (saturate), --tire-friction-scale (baseline, fault and no-reaction runs)
 """
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ from typing import Any
 
 from . import judgment as J
 from .config import import_scenario_space_tool
-from .scenarios import fault_cli_local, fault_dict_for_sim
+from .scenarios import fault_cli_local, fault_dict_for_sim, friction_of
 
 NO_REACTION_CONTROLLER = "mpc_unprotected"  # run_benchmark.py --controller choice (sim-eval PR #1): MPC, no supervisor
 
@@ -34,7 +35,7 @@ def baseline_key(c: dict, route: dict, seed: int, planner: str = "pdm") -> dict:
     """08 paired_runs.match fields (BASELINE_MATCH_FIELDS); axes the runner does not vary are None."""
     vals = {f: None for f in J.BASELINE_MATCH_FIELDS}
     vals.update(map=route.get("town"), route_id=c["route_id"], seed=seed, max_speed_kmh=c["environment"]["max_speed_kmh"],
-                planner=planner, tire_friction_scale=1.0)
+                planner=planner, tire_friction_scale=friction_of(c))   # integration3: baseline at the same friction
     return vals
 
 
@@ -111,6 +112,7 @@ class MockRunner(BaseRunner):
         t0 = time.time()
         fault = None if onset_s is None else fault_dict_for_sim(self.space, c, onset_s)
         write_run_folder(out, route=c["route_id"], max_speed_kmh=c["environment"]["max_speed_kmh"], fault=fault,
+                         tire_friction_scale=friction_of(c),
                          seed=self.seed, stop_after_fault_s=self.stop_after_fault_s if fault else None,
                          record_front=fault is not None and controller == "supervised", controller=controller)
         return RunResult(out, 0, ["<synthetic_sim>", c["route_id"], controller], time.time() - t0)
@@ -145,14 +147,18 @@ class CarlaRunner(BaseRunner):
                 "--max-speed", "%.1f" % c["environment"]["max_speed_kmh"], "--seed", str(self.seed),
                 "--host", self.host, "--port", str(self.port), "--traffic-manager-port", str(self.tm_port),
                 "--timeout", str(self.timeout_s), "--out", str(out)]
+        fr = friction_of(c)
+        if abs(fr - 1.0) > 1e-9:   # integration3: same tyres for the baseline, fault and no-reaction runs
+            cmd += ["--tire-friction-scale", "%.2f" % fr]
         if not self.chase_view:
             cmd.append("--no-view")   # view.mp4 needs the chase window (chase_view.py); front.mp4 does not
         cmd += list(r.get("extra_args") or [])
         if fault_args:
             # --max-speed comes from the environment mapping too; keep only the fault part of to_cli
             fa = list(fault_args)
-            if "--max-speed" in fa:
-                i = fa.index("--max-speed"); del fa[i:i + 2]
+            for flag in ("--max-speed", "--tire-friction-scale"):   # both already set above from the environment
+                if flag in fa:
+                    i = fa.index(flag); del fa[i:i + 2]
             cmd += fa + ["--stop-after-fault", "%.1f" % self.stop_after_fault_s]
         return cmd
 

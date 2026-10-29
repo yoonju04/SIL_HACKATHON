@@ -29,6 +29,7 @@ WHEELBASE = 2.9
 MAX_STEER = 0.70           # rad, synthetic
 HALF_W, HALF_L, LANE_W = 0.93, 2.4, 3.5
 COLLISION_OFFSET_M = 3.2   # synthetic: |offset| beyond this = hit roadside object
+GRIP_MU = 0.9              # synthetic tyre: a_lat <= GRIP_MU * tire_friction_scale * g (integration3)
 
 # synthetic route curvature profiles: list of (length_m, curvature_1pm)
 ROUTES = {
@@ -63,9 +64,11 @@ def _gains(v: float, wn: float, zeta: float) -> tuple[float, float]:
 
 def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, seed: int = 17,
              stop_after_fault_s: float | None = None, max_time_s: float = 120.0,
-             supervised: bool = True) -> dict[str, Any]:
-    """Return per-tick arrays + events. fault = {mode, start, duration, magnitude, on_s, off_s} or None.
-    supervised=False is the no-reaction run (`--controller mpc_unprotected`): the MPC keeps steering (SR1 FTTI)."""
+             supervised: bool = True, tire_friction_scale: float = 1.0) -> dict[str, Any]:
+    """Return per-tick arrays + events. fault = {mode, start, duration, magnitude, on_s, off_s, level, ramp_s} or None.
+    supervised=False is the no-reaction run (`--controller mpc_unprotected`): the MPC keeps steering (SR1 FTTI).
+    tire_friction_scale (integration3, SYNTHETIC): the achievable lateral acceleration is capped at
+    GRIP_MU * scale * g; beyond it the car understeers (yaw rate follows the cap, not the steering)."""
     rng = random.Random(hash((route, round(max_speed_kmh, 3), seed)) & 0xFFFFFFFF)
     v_cap = max_speed_kmh / 3.6
     s = 0.0; v = 0.0; e_y = 0.0; e_psi = 0.0; delta = 0.0
@@ -141,6 +144,9 @@ def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, see
             delta = max(delta - lim, min(delta + lim, u))
             status = "lqr"
         psi_dot = v * math.tan(delta) / WHEELBASE
+        a_grip = GRIP_MU * float(tire_friction_scale) * 9.81
+        if v > 0.5 and abs(v * psi_dot) > a_grip:   # SYNTHETIC understeer at the friction limit
+            psi_dot = math.copysign(a_grip / v, psi_dot)
         e_psi_dot = psi_dot - v * kappa
         rows.append(dict(t=round(t, 4), s=s, v=v, e_y=e_y, e_psi=e_psi, delta=delta, kappa=kappa,
                          yaw_rate=psi_dot, ay=v * psi_dot + rng.gauss(0, 0.05), active=active,
@@ -196,10 +202,11 @@ def _ffmpeg() -> str | None:
 
 def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict[str, Any] | None,
                      seed: int = 17, stop_after_fault_s: float | None = None, record_front: bool = True,
-                     controller: str = "supervised") -> Path:
+                     controller: str = "supervised", tire_friction_scale: float = 1.0) -> Path:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    sim = simulate(route, max_speed_kmh, fault, seed, stop_after_fault_s, supervised=controller == "supervised")
+    sim = simulate(route, max_speed_kmh, fault, seed, stop_after_fault_s, supervised=controller == "supervised",
+                   tire_friction_scale=tire_friction_scale)
     rows = sim["rows"]
     f = fault or {"mode": "none", "start": 20.0, "duration": 5.0, "magnitude": 0.05}
     marker = {"synthetic_fixture": True, "generator": "engine/fixtures/synthetic_sim.py"}
@@ -208,6 +215,8 @@ def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict
                   fault_magnitude=f["magnitude"], fault_on_s=f.get("on_s", 0.2), fault_off_s=f.get("off_s", 0.2),
                   fault_level=f.get("level", 1.0), fault_ramp_s=f.get("ramp_s", 0.0),
                   stop_after_fault=stop_after_fault_s, max_speed_kmh=max_speed_kmh, dt=DT, out=str(out),
+                  tire_friction_scale=tire_friction_scale,
+                  tire_friction=dict(scale=tire_friction_scale, applied=True, synthetic=True),
                   geometry=dict(max_steer_rad=MAX_STEER, lf=1.35, lr=1.55), **marker)
     (out / "agent_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
     town = {"bench2drive:26956": "Town05", "bench2drive:28035": "Town01", "bench2drive:24206": "Town03",

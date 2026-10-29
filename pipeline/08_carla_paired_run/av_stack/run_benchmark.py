@@ -57,6 +57,8 @@ def main() -> int:
                         help="saturate: fraction of the steering limit in (0, 1] (1.0 = exactly the limit, the original fault)")
     parser.add_argument("--fault-ramp", type=float, default=0.0,
                         help="saturate: seconds to ramp linearly from the MPC command to the saturated value (0 = step)")
+    parser.add_argument("--tire-friction-scale", type=float, default=1.0,
+                        help="multiply every wheel's CARLA tire_friction by this after spawn (1.0 = default tyres)")
     parser.add_argument("--fault-start", type=float, default=20.0)
     parser.add_argument("--fault-duration", type=float, default=5.0)
     parser.add_argument("--stop-after-fault", type=float, help="end the route this many seconds after fault start (demo videos)")
@@ -88,6 +90,8 @@ def main() -> int:
         parser.error("TF++ --model must contain config.json")
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("Timeout must be finite and positive")
+    if not math.isfinite(args.tire_friction_scale) or not 0 < args.tire_friction_scale <= 2.0:
+        parser.error("--tire-friction-scale must be in (0, 2]")
     from integration.fault_injection import FaultConfig
     try:
         FaultConfig(args.mpc_fault, args.fault_start, args.fault_duration, args.fault_magnitude, args.fault_on, args.fault_off,
@@ -106,7 +110,7 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     config = dict(model=None if args.model is None else str(args.model.resolve()), planner=args.planner, record_front=args.record_front, controller=args.controller, longitudinal=args.longitudinal, mpc_extension=args.mpc_extension, speed_policy=args.speed_policy, mpc_fault=args.mpc_fault,
                   fault_start=args.fault_start, fault_duration=args.fault_duration, fault_magnitude=args.fault_magnitude, fault_on_s=args.fault_on, fault_off_s=args.fault_off, fault_level=args.saturate_level, fault_ramp_s=args.fault_ramp, stop_after_fault=args.stop_after_fault,
-                  max_speed_kmh=args.max_speed, comfort=not args.no_comfort, monitor_period=args.monitor, view=not args.no_view, green_lights=args.green_lights,
+                  max_speed_kmh=args.max_speed, tire_friction_scale=args.tire_friction_scale, comfort=not args.no_comfort, monitor_period=args.monitor, view=not args.no_view, green_lights=args.green_lights,
                   out=str(args.out), device=args.device, dt=0.05)
     agent_config = args.out / "agent_config.json"
     agent_config.write_text(json.dumps(config, indent=2), encoding="utf-8")
@@ -115,7 +119,8 @@ def main() -> int:
                     source_commit="48e6a6dbcb133220333bd65e242fbc2b492bb15b",
                     routes_file=str(args.routes), routes_sha256=hashlib.sha256(args.routes.read_bytes()).hexdigest(),
                     scenario_types=[s.get("type") for s in selected.findall("./scenarios/scenario")],
-                    controller=args.controller, planner=args.planner, seed=args.seed)
+                    controller=args.controller, planner=args.planner, seed=args.seed,
+                    tire_friction_scale=args.tire_friction_scale)
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     from integration.tfpp_benchmark import evaluate
     return evaluate(args, agent_config)

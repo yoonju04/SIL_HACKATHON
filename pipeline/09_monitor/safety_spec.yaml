@@ -19,6 +19,7 @@ safety_specification:
       evaluation: paired_baseline              # pipeline/09_monitor/monitor.py: limit = max(4.41, baseline peak) + allowance
       paired_allowance_mps2: 0.3               # R79 5.6.2.1.1 precedent (SR monitor v3.1)
       lateral_acc_formula: {mu: 0.9, g_mps2: 9.81, factor: 0.5}
+      friction_scaling: "integration3: mu = 0.9 * tire_friction_scale (run_benchmark --tire-friction-scale) -> 한계 = 4.41 * scale. engine/monitor.py scale_thresholds_for_friction (recovery v2 라벨·P-02), SR monitor aux P-02 도 같은 배율 (참고용)"
       role: label_not_failure                  # 2026-10-27: P-02 위반은 recovery_labels.lat_acc_excess 라벨. 차선·충돌 판정과 분리
       primary: baseline_relative               # |a_y_fault - a_y_baseline(같은 경로 위치)| > 4.41
       secondary: total                         # |a_y_fault| > 4.41 (경로 곡률 수요 포함. 팀원 P-02 는 이 전체 값으로 잼)

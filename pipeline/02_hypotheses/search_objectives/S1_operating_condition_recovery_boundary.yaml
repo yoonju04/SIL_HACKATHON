@@ -101,7 +101,7 @@ context_axes:
   max_speed_kmh: {range: [10, 40], available: true}                   # pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:32
   route_curvature_at_switch: {available: from_logs_todo, note: '경로가 정함. kappa는 현재 로그에 없음 (logging TODO L-3)'}
   curvature_rate: {values: [curve_entry, curve_exit], available: 'onset_event로 간접', note: '곡률 변화율 자체는 미기록'}
-  tire_friction_scale: {available: false, note: 'pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:33 미지원 (H-09)'}
+  tire_friction_scale: {available: true, note: 'integration3: run_benchmark.py --tire-friction-scale (scenario_space_av_stack.yaml environment). CARLA real runs not yet verified'}
   vehicle_mass_scale: {available: false}
 
 # ---------------------------------------------------------------- 탐색 축 (결과에서 계산)

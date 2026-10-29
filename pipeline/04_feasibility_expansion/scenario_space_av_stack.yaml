@@ -33,7 +33,11 @@ supervisor:
 
 environment:
   max_speed_kmh:       {range: [10, 40], unit: km/h, cli: --max-speed}
-  tire_friction_scale: {range: [0.3, 1.0], cli: null, note: "run_benchmark 미지원. 추가 전까지 1.0으로 실행"}
+  # integration3: run_benchmark.py --tire-friction-scale (CARLA WheelPhysicsControl.tire_friction x scale, 4바퀴 모두,
+  # get_physics_control/apply_physics_control). 1.0 = CARLA 기본 타이어. baseline도 같은 마찰로 돈다 (08 match key).
+  # 09 P-02 한계 0.5*mu*g 는 mu = 0.9 * scale 로 같이 줄어든다 (engine/monitor.py). CARLA tire_friction 은 물리적 mu와
+  # 같지 않으므로 scale 은 상대값으로만 해석한다.
+  tire_friction_scale: {range: [0.3, 1.0], default: 1.0, cli: --tire-friction-scale, cli_format: '%.2f'}
 
 fault_timing:
   onset_event: {values: [straight, curve_entry, curve_apex, curve_exit]}

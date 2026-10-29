@@ -271,6 +271,13 @@ class Loop:
             lo, hi = self.space["environment"]["max_speed_kmh"]["range"]
             v = round(c["environment"]["max_speed_kmh"] / step) * step
             c["environment"]["max_speed_kmh"] = float(min(hi, max(lo, v)))
+        fstep = float(self.runner_cfg.get("friction_step") or 0)
+        fax = SC.friction_axis(self.space)
+        if fstep > 0 and fax and SC.FRICTION in c["environment"]:
+            flo, fhi = fax["range"]
+            fv = round(round(c["environment"][SC.FRICTION] / fstep) * fstep, 3)
+            c["environment"][SC.FRICTION] = float(min(fhi, max(flo, fv)))
+        if step > 0 or (fstep > 0 and fax):
             c["scenario_id"] = SC.cand_id(c)
             if c.get("source") != "perturbation" and c.get("source") != "counterfactual":
                 c["seed_scenario_id"] = c["scenario_id"]

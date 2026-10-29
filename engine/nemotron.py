@@ -19,7 +19,7 @@ from typing import Any
 
 from . import schema as S
 from .llm import LLMError, extract_json, json_schema_format
-from .scenarios import faults_by_id, make_candidate
+from .scenarios import faults_by_id, friction_axis, make_candidate
 
 
 # ----------------------------------------------------------------------------- A
@@ -43,6 +43,7 @@ def candidate_schema(space: dict, routes: list[str], fault_pool: list[str], obje
                      evidence: list[str], n_max: int) -> dict:
     env_lo, env_hi = space["environment"]["max_speed_kmh"]["range"]
     olo, ohi = space["fault_timing"]["offset_s"]["range"]
+    fax = friction_axis(space)
     branches = []
     for fid in fault_pool:
         f = faults_by_id(space)[fid]
@@ -54,6 +55,8 @@ def candidate_schema(space: dict, routes: list[str], fault_pool: list[str], obje
                 "params": {"type": "object", "properties": params, "required": list(params), "additionalProperties": False},
                 "route_id": {"enum": routes},
                 "max_speed_kmh": {"type": "number", "minimum": env_lo, "maximum": env_hi},
+                **({"tire_friction_scale": {"type": "number", "minimum": fax["range"][0], "maximum": fax["range"][1]}}
+                   if fax else {}),
                 "onset_event": {"enum": space["fault_timing"]["onset_event"]["values"]},
                 "onset_offset_s": {"type": "number", "minimum": olo, "maximum": ohi},
                 "objective_ids": {"type": "array", "items": {"enum": objectives}, "minItems": 1, "maxItems": len(objectives)},
@@ -62,7 +65,8 @@ def candidate_schema(space: dict, routes: list[str], fault_pool: list[str], obje
                 "expected_side": {"enum": ["recover", "fail", "boundary"]},
                 "missing_information": {"type": "string"},
             },
-            "required": ["fault_id", "params", "route_id", "max_speed_kmh", "onset_event", "onset_offset_s",
+            "required": ["fault_id", "params", "route_id", "max_speed_kmh"] + (["tire_friction_scale"] if fax else []) +
+                        ["onset_event", "onset_offset_s",
                          "objective_ids", "evidence_ids", "expected_mechanism", "expected_side", "missing_information"],
             "additionalProperties": False,
         })
@@ -117,6 +121,7 @@ def a_to_candidates(obj: dict, space: dict, *, round_index: int, source: str = "
     for item in obj.get("candidates", []):
         try:
             c = make_candidate(space, route_id=item["route_id"], speed=item["max_speed_kmh"], fault_id=item["fault_id"],
+                               friction=item.get("tire_friction_scale"),
                                params=item["params"], onset_event=item["onset_event"], offset=item["onset_offset_s"],
                                source=source, objective=(item.get("objective_ids") or ["S1"])[0], round_index=round_index,
                                evidence_ids=item.get("evidence_ids", []), expected_mechanism=item.get("expected_mechanism"),
