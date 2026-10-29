@@ -62,8 +62,14 @@ RUN_RECORD_FIELDS = (
 )
 
 # ---------------------------------------------------------------------------
-# 05a: DF-01~05 — LLM을 쓰지 않고 프로필 + 시나리오 값으로 계산한다.
+# 05a: DF-01~06 — LLM을 쓰지 않고 프로필 + 시나리오 값으로 계산한다.
+# DF-06 (integration3 #6): 타이어 마찰 이용률 v²|κ| / (μ·g), μ = 0.9 × tire_friction_scale (P-02 와 같은 μ).
+#   1.0 = 명목 타이어 한계 전부, 0.5 = P-02 한계 (0.5·μ·g). CARLA tire_friction 은 물리 μ 가 아니라 상대값.
 # ---------------------------------------------------------------------------
+
+NOMINAL_MU = 0.9      # safety_spec P-02 lateral_acc_formula (0.5 * mu * g, mu = 0.9 at tire_friction_scale 1.0)
+G_MPS2 = 9.81
+
 
 @dataclass
 class DeterministicFeatures:
@@ -72,6 +78,7 @@ class DeterministicFeatures:
     df03_fault_delay_over_deadline_ms: float | None = None
     df04_expected_switch_after_curve_entry: bool | None = None
     df05_nominal_lateral_acc_mps2: float | None = None
+    df06_friction_utilization: float | None = None
     missing: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -82,6 +89,7 @@ class DeterministicFeatures:
             "DF-03": self.df03_fault_delay_over_deadline_ms,
             "DF-04": self.df04_expected_switch_after_curve_entry,
             "DF-05": self.df05_nominal_lateral_acc_mps2,
+            "DF-06": self.df06_friction_utilization,
         }
         for name in self.missing:
             out[f"{name}_missing"] = True
@@ -90,7 +98,7 @@ class DeterministicFeatures:
 
 def compute_df(scenario: dict[str, Any], profile: dict[str, Any]) -> DeterministicFeatures:
     """scenario: speed_mps, road_curvature_per_m, fault{delay_ms},
-    onset_time, curve_entry_time. profile: safety_profile.yaml 내용."""
+    onset_time, curve_entry_time, tire_friction_scale (default 1.0). profile: safety_profile.yaml 내용."""
     design_speed = _get(profile, "controllers", "lqr", "feedback_design", "design_speed_mps")
     design_curv = _get(profile, "controllers", "lqr", "feedback_design", "design_curvature_per_m")
     time_limit = _get(profile, "controllers", "mpc", "solver_runtime", "configured_time_limit_ms")
@@ -120,6 +128,12 @@ def compute_df(scenario: dict[str, Any], profile: dict[str, Any]) -> Determinist
         feats.missing.append("DF-05")
     else:
         feats.df05_nominal_lateral_acc_mps2 = speed ** 2 * curv
+    scale = scenario.get("tire_friction_scale", 1.0)
+    if feats.df05_nominal_lateral_acc_mps2 is None or not isinstance(scale, (int, float)) or not math.isfinite(scale) \
+            or scale <= 0:
+        feats.missing.append("DF-06")
+    else:
+        feats.df06_friction_utilization = feats.df05_nominal_lateral_acc_mps2 / (NOMINAL_MU * float(scale) * G_MPS2)
     return feats
 
 

@@ -324,8 +324,10 @@ class Loop:
             kappa = None if ev is None else (ev.get("kappa_at") or {}).get(c["onset_event"])
             scen = {"speed_mps": c["environment"]["max_speed_kmh"] / 3.6, "road_curvature_per_m": None if kappa is None else abs(kappa),
                     "fault": {"delay_ms": 50.0 * c["fault"]["params"]["delay_ticks"]} if "delay_ticks" in c["fault"]["params"] else {}}
+            scen["tire_friction_scale"] = (c.get("environment") or {}).get("tire_friction_scale", 1.0)
             df = J.compute_df(scen, profile).as_dict()
-            for k, scale_by in (("DF-03", 100.0), ("DF-05", 5.0)):
+            # integration3 #6: DF-06 friction utilization v^2|kappa| / (0.9 * scale * g) next to DF-05
+            for k, scale_by in (("DF-03", 100.0), ("DF-05", 5.0), ("DF-06", 2.0)):
                 v = df.get(k)
                 names += [k, f"{k}_missing"]
                 x += [0.0 if v is None else float(v) / scale_by, 1.0 if v is None else 0.0]

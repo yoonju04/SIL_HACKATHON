@@ -136,6 +136,19 @@ def test_stub_b_is_schema_valid_and_marked(bank):
         assert a["answer"] in q["answer"] and "SYNTHETIC" in a["rationale"]
 
 
+def test_df06_friction_utilization():
+    profile = {}
+    f = J.compute_df({"speed_mps": 10.0, "road_curvature_per_m": 0.05, "tire_friction_scale": 0.5}, profile)
+    assert f.df05_nominal_lateral_acc_mps2 == pytest.approx(5.0)
+    assert f.df06_friction_utilization == pytest.approx(5.0 / (0.9 * 0.5 * 9.81))
+    d = J.compute_df({"speed_mps": 10.0, "road_curvature_per_m": 0.05}, profile)
+    assert d.df06_friction_utilization == pytest.approx(5.0 / (0.9 * 9.81))        # default scale 1.0
+    m = J.compute_df({"speed_mps": 10.0, "road_curvature_per_m": None, "tire_friction_scale": 0.5}, profile).as_dict()
+    assert m["DF-06"] is None and m["DF-06_missing"] is True and m["DF-05_missing"] is True
+    bad = J.compute_df({"speed_mps": 10.0, "road_curvature_per_m": 0.05, "tire_friction_scale": 0.0}, profile).as_dict()
+    assert bad["DF-06"] is None and bad["DF-06_missing"] is True
+
+
 @pytest.mark.skipif(not (AV_STACK / "integration" / "supervised_lateral.py").is_file(), reason="av_stack not merged")
 def test_expected_answers_match_the_real_supervisor(bank):
     """Ground the answer key in the code itself: feed the real injector + supervisor synthetic healthy MPC outputs

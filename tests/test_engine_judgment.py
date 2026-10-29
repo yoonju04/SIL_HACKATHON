@@ -19,9 +19,11 @@ def test_judgment_self_test():
         {"speed_mps": 15.0, "road_curvature_per_m": 0.02,
          "fault": {"delay_ms": 50}, "onset_time": 10.0, "curve_entry_time": 10.01},
         profile)
-    assert feats.as_dict() == {
+    d = feats.as_dict()
+    assert abs(d.pop("DF-06") - 4.5 / (0.9 * 9.81)) < 1e-12   # integration3 #6: friction utilization (scale 1.0)
+    assert d == {
         "DF-01": 5.0, "DF-02": 0.01, "DF-03": 30, "DF-04": True, "DF-05": 4.5,
-    }, feats.as_dict()
+    }, d
     assert beta_schedule(0, 10) == 2.0 and abs(beta_schedule(9, 10) - 0.5) < 1e-9
     assert lcb(0.0, 1.0, 2.0) == -2.0
     ok, tags = feasibility_gate(
