@@ -24,11 +24,14 @@ meta:
 supervisor:
   period_s: 0.05
   instant_checks: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range,
-                   deadline_miss, stale_output, stale_sequence]
+                   deadline_miss, stale_output, stale_sequence, steer_rate_exceeded]
   stale_output_tolerance_s: 0.1                 # |t - stamp| > 0.1 s면 전환
   steer_out_of_range: "최대각 초과만 검사 (정확히 최대각은 통과)"
-  tracking_divergence: {e_y_m: 1.0, e_psi_rad: 0.6, hold_s: 0.25,
-                        note: "MPC가 보고한 오차를 씀. 정상 샘플 하나면 타이머 리셋"}
+  # integration4: run_benchmark --supervisor tight(기본) | legacy (SUPERVISOR_PROFILES)
+  steer_rate_exceeded: {max_dps: 90.0, note: "MPC 출력 조향 속도. MPC는 스스로 60 °/s로 제한하므로 90 °/s 초과는 고장 (legacy: 검사 없음)"}
+  tracking_divergence: {e_y_m: 0.6, e_psi_rad: 0.35, hold_s: 0.15,
+                        legacy: {e_y_m: 1.0, e_psi_rad: 0.6, hold_s: 0.25},
+                        note: "MPC가 보고한 오차를 씀. 정상 샘플 하나면 타이머 리셋. 고장 없는 기준 실행 61개 최대 |e_y| 0.46 m, |e_psi| 0.23 rad"}
   latched: true                                 # LQR로 넘어가면 MPC로 돌아오지 않음
 
 environment:

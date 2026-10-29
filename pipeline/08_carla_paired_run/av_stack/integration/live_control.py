@@ -67,7 +67,9 @@ REASONS = {
     'stale_output': 'MPC output timestamp is old',
     'stale_sequence': 'MPC output was not refreshed (repeated sample)',
     'controller_exception': 'MPC raised an exception',
-    'tracking_divergence': 'vehicle diverging from the path (|e_y| > 1.0 m or |e_psi| > 0.6 rad for 0.25 s)',
+    'tracking_divergence': 'vehicle diverging from the path (tight: |e_y| > 0.6 m or |e_psi| > 0.35 rad for 0.15 s; '
+                           'legacy: 1.0 m / 0.6 rad / 0.25 s)',
+    'steer_rate_exceeded': 'MPC steering command changing faster than 90 deg/s (the MPC itself limits it to 60)',
 }
 
 

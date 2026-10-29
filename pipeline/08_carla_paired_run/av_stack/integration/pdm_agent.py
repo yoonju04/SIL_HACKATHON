@@ -70,7 +70,7 @@ from integration.chase_view import ChaseView
 from integration.live_control import CapturingLongitudinal, ComfortPedals, LiveFaultCommands, SupervisorConsole
 from integration.monitor_logs import MonitorLogs
 from srunner.scenariomanager.timer import GameTime
-from integration.supervised_lateral import SupervisedLateral
+from integration.supervised_lateral import SUPERVISOR_PROFILES, SupervisedLateral
 from integration.unprotected_lateral import UnprotectedMPC
 from lqr_controller import LQRConfig
 from planner import Trajectory
@@ -227,7 +227,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             self.max_steer = geometry['max_steer_rad']
             if self.mode == 'supervised':
                 self.lateral = SupervisedLateral(geometry, self.dt, self.reference, self.fault,
-                                                 lqr_config=LQR_CONFIG)
+                                                 lqr_config=LQR_CONFIG,
+                                                 supervisor=SUPERVISOR_PROFILES[self.options.get('supervisor', 'tight')])
                 self.lateral.rate_dps = TAKEOVER_RATE_DPS
             elif self.mode == 'mpc_unprotected':
                 self.lateral = UnprotectedMPC(geometry, self.dt, self.reference, self.fault)
