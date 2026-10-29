@@ -40,6 +40,7 @@ OUTCOME = {
     "invalid": ("판정 불가 (무효, 실패 아님)", "mut",
                 "기록이나 비교 조건(평가 구간 길이 등)이 맞지 않아 SR 채점을 하지 않음. 안전 실패로 세지 않음"),
 }
+SM_KO = {"lane": "차선 여유", "collision": "충돌", "settle": "안정 유지 시간", "lat_acc": "횡가속도", "lat_jerk": "횡저크"}
 RECOVERY_KO = {"safe_recovery": "안전 회복", "recovered_after_departure": "이탈 후 복귀", "unsettled": "안정 안 됨",
                "unrecovered": "회복 실패", "no_switch": "전환 없음", "simulation_invalid": "무효"}
 ONSET_KO = {"curve_entry": "곡선 진입", "curve_apex": "곡선 정점", "straight": "직선", "curve_exit": "곡선 탈출"}
@@ -248,6 +249,8 @@ def _checks(r, lim: dict) -> list[tuple]:
     labels = r.get("recovery_labels") or {}
     acc = (labels.get("lat_acc_excess") or {}).get("primary")
     ro = r.get("recovery_outcome")
+    sm = (r.get("metrics") or {}).get("safety_margin")
+    smb = (r.get("metrics") or {}).get("safety_margin_binding")
     rows = [
         ("전환 순간 조향 튐 (SR2)", s2.get("pass") if s2.get("applies") else None,
          _f(s2.get("max_rate_dps"), 0, " °/s") if switched else "전환 안 함", f"{_f(lim['sr2'], 0)} °/s 이하"),
@@ -261,6 +264,9 @@ def _checks(r, lim: dict) -> list[tuple]:
          RECOVERY_KO.get(ro, ro or "–") + (f" · lrr {_f(r.get('lane_recovery_robustness'))}" if switched else ""),
          f"{_f(lim['win'], 0)} s 창, {_f(lim['rj'].get('e_settle_m', 0.3), 1)} m · {_f(lim['rj'].get('psi_settle_rad', 0.1), 1)} rad · "
          f"{_f(lim['rj'].get('settle_hold_s', 1.0), 0)} s 유지"),
+        ("GP 판정 여유 (safety_margin, #9)", None if sm is None else sm >= 0,
+         "–" if sm is None else f"{_f(sm, 2)} · 가장 빠듯한 기준 {SM_KO.get(smb, smb or '–')}",
+         "≥ 0 (차선·안정·횡가속도·저크 모두 통과)"),
         ("횡가속도 (P-02, baseline 대비)", None if acc is None else not acc,
          _f(r.get("lat_acc_excess_mps2"), 2, " m/s²"), f"{_f(lim['acc'], 2)} m/s² 이하"),
         ("조향 한계 (SR6)", s6.get("pass") if s6.get("applies") else None,
@@ -478,7 +484,8 @@ def load_method(out_dir: Path) -> dict:
         if c is None:
             continue
         exp = c.get("expected_side")
-        lrr = r.get("lane_recovery_robustness")
+        lrr = (r.get("metrics") or {}).get("safety_margin")      # #9: the GP target; lrr for records before #9
+        lrr = r.get("lane_recovery_robustness") if lrr is None else lrr
         if r.get("recovery_outcome") == "no_switch" or r.get("final_safe_recovery") is None:
             actual, hit = "전환 안 됨", None                  # S1 (LQR recovery) not exercised
         else:
@@ -527,7 +534,7 @@ def render_method(out_dir: Path = Path(".")) -> str:
         hit = "–" if x["hit"] is None else ("맞음" if x["hit"] else "틀림")
         rows += (f'<tr><td>{_e(x["run_id"])}</td><td>{_e(x["kind"])}</td><td>{_e(x["expected"])}</td>'
                  f'<td>{_e(x["actual"])}{margin}</td><td>{hit}</td></tr>')
-    table = (f'<table class="kv mtab"><tr><th>런</th><th>출처</th><th>예상</th><th>실제 (차선 여유)</th><th>적중</th></tr>{rows}</table>'
+    table = (f'<table class="kv mtab"><tr><th>런</th><th>출처</th><th>예상</th><th>실제 (판정 여유)</th><th>적중</th></tr>{rows}</table>'
              if rows else "")
     return ('<section class="col ins meth" id="meth"><h2>이 시스템은 이렇게 검증합니다</h2>'
             f'<div class="ibody"><p class="mkey">{_e(key)}</p><ol class="msteps">{steps}</ol>'

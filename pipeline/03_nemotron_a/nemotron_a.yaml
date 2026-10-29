@@ -54,7 +54,7 @@ surrogate_summary:                              # integration3 #4 (ChatScene arX
   k: 6                                          #   LLM은 방향 제안, GP/탐색이 정밀화). 매 라운드 A 입력에 GP 요약을 넣는다:
                                                 #   boundary_regions (모호도 상위 k개: 1.96*std - |mean| 또는 P(switch)≈0.5),
                                                 #   recent_outcomes_by_fault_mode (고장별 복구/실패 분포). round_XX/03_gp_summary.json
-summary_v2:                                     # integration3 #7: 07 acquisition (boundary_score)과 같은 점수로 순위, 단위는 lane_recovery_robustness 원래 단위
+summary_v2:                                     # integration3 #7: 07 acquisition (boundary_score)과 같은 점수로 순위, 단위는 GP 타깃 원래 단위 (integration3 #9: safety_margin, --gp-target lrr 이면 lane_recovery_robustness)
   k_unexplored: 3                               # GP std >= unexplored_std_frac x 학습 std 인 점은 boundary가 아니라 unexplored_regions
   unexplored_std_frac: 0.75
 prompt_goal: boundary                           # "실패 찾기" → "성공/실패 경계 근처 제안". 범위 끝(5% 이내)은 extreme_justification 필요

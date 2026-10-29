@@ -159,7 +159,7 @@ class RecoveryJudgmentTests(unittest.TestCase):
   self.assertEqual(self.od['recovery_labels']['lat_acc_excess']['threshold_mps2']['status'],'provisional')
  def test_gp_targets_split(self):
   mr=self.c['metric_rules']
-  self.assertEqual(mr['recovery_success']['gp']['target'],'lane_recovery_robustness')
+  self.assertEqual(mr['recovery_success']['gp']['target'],'safety_margin')
   self.assertEqual(mr['lat_acc_excess_mps2']['gp']['target'],'lat_acc_excess_mps2')
   for k in self.common['gp_targets']:self.assertIn(k,self.od)
   self.assertIn('SUPERSEDED',self.od['recovery_robustness'])

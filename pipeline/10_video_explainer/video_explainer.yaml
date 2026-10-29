@@ -10,7 +10,7 @@ meta:
 
 select_runs:                            # 어떤 런을 해설할지
   failed: true                          # 전환했고 final_safe_recovery == false, 또는 전환 없이 P-01 < 0 / P-03 위반
-  boundary_near_abs_robustness: 0.15    # |lane_recovery_robustness| < 0.15 (PROVISIONAL)
+  boundary_near_abs_robustness: 0.15    # |GP 타깃| < 0.15 (integration3 #9: safety_margin; --gp-target lrr 이면 lane_recovery_robustness) (PROVISIONAL)
   max_per_round: 4                      # 비용 상한
 
 clip:

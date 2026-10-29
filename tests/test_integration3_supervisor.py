@@ -155,7 +155,7 @@ def test_gp_history_skips_runs_from_another_supervisor(tmp_path):
     hist.write_text("\n".join(json.dumps(dict(base, **extra)) for extra in ({}, {"supervisor_profile": "legacy"},
                                                                               {"supervisor_profile": "tight"})))
     loop = Loop(mode="mock", out=tmp_path / "o", ablation="X-5", video_on=False, seed=0, cold_start=4, batch_size=2,
-                rounds=0, quiet=True)
+                rounds=0, quiet=True, gp_target="lrr")          # #9: these minimal records have no metrics to re-score
     assert loop.supervisor == "tight"
     loop.load_gp_history([str(hist)])
     assert loop.stats["gp_history"]["loaded"] == 1

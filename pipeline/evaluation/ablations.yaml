@@ -33,7 +33,7 @@ evaluation:
     - gp_prediction_error_over_rounds         # 지표별 GP 각각
     # 2026-10-27 경계 추정 지표 (run.py evaluate)
     - both_sides_observed                     # final_safe_recovery true/false 둘 다 관측
-    - boundary_band_runs                      # |lane_recovery_robustness| < 0.2 m 런 수
+    - boundary_band_runs                      # |GP 타깃| < 0.2 런 수 (integration3 #9: safety_margin, 무차원. 예전 lane_recovery_robustness)
     - gp_boundary_sign_accuracy               # mock: 합성 시뮬레이터 정답 40점, real: leave-one-out
     - explanation_acceptance_rate             # 10 검증 통과 비율 (1 - 환각률)
 

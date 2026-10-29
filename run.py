@@ -64,6 +64,27 @@ SWITCH_METRIC = "switched_indicator"   # +1 switched / -1 no switch; S1 boundary
 # integration3: modelled by a GP classifier (06 surrogate.yaml switch_model: classifier) -> gp_mean = P(switch) in [0, 1]
 
 
+def select_gp_target(metric_rules: dict, choice: str | None) -> tuple[str, dict]:
+    """integration3 #9: (choice, metric_rules) with every rule that lists gp.target_choices pointed at `choice`
+    (02 vulnerability_patterns.yaml; default = the rule's own gp.target, i.e. safety_margin). The stage config is not
+    modified (deep copy). Unknown choice -> SystemExit."""
+    import copy
+    rules = copy.deepcopy(metric_rules or {})
+    picked = None
+    for name, rule in rules.items():
+        gp = rule.get("gp") or {}
+        opts = gp.get("target_choices") or {}
+        if not opts:
+            continue
+        default = next((k for k, v in opts.items() if v == gp.get("target")), gp.get("target"))
+        key = choice or default
+        if key not in opts:
+            raise SystemExit(f"--gp-target {key}: not in {name}.gp.target_choices {sorted(opts)}")
+        gp["target"] = opts[key]
+        picked = key
+    return picked or str(choice or ""), rules
+
+
 def switch_aware_score(c: dict, obj: dict, beta: float, weight: float = 2.0) -> float | None:
     """LEGACY (acquisition: straddle). S1 straddle on recovery_success, penalised where the switch GP predicts no
     switch (no S1 target there). Meant for switch_model: regression (mu_sw in [-1, 1]); the integration3 default is
@@ -142,7 +163,7 @@ class Loop:
     def __init__(self, *, mode: str, out: Path, ablation: str, video_on: bool, seed: int, cfg: dict | None = None,
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
                  quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None,
-                 supervisor: str | None = None):
+                 supervisor: str | None = None, gp_target: str | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -167,6 +188,8 @@ class Loop:
         self.objectives = orch["active_objectives"]
         self.obj_cfg = orch["objective_acquisition"]
         self.metric_rules = self.cfg["vulnerability_patterns"]["metric_rules"]
+        # integration3 #9: recovery GP target = safety_margin (every final_safe_recovery criterion) | lrr (lane only)
+        self.gp_target_choice, self.metric_rules = select_gp_target(self.metric_rules, gp_target)
         self.gp_metrics = sorted({self.obj_cfg[o]["metric"] for o in self.objectives}) + [SWITCH_METRIC]
         self.th = thresholds_from_config(self.cfg)
         sur = (self.cfg.get("surrogate") or {}).get("surrogate") or {}
@@ -352,14 +375,37 @@ class Loop:
                               f"{f['g_mps2']:g} (P-02); lat_jerk_excess: > {th['lat_jerk_threshold_mps3']:g} m/s^3 (P-04)"),
             "not_a_failure": ("a run with no switch is not a failed recovery (LQR never acted): it says the fault was too "
                               "mild / short or started too late for the supervisor to fire"),
-            "gp_target": ("lane_recovery_robustness = min over the window of lane margin / (lane_width/2 - vehicle half "
-                          f"width), dimensionless: 1 = centred, 0 = body at the lane edge (the boundary), < 0 departed, "
-                          f"clipped to [{th['robustness_clip_min']:g}, {th['robustness_clip_max']:g}], collision <= "
-                          f"{th['collision_penalty']:g}"),
+            "gp_target": self.target_meaning(),
             "evaluation_window": (f"P-01 lane margin is measured over onset .. onset + {th['eval_window_s']:g} s; an onset "
                                   f"less than {float(self.cfg['safety_spec']['evaluation_window']['min_length_s']):g} s "
                                   f"before the route end is rejected (V-03)"),
         }
+
+    def target_name(self) -> str:
+        rule = (self.metric_rules or {}).get(self.obj_cfg[self.objectives[0]]["metric"]) or {}
+        return str((rule.get("gp") or {}).get("target") or "")
+
+    def target_units(self) -> str:
+        if self.target_name() == "safety_margin":
+            return ("dimensionless safety_margin = min over the final_safe_recovery criteria of (limit - observed) / limit "
+                    "(lane term: lane_recovery_robustness); >= 0 <=> final_safe_recovery, 0 = at the binding limit")
+        return "dimensionless lane_recovery_robustness (NOT metres): lane margin / (lane_width/2 - vehicle half width)"
+
+    def target_meaning(self) -> str:
+        th = self.th
+        lrr = ("lane_recovery_robustness = min over the window of lane margin / (lane_width/2 - vehicle half "
+               f"width), dimensionless: 1 = centred, 0 = body at the lane edge, < 0 departed, collision <= "
+               f"{th['collision_penalty']:g}")
+        clip = f"clipped to [{th['robustness_clip_min']:g}, {th['robustness_clip_max']:g}]"
+        if self.target_name() != "safety_margin":
+            return f"{lrr}, {clip} (boundary 0 = lane edge only; jerk / lat_acc / settling are not in this target)"
+        return ("safety_margin = min(lane, settle, lat_acc, lat_jerk), " + clip + "; >= 0 exactly when the run is "
+                f"final_safe_recovery. lane = {lrr}; settle = (longest hold with |e_y| <= {th['e_settle_m']:g} m, |e_psi| "
+                f"<= {th['psi_settle_rad']:g} rad, margin >= 0 within {th['window_s']:g} s - {th['settle_hold_s']:g} s) / "
+                f"{th['settle_hold_s']:g} s; lat_acc = ({th['lat_acc_threshold_mps2']:g} * tire_friction_scale m/s^2 - "
+                f"lat_acc_excess) / limit; lat_jerk = ({th['lat_jerk_threshold_mps3']:g} m/s^3 - lat_jerk_excess) / "
+                f"{th['lat_jerk_threshold_mps3']:g}. Each run reports the binding (smallest) term; observed outcomes give "
+                "every term in real units (observed.safety_margin)")
 
     def _geom_candidate(self, rid: str, kmh: float, fr: float) -> dict:
         return {"route_id": rid, "environment": {"max_speed_kmh": kmh, "tire_friction_scale": fr},
@@ -516,7 +562,7 @@ class Loop:
             schema_r = NM.candidate_schema(self.space, self.route_ids, self.fault_pool, self.objectives, evidence, len(near))
             near_items = [NM.region_item(c, self.summary_scorer(c) or {}, metric=self.obj_cfg[self.objectives[0]]["metric"],
                                          native=self.native, y_scale=self.target_y_scale(), level_z=self.level_z(self.obj_cfg[self.objectives[0]]),
-                                         runs=by_sid) for c in near]
+                                         runs=by_sid, target=self.target_name()) for c in near]
             obj_r, st_r = NM.call_a(self.client_a, self.a_refine, NM.refine_messages(schema_r, near_items, ctx), schema_r, tag="A_refine")
             st_r.update(round=round_index, requested=len(near), refine=True)
             self.stats["a_calls"].append(st_r)
@@ -640,12 +686,34 @@ class Loop:
                 if why is not None:
                     skipped[why] = skipped.get(why, 0) + 1
                     continue
-                tg = dict(r.get("gp_targets") or {})
+                tg, why = self.history_targets(r)
+                if why is not None:
+                    skipped[why] = skipped.get(why, 0) + 1
+                    continue
                 tg[SWITCH_METRIC] = 1.0 if r.get("switch_time") is not None else -1.0
                 self.history_rows.append((c, tg))
-        self.stats["gp_history"] = {"files": files, "loaded": len(self.history_rows), "skipped": skipped}
+        self.stats["gp_history"] = {"files": files, "loaded": len(self.history_rows), "skipped": skipped,
+                                    "gp_target": self.gp_target_choice}
         self.say(f"[06] --gp-history: {len(self.history_rows)} earlier runs from {len(files)} file(s) pooled into GP training"
                  + (f", skipped {skipped}" if skipped else ""))
+
+    def history_targets(self, r: dict) -> tuple[dict, str | None]:
+        """integration3 #9: GP targets of one --gp-history run under THIS campaign's metric_rules. Old records stored
+        z of lane_recovery_robustness under 'recovery_success'; with --gp-target safety_margin the run is re-scored from
+        its logged metrics (judgment.rescore_safety_margin, thresholds from config); a switched run that cannot be
+        re-scored is excluded with the reason. Never-switched runs keep only the switch label (target undefined)."""
+        tg = {k: v for k, v in (r.get("gp_targets") or {}).items() if k not in self.metric_rules}
+        metrics = dict(r.get("metrics") or {})
+        if r.get("switch_time") is not None:
+            for name, rule in self.metric_rules.items():
+                if (rule.get("gp") or {}).get("target") == "safety_margin":
+                    sm, why = J.rescore_safety_margin(r, self.th)
+                    if sm is None:
+                        return {}, f"safety_margin: {why}"
+                    metrics["safety_margin"] = sm["value"]
+            has_fault = (((r.get("parameters") or {}).get("fault") or {}).get("mode") or "none") != "none"
+            tg.update(J.gp_targets(self.metric_rules, metrics, r.get("baseline_metrics"), has_fault))
+        return tg, None
 
     def fit_gp(self, round_index: int) -> MetricGPs | None:
         if not self.flags["use_gp"]:
@@ -704,7 +772,7 @@ class Loop:
                                     switch_penalty=float(obj.get("switch_penalty", 1.0)))
 
     def native(self, mean_z: float, std_z: float) -> tuple[float, float]:
-        """GP z -> lane_recovery_robustness (inverse of judgment.orient)."""
+        """GP z -> the recovery target's own units (safety_margin or lane_recovery_robustness; inverse of judgment.orient)."""
         rule = (self.metric_rules or {}).get(self.obj_cfg[self.objectives[0]]["metric"]) or {}
         sc = float((rule.get("gp") or {}).get("scale", 1.0))
         sign = 1.0 if rule.get("support_direction", "negative") == "negative" else -1.0
@@ -715,7 +783,7 @@ class Loop:
         rule = (self.metric_rules or {}).get(obj["metric"]) or {}
         ys = self.target_y_scale()
         return {"y_scale_z": ys, "level_z": self.level_z(obj), "target": (rule.get("gp") or {}).get("target", obj["metric"]),
-                "units": "dimensionless lane_recovery_robustness (NOT metres): lane margin / (lane_width/2 - vehicle half width)",
+                "units": self.target_units(),
                 "level": float(obj.get("level", 0.0)), "training_std": round(self.native(0.0, ys)[1], 3),
                 "meaning": self.judgment_criteria()["gp_target"]}
 
@@ -925,7 +993,9 @@ class Loop:
                         else f"라운드 {round_index}: {run_id} 끝 ({len(new)}/{len(batch)})")
             self.say(f"  [08/09] {run_id} {c['route_id']} {c['environment']['max_speed_kmh']:.0f}km/h {c['fault']['mode']} "
                      f"@{c['onset_event']}{c['onset_offset_s']:+.2f}s -> {rec['recovery_outcome']} "
-                     f"(lrr={_f(rec['lane_recovery_robustness'])}, trigger={_f(rec['trigger_time'])}s, "
+                     f"(margin={_f((rec.get('metrics') or {}).get('safety_margin'))}"
+                     f"[{(rec.get('metrics') or {}).get('safety_margin_binding') or '-'}], "
+                     f"lrr={_f(rec['lane_recovery_robustness'])}, trigger={_f(rec['trigger_time'])}s, "
                      f"detected={rec['trigger_source']}, "
                      f"sr={rec.get('sr_outcome')}, sel={c.get('selected_by')})")
         return new
@@ -942,8 +1012,8 @@ class Loop:
         sel = self.vcfg["select_runs"]
         picks = []
         for r in new:
-            lrr = r.get("lane_recovery_robustness")
-            near = lrr is not None and abs(lrr) < float(sel["boundary_near_abs_robustness"])
+            y = recovery_target_value(r, self.target_name())     # #9: the GP target (safety_margin by default)
+            near = y is not None and abs(y) < float(sel["boundary_near_abs_robustness"])
             if (sel["failed"] and is_failure(r)) or near:
                 picks.append((0 if is_failure(r) else 1, r))
         picks = [r for _, r in sorted(picks, key=lambda p: p[0])][: int(sel["max_per_round"])]
@@ -1010,7 +1080,7 @@ class Loop:
         self.out.mkdir(parents=True, exist_ok=True)
         dump(self.out / "run_config.json", {"mode": self.mode, "ablation": self.ablation, "flags": self.flags,
                                             "video_explainer": self.video_on, "seed": self.seed, "cold_start": self.cold,
-                                            "supervisor": self.supervisor,
+                                            "supervisor": self.supervisor, "gp_target": self.gp_target_choice,
                                             "batch_size": self.batch, "rounds": self.rounds, "synthetic": self.mode == "mock",
                                             "scenario_space": str(self.space_path), "av_stack": str(self.av_stack)})
         self.screen("시작: 사전 지식 정리 중")
@@ -1122,6 +1192,13 @@ def _f(x):
     return "None" if x is None else f"{x:.2f}"
 
 
+def recovery_target_value(r: dict, target: str | None = "safety_margin") -> float | None:
+    """integration3 #9: a run's recovery GP target in its own units (metrics.safety_margin | lane_recovery_robustness)."""
+    if target == "lane_recovery_robustness":
+        return r.get("lane_recovery_robustness")
+    return (r.get("metrics") or {}).get(target or "safety_margin")
+
+
 def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Loop | None = None) -> dict:
     """Boundary-estimation quality (evaluation/ablations.yaml metrics, v2)."""
     valid = [r for r in records if r.get("sim_status") == "ok"]
@@ -1129,6 +1206,8 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
     safe = [r for r in switched if r.get("final_safe_recovery") is True]
     fail = [r for r in valid if is_failure(r)]
     first_fail = next((i + 1 for i, r in enumerate(records) if is_failure(r)), None)
+    target = loop.target_name() if loop is not None else "safety_margin"
+    ys = [y for r in switched if (y := recovery_target_value(r, target)) is not None]
     lrr = [r["lane_recovery_robustness"] for r in switched if r.get("lane_recovery_robustness") is not None]
     band = 0.2
     uniq = {(candidates[r["scenario_id"]]["route_id"], candidates[r["scenario_id"]]["fault"]["mode"],
@@ -1140,7 +1219,9 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         "n_runs": len(records), "n_valid": len(valid), "n_switched": len(switched),
         "n_final_safe_recovery": len(safe), "n_failures": len(fail),
         "both_sides_observed": bool(safe) and any(r.get("final_safe_recovery") is False for r in switched),
-        "boundary_band_runs": sum(abs(x) < band for x in lrr), "boundary_band": band,
+        "boundary_band_runs": sum(abs(x) < band for x in ys), "boundary_band": band, "boundary_target": target,
+        "boundary_band_runs_lrr": sum(abs(x) < band for x in lrr),
+        "target_negative_runs": sum(x < 0 for x in ys),
         "failures_per_simulation": len(fail) / max(1, len(records)), "simulations_to_first_failure": first_fail,
         "unique_failure_conditions": len(uniq),
         "outcome_counts": _count(r.get("recovery_outcome") for r in records),
@@ -1149,7 +1230,7 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         "explanations": len(expl), "explanations_accepted": len(acc),
         "explanation_acceptance_rate": (len(acc) / len(expl)) if expl else None,
         "hallucination_rate": (1 - len(acc) / len(expl)) if expl else None,
-        "boundary_metrics": boundary_metrics(records, candidates, band),
+        "boundary_metrics": boundary_metrics(records, candidates, band, target),
     }
     if loop is not None:
         m["gp_boundary_sign_accuracy"] = boundary_accuracy(loop)
@@ -1206,14 +1287,17 @@ def nemotron_a_metrics(loop: Loop) -> dict:
             "expected_side": _count(c.get("expected_side") for c in a)}
 
 
-def boundary_metrics(records: list[dict], candidates: dict, band: float = 0.2) -> dict:
+def boundary_metrics(records: list[dict], candidates: dict, band: float = 0.2, target: str = "safety_margin") -> dict:
     """integration3: is the campaign finding a boundary at all? (result_1..5: every fault mode had a single outcome)
 
-    boundary_band_runs: switched runs with |lane_recovery_robustness| < band (also for 0.5 m);
+    boundary_band_runs: switched runs with |GP target| < band (also 0.5; #9: safety_margin, lrr kept as *_lrr);
     per_fault_mode: n, recovery_outcome mix, final_safe_recovery count and whether both safe and unsafe occurred;
     gp_prediction_diversity: distinct gp_mean values the executed runs were chosen with (constant = GP not learning);
     selection_sources: candidate source of the executed runs (Nemotron A share)."""
     lrr = [r["lane_recovery_robustness"] for r in records if r.get("lane_recovery_robustness") is not None]
+    ys = [y for r in records if (y := recovery_target_value(r, target)) is not None]
+    binding = _count((r.get("metrics") or {}).get("safety_margin_binding") for r in records
+                     if (r.get("metrics") or {}).get("safety_margin_binding"))
     per: dict[str, dict] = {}
     for r in records:
         if r.get("sim_status") != "ok":
@@ -1235,8 +1319,10 @@ def boundary_metrics(records: list[dict], candidates: dict, band: float = 0.2) -
                            "std": (sum((x - mean) ** 2 for x in v) / len(v)) ** 0.5}
     src = _count(str((candidates.get(r["scenario_id"]) or {}).get("source")) for r in records)
     n_a = sum(v for k, v in src.items() if k.startswith("nemotron_a"))
-    return {"band": band, "boundary_band_runs": sum(abs(x) < band for x in lrr),
-            "boundary_band_runs_0.5": sum(abs(x) < 0.5 for x in lrr), "n_lrr": len(lrr),
+    return {"band": band, "target": target, "boundary_band_runs": sum(abs(x) < band for x in ys),
+            "boundary_band_runs_0.5": sum(abs(x) < 0.5 for x in ys), "n_target": len(ys),
+            "target_negative": sum(x < 0 for x in ys), "safety_margin_binding": binding,
+            "boundary_band_runs_lrr": sum(abs(x) < band for x in lrr), "n_lrr": len(lrr),
             "per_fault_mode": per, "modes_with_mixed_outcome": sorted(k for k, d in per.items() if d["mixed"]),
             "gp_prediction_diversity": div, "selection_sources": src,
             "nemotron_a_share": (n_a / len(records)) if records else None}
@@ -1265,7 +1351,7 @@ def llm_usage(path: Path) -> dict:
 
 
 def boundary_accuracy(loop: Loop) -> dict | None:
-    """Sign accuracy of the final S1 GP (mean_z of lane_recovery_robustness) against held-out truth.
+    """Sign accuracy of the final S1 GP (mean_z of the recovery target: safety_margin (#9) or lrr) against held-out truth.
 
     mock: truth from the SYNTHETIC simulator on 40 fixed random scenarios. real: leave-one-out on observed runs.
     """
@@ -1285,6 +1371,7 @@ def boundary_accuracy(loop: Loop) -> dict | None:
         tmp = loop.out / "_truth"
         ok = n = 0
         pairs: list[tuple[bool, bool]] = []
+        pairs_fs: list[tuple[bool, bool]] = []       # #9: the same GP sign against final_safe_recovery (any target)
         for i, c in enumerate(test):
             base, _ = loop.runner.ensure_baseline(c)
             onset = SC.onset_time(c, loop.route_events(c) or {})
@@ -1303,10 +1390,14 @@ def boundary_accuracy(loop: Loop) -> dict | None:
             mu = gps.predict([loop.features(c)[0]])[0][0].get(metric)
             n += 1; ok += int((mu >= 0) == (y >= 0))
             pairs.append((mu >= 0, y >= 0))
+            if rec.get("final_safe_recovery") is not None:
+                pairs_fs.append((mu >= 0, bool(rec["final_safe_recovery"])))
         shutil.rmtree(tmp, ignore_errors=True)
-        return {"n": n, "accuracy": ok / n if n else None, "truth": "SYNTHETIC simulator (mock)", **_sign_detail(pairs)}
+        return {"n": n, "accuracy": ok / n if n else None, "truth": "SYNTHETIC simulator (mock)", **_sign_detail(pairs),
+                "vs_final_safe": _vs_final_safe(pairs_fs)}
     ok = 0
     pairs = []
+    pairs_fs = []
     for i in range(len(rows)):
         train = rows[:i] + rows[i + 1:]
         g = MetricGPs([metric], loop.seed, kernel_opts=loop.kernel_opts, prior_means=loop.gp_prior_means())
@@ -1316,7 +1407,18 @@ def boundary_accuracy(loop: Loop) -> dict | None:
         mu = g.predict([loop.features(rows[i][0])[0]])[0][0][metric]
         ok += int((mu >= 0) == (rows[i][1]["gp_targets"][metric] >= 0))
         pairs.append((mu >= 0, rows[i][1]["gp_targets"][metric] >= 0))
-    return {"n": len(rows), "accuracy": ok / len(rows), "truth": "leave-one-out on observed runs", **_sign_detail(pairs)}
+        if rows[i][1].get("final_safe_recovery") is not None:
+            pairs_fs.append((mu >= 0, bool(rows[i][1]["final_safe_recovery"])))
+    return {"n": len(rows), "accuracy": ok / len(rows), "truth": "leave-one-out on observed runs", **_sign_detail(pairs),
+            "vs_final_safe": _vs_final_safe(pairs_fs)}
+
+
+def _vs_final_safe(pairs: list[tuple[bool, bool]]) -> dict:
+    """integration3 #9: GP sign (mean >= level) vs final_safe_recovery. With the safety_margin target this equals the
+    target-sign accuracy; with --gp-target lrr it shows how far the lane-only sign is from the judgment."""
+    if not pairs:
+        return {}
+    return {"n": len(pairs), "accuracy": sum(p == t for p, t in pairs) / len(pairs), **_sign_detail(pairs)}
 
 
 def _sign_detail(pairs: list[tuple[bool, bool]]) -> dict:
@@ -1339,9 +1441,10 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
     lines = [f"# 파이프라인 실행 보고서 ({loop.ablation} {ABLATIONS[loop.ablation]['name']}, 영상 해설 {'on' if loop.video_on else 'off'})",
              "", f"- 데이터: **{syn}**", f"- 출력 폴더: `{out}`",
              f"- 런 {m['n_runs']}개 (유효 {m['n_valid']}, 전환 {m['n_switched']}), final_safe_recovery {m['n_final_safe_recovery']}개, 실패 {m['n_failures']}개",
-             f"- 경계 양쪽 관측: {'예' if m['both_sides_observed'] else '아니오 (경계 미추정)'}; |lane_recovery_robustness| < {m['boundary_band']} 런 {m['boundary_band_runs']}개",
+             f"- 경계 양쪽 관측: {'예' if m['both_sides_observed'] else '아니오 (경계 미추정)'}; |{m.get('boundary_target', 'lane_recovery_robustness')}| < {m['boundary_band']} 런 {m['boundary_band_runs']}개 (GP 타깃 < 0: {m.get('target_negative_runs')}개)",
              f"- 첫 실패까지 런 수: {m['simulations_to_first_failure']}, 고유 실패 조건: {m['unique_failure_conditions']}",
              f"- GP 경계 부호 정확도: {m.get('gp_boundary_sign_accuracy')}",
+             f"- GP 부호 vs final_safe_recovery (#9): {(m.get('gp_boundary_sign_accuracy') or {}).get('vs_final_safe')}",
              f"- 영상 해설: {m['explanations']}건, 검증 통과 {m['explanations_accepted']}건 (환각률 {m['hallucination_rate']})",
              f"- recovery_outcome 분포: {m['outcome_counts']}", f"- trigger_source 분포: {m['trigger_counts']}",
              f"- SR 검사 (engine/sr_checks.py, 참고) sr_outcome 분포: {m.get('sr_outcome_counts')}; 화면: `screen/campaign.html`",
@@ -1358,8 +1461,10 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
 def _boundary_lines(b: dict) -> list[str]:
     if not b:
         return ["- (없음)"]
-    lines = [f"- |lane_recovery_robustness| < {b['band']}: {b['boundary_band_runs']}개, < 0.5: {b['boundary_band_runs_0.5']}개 "
-             f"(복구 지표가 있는 런 {b['n_lrr']}개)",
+    lines = [f"- GP 타깃 {b.get('target', 'lane_recovery_robustness')}: |값| < {b['band']} {b['boundary_band_runs']}개, "
+             f"< 0.5 {b['boundary_band_runs_0.5']}개, < 0 (불안전) {b.get('target_negative')}개 (타깃이 있는 런 {b.get('n_target', b['n_lrr'])}개); "
+             f"제한 기준 (binding): {b.get('safety_margin_binding') or '-'}; 참고 |lane_recovery_robustness| < {b['band']}: "
+             f"{b.get('boundary_band_runs_lrr')}개 / {b['n_lrr']}개",
              f"- 같은 고장 안에서 안전·불안전이 둘 다 나온 고장: {b['modes_with_mixed_outcome'] or '없음 (결과가 고장 종류만으로 갈림)'}",
              f"- Nemotron A 후보 비율 (실행된 런): {b['nemotron_a_share']}; 출처: {b['selection_sources']}"]
     for mode, d in sorted((b.get("per_fault_mode") or {}).items()):
@@ -1497,6 +1602,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="SR1 FTTI runs (same fault, --controller mpc_unprotected); default 08 paired_runs.yaml no_reaction_run")
     ap.add_argument("--conditions", nargs="*")
     ap.add_argument("--repeats", type=int)
+    ap.add_argument("--gp-target", choices=("safety_margin", "lrr"),
+                    help="recovery GP target (default 02 metric_rules.recovery_success.gp.target = safety_margin; "
+                         "lrr = lane_recovery_robustness, the target before integration3 #9)")
     ap.add_argument("--gp-history", action="append", metavar="GLOB",
                     help="pool earlier campaigns' run_records.jsonl (glob, repeatable) into GP training (warm start)")
     args = ap.parse_args(argv)
@@ -1522,7 +1630,7 @@ def main(argv: list[str] | None = None) -> int:
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
-                gp_history=args.gp_history, supervisor=args.supervisor)
+                gp_history=args.gp_history, supervisor=args.supervisor, gp_target=args.gp_target)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":

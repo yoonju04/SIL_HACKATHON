@@ -289,6 +289,92 @@ runs; set false to reuse them. (2) the baseline cache key ignores the profile (n
 tight). (3) Q-B4 expectations are written for tight. (4) supervised_lateral.py line refs were remapped mechanically.
 (5) the tight effect, the mock boundary shift and all accuracy numbers are mock-only; nothing here ran on CARLA.
 
+## 9. GP target = signed safety margin over every final_safe_recovery criterion (integration3 #9)
+
+KO: 예전 GP 타깃 `lane_recovery_robustness`(lrr)는 차선 여유만 보았다. 그런데 `final_safe_recovery` 는 차선 +
+안정 유지 + 횡가속도(P-02) + 횡저크(P-04) 를 모두 본다. result_8 에서 전환된 50런 중 25런이 실패였는데 그중 23런은
+`safe_recovery` (차선 안, 안정 유지) 이면서 저크 초과로만 실패했다. lrr 는 50런 모두 ≥ 0 이라 부호가 final_safe 와
+25/50 만 맞았고, GP 는 "실제로 위험한" 런을 경계 밖으로 볼 수 없었다. 이제 타깃은 판정 코드와 같은 기준·임계값
+(`engine.monitor.thresholds_from_config`, 09 safety_spec.yaml 단일 출처) 으로 만든 연속 부호 여유다:
+
+EN: the old target (lrr) saw the lane only; final_safe_recovery also needs settling and the P-02 / P-04 excess
+labels. On result_8, 23 of the 25 failed switched runs were `safe_recovery` failed only by lateral jerk, and lrr was
+≥ 0 on all 50 switched runs (sign = final_safe on 25/50). The new target uses exactly the judgment's criteria and
+thresholds:
+
+```
+safety_margin = clip( min(terms), robustness_clip [-2, 1] )                (engine/judgment.py safety_margin)
+  lane     = lane_recovery_robustness  (min lane margin / (lane_width/2 - half width); collision -> collision_penalty)
+  settle   = (longest settled hold in the 3 s window - settle_hold_s 1.0 s) / settle_hold_s
+             settled = |e_y| <= 0.3 m, |e_psi| <= 0.1 rad, lane margin >= 0 (same test as classify_recovery)
+  lat_acc  = (P-02 limit 4.41 m/s^2 x tire_friction_scale - lat_acc_excess) / limit
+  lat_jerk = (P-04 limit 5.0 m/s^3 - lat_jerk_excess) / limit
+safety_margin >= 0  <=>  final_safe_recovery   (labels use a strict '>', so exactly at a limit is safe: margin 0)
+binding = argmin term ('collision' when the lane term binds on a collision); failing = terms < 0
+```
+
+- monitor (`compute_run_record`) writes `metrics.settle_hold_max_s`, `safety_margin`, `safety_margin_binding`,
+  `safety_margin_detail` (terms + observed value / unit / limit per criterion). Undefined (None) exactly where
+  final_safe_recovery is: invalid runs, never-switched runs (switch classifier unchanged), no baseline.
+- 02 `metric_rules.recovery_success.gp.target: safety_margin` (`target_choices: {safety_margin, lrr}`); scale 0.1,
+  level 0, prior_mean = level unchanged. `python run.py --gp-target lrr` restores the old target
+  (`run.select_gp_target`); mock with `--gp-target lrr` reproduces the pre-#9 campaign exactly (table below).
+- Nemotron A: `gp_info.target/units/meaning` name the margin; region items are `predicted_<target>(_std)`;
+  `outcome_view` / failure table / few-shot carry `safety_margin {value, binding, failing, terms: {margin, observed,
+  limit, unit}}` in real units (m/s³, m/s², s held, lrr) and `failed_criteria`; the refine prompt says level 0 = the
+  judgment boundary.
+- `--gp-history`: old records (no margin) are re-scored from their logged metrics (`judgment.rescore_safety_margin`;
+  friction-scaled limit from `metrics.p02_lat_acc_threshold_mps2`). safe_recovery / departure / collision keep their
+  sign without the settle term; `unsettled` runs logged before #9 and any run whose re-scored sign disagrees with the
+  logged final_safe are excluded with the reason in `loop_stats.gp_history.skipped`.
+- report / dashboard / video selection use the active target (`boundary_band_runs` on the margin; lrr kept as
+  `boundary_band_runs_lrr`; dashboard row "GP 판정 여유"); `gp_boundary_sign_accuracy.vs_final_safe` gives the GP sign
+  against final_safe for either target.
+
+Agreement (new monitor re-run on the logged CARLA runs, `/workspace/gpt/rescore.py`) / 부호 일치:
+
+| data | switched, labelled | sign(safety_margin) = final_safe | sign(lrr) = final_safe | logged final_safe reproduced | binding |
+|---|---|---|---|---|---|
+| result_8 (84 runs) | 50 | 50/50 | 25/50 | 84/84 | lat_jerk 50 |
+| result_7 | 3 | 3/3 | 2/3 | 8/8 | lat_jerk 3 |
+| result_6 | 4 | 4/4 | 4/4 | 8/8 | lat_jerk 4 |
+| mock seeds 0/1/2 (after) | 43/45/46 | 43/43, 45/45, 46/46 | 34/43, 36/45, 33/46 | – | lat_jerk 27/25/35, lane 16/19/9 |
+
+Offline GP on result_8 (same features: numeric + DF + B answers of the last round, same GP code, seed 6;
+`/workspace/gpt/offline_gp.py`; truth = final_safe, 25 safe / 25 failed). Majority baseline balanced accuracy = 0.5
+(LOO majority plain accuracy is 0.0 on a 25/25 split; round-by-round 0.405):
+
+| target | LOO balanced acc | LOO AUC | round-by-round (n 42) balanced acc | round-by-round AUC | predicted safe (LOO) |
+|---|---|---|---|---|---|
+| lrr (old) | 0.50 | 0.795 | 0.50 | 0.739 | 50/50 |
+| safety_margin (new) | **0.76** | **0.859** | **0.741** | **0.798** | 21/50 |
+
+(The 0.57 AUC quoted for result_8 came from the campaign's own logged `gp_mean` with fewer training runs; the offline
+lrr refit here ranks better but its sign never says "fail".)
+
+Mock (`PYTHONHASHSEED=0`, SYNTHETIC simulator + stub LLMs; default seed = seed 0). `vs FS` = GP sign vs final_safe on
+the frozen 26-point truth set (majority 0.808):
+
+| seed | before 78f0169: switched / final safe / failures | after: switched / final safe / failures | after `--gp-target lrr` | GP vs FS balanced acc, lrr → safety_margin |
+|---|---|---|---|---|
+| 0 | 44 / 32 / 12 | 43 / 22 / 21 | 44 / 32 / 12 | 0.60 → 0.70 |
+| 1 | 50 / 40 / 10 | 45 / 33 / 12 | 50 / 40 / 10 | 0.476 → 0.676 |
+| 2 | 53 / 36 / 17 | 46 / 32 / 14 | 53 / 36 / 17 | 0.60 → 0.60 |
+
+Jerk limit (data only, threshold NOT changed) / 저크 한계 (임계값 변경 없음): `safety_spec.yaml P-04
+lateral_jerk_threshold_mps3: 5.0` ("PROVISIONAL. 사용자 제공 참고값 ISO 11270:2014 (E-01)"), default
+`judgment.PROVISIONAL_RECOVERY`; jerk = d(a_y)/dt with a 0.5 s moving average, excess = max |j − j_baseline(s)| aligned
+by distance in the 3 s post-switch window. result_8, 65 fault-free baselines (after the first 2 s): per-run max |j|
+median 3.93, p90 11.04, max 18.23 m/s³, 26/65 exceed 5 somewhere; all samples p99 4.29, p99.9 8.56. Switched runs:
+final_safe jerk_excess median 2.13 (max 4.87), failed median 11.41 (min 5.25, max 24.82); of 48 `safe_recovery` runs,
+23 fail on jerk at 5 (19 at 7.5, 14 at 10, 2 at 15). The limit alone decides about half of the result_8 labels, and
+the fault-free stack itself exceeds it in 40 % of baselines (the baseline-relative excess removes most of that), so the
+provisional 5.0 deserves a reviewed source before conclusions are drawn.
+
+Not changed here / 이번에 안 바꾼 것: switch classifier and switch-uncertainty gating, range widening, thresholds.
+The new target makes the margin almost always jerk-bound on CARLA (50/50 runs), so the GP now models jerk excess;
+whether the switch gate or range widening matter should be re-measured on the next CARLA campaign with this target.
+
 ## Mock comparison (seed 0, `PYTHONHASHSEED=0`, SYNTHETIC simulator, stub LLMs)
 
 `python run.py --mock --seed 0 --open-screen off`; before = `bd683b5`, after = `651add7`.
@@ -315,5 +401,5 @@ run on CARLA.
 `tests/test_integration3_faults.py`, `tests/test_integration3_nemotron.py`, `tests/test_integration3_gp.py`,
 `tests/test_integration3_nemotron_b.py`, `tests/test_integration3_nemotron_a_context.py`,
 `tests/test_integration3_supervisor.py`, `tests/test_integration3_onset_exclusions.py`,
-`tests/test_integration3_cold_start.py` (plus updated existing tests). Root suite, `pipeline/09_monitor` and the av_stack suite (without GPU / reference
+`tests/test_integration3_cold_start.py`, `tests/test_integration3_safety_margin.py` (plus updated existing tests). Root suite, `pipeline/09_monitor` and the av_stack suite (without GPU / reference
 tests) pass.

@@ -331,7 +331,8 @@ def surrogate_summary(*, regions: list[dict], records: list[dict], candidates: d
                       unexplored_std_frac: float = 0.75) -> dict:
     """Compact GP view for Nemotron A every round (integration3 #4, LeGEND-style: the LLM proposes direction, the
     GP / search refines). integration3 #7:
-    - values in the target's own units (`native(mean_z, std_z)` -> lane_recovery_robustness), not GP z units;
+    - values in the target's own units (`native(mean_z, std_z)` -> gp_info.target: safety_margin (#9) or
+      lane_recovery_robustness), not GP z units;
     - ranked by `scorer(c)` = engine.surrogate.boundary_score_parts (the real acquisition: level set penalised by
       1 - P(switch), or switch uncertainty); points whose GP std is >= unexplored_std_frac of the training std are
       'unexplored_regions' (prior-level uncertainty), the rest 'boundary_regions';
@@ -346,8 +347,11 @@ def surrogate_summary(*, regions: list[dict], records: list[dict], candidates: d
         scorer = lambda c: boundary_score_parts(c, metric, switch_metric, beta=1.96, level_z=level_z, y_scale=y_scale)  # noqa: E731
     run_ids = {r.get("scenario_id"): r for r in records}
 
+    tname = str(gi.get("target") or "lane_recovery_robustness")
+
     def item(c: dict, parts: dict) -> dict:
-        return region_item(c, parts, metric=metric, native=native, y_scale=y_scale, level_z=level_z, runs=run_ids)
+        return region_item(c, parts, metric=metric, native=native, y_scale=y_scale, level_z=level_z, runs=run_ids,
+                           target=tname)
     scored = []
     for c in regions:
         parts = scorer(c) or {}
@@ -378,7 +382,7 @@ def surrogate_summary(*, regions: list[dict], records: list[dict], candidates: d
 
 
 def region_item(c: dict, parts: dict, *, metric: str, native, y_scale: float, level_z: float,
-                runs: dict | None = None) -> dict:
+                runs: dict | None = None, target: str = "lane_recovery_robustness") -> dict:
     """One GP region / refine candidate in the candidate item shape plus the GP view in target units."""
     gm, gs = c.get("gp_mean") or {}, c.get("gp_std") or {}
     mz, sz = gm.get(metric), gs.get(metric)
@@ -389,8 +393,8 @@ def region_item(c: dict, parts: dict, *, metric: str, native, y_scale: float, le
     if "tire_friction_scale" in c["environment"]:
         out["tire_friction_scale"] = c["environment"]["tire_friction_scale"]
     out.update({
-        "predicted_lane_recovery_robustness": None if mean is None else round(mean, 3),
-        "predicted_lane_recovery_robustness_std": None if sd is None else round(sd, 3),
+        f"predicted_{target}": None if mean is None else round(mean, 3),
+        f"predicted_{target}_std": None if sd is None else round(sd, 3),
         "p_below_level": None if mz is None or not sz else round(_phi((level_z - mz) / sz), 3),
         "p_switch": None if parts.get("p_switch") is None else round(parts["p_switch"], 3),
         "gp_uncertainty_vs_training_std": None if sz is None else round(sz / max(y_scale, 1e-9), 2),
@@ -434,9 +438,10 @@ def call_a(client, settings: dict, messages: list[dict], schema: dict, tag: str 
 
 
 REFINE_INSTR = """Refine pass (thinking enabled). Each candidate below is a tried condition near the recovery boundary, \
-with the GP prediction of lane_recovery_robustness in its own units (see surrogate.gp.units; level 0 = vehicle body at \
-the lane edge), p_below_level, p_switch and the observed outcome if it ran. Propose ONE modified scenario per candidate \
-that you expect to lie closer to the boundary (predicted robustness ~ 0 with the switch still happening), changing at \
+with the GP prediction of the recovery target in its own units (surrogate.gp.target / units / meaning: safety_margin = \
+the tightest final_safe_recovery criterion, >= 0 safe, level 0 = the judgment boundary; observed.safety_margin names the \
+binding criterion), p_below_level, p_switch and the observed outcome if it ran. Propose ONE modified scenario per candidate \
+that you expect to lie closer to the boundary (predicted target ~ 0 with the switch still happening), changing at \
 most two fields and keeping route_id and fault_id. Respect route_geometry (V-03 latest onset offset) and \
 objective.judgment_criteria. Output ONLY the JSON object of the response format."""
 

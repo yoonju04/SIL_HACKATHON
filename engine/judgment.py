@@ -403,6 +403,110 @@ def recovery_labels(*, acc_excess: float | None, acc_total_max: float | None,
     }
 
 
+# ---------------------------------------------------------------------------
+# integration3 #9: GP target = signed safety margin over EVERY criterion that decides final_safe_recovery.
+# result_8 (84 real runs, tight supervisor): 25 of 50 switched runs were not final_safe, every one because of
+# lat_jerk_excess (+ lane departure / unsettled / lat_acc), while lane_recovery_robustness stayed > 0 (min 0.11), so a
+# GP on lrr with level 0 never saw a failure. Each term is (limit - observed) / scale with the limit and the scale taken
+# from the judgment thresholds themselves (no new numbers): > 0 safe, 0 = at the limit (still safe, as the labels use
+# strict >), < 0 that criterion fails. target = clip(min over terms) -> target >= 0 exactly when final_safe_recovery.
+# ---------------------------------------------------------------------------
+
+SAFETY_MARGIN_TERMS = ("lane", "settle", "lat_acc", "lat_jerk")
+
+
+def settle_hold_max_s(*, margins: list[float], e_y: list[float], e_psi: list[float], dt: float = 0.05,
+                      th: dict[str, float] | None = None) -> float:
+    """Longest run (s) of 'settled' samples in the post-switch window: |e_y| <= e_settle_m, |e_psi| <= psi_settle_rad and
+    lane margin >= 0, the same test classify_recovery holds for settle_hold_s (returned as samples * dt)."""
+    th = th or PROVISIONAL_RECOVERY
+    best = run = 0
+    for a, b, m in zip(e_y, e_psi, margins):
+        run = run + 1 if (abs(a) <= th["e_settle_m"] and abs(b) <= th["psi_settle_rad"] and m >= 0) else 0
+        best = max(best, run)
+    return best * dt
+
+
+def safety_margin(*, lrr: float | None, collision: bool, acc_excess: float | None, acc_limit: float | None,
+                  jerk_excess: float | None, jerk_limit: float | None, settle_hold_s: float | None,
+                  settle_need_s: float | None, clip: tuple[float, float] | None = None,
+                  detail: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Signed, dimensionless safety margin of one switched run (None when final_safe_recovery would be None).
+
+    terms (> 0 safe):
+      lane     = lane_recovery_robustness = min lane margin / (lane_width/2 - half width), collision <= collision_penalty
+      settle   = (longest settled hold - settle_hold_s) / settle_hold_s         (unsettled < 0)
+      lat_acc  = (lat_acc limit (friction-scaled P-02) - lat_acc_excess) / limit (lat_acc_excess.primary <=> < 0)
+      lat_jerk = (P-04 lat_jerk limit - lat_jerk_excess) / limit                 (lat_jerk_excess.primary <=> < 0)
+    settle_hold_s=None leaves the settle term out (history runs whose hold was not logged; caller decides when that
+    is allowed). value = min(terms) clipped to `clip`; binding = the argmin ('collision' when the lane term is the
+    collision penalty)."""
+    if lrr is None or acc_excess is None or jerk_excess is None or not acc_limit or not jerk_limit:
+        return None
+    terms: dict[str, float] = {"lane": float(lrr)}
+    if settle_hold_s is not None and settle_need_s:
+        terms["settle"] = (float(settle_hold_s) - float(settle_need_s)) / float(settle_need_s)
+    terms["lat_acc"] = (float(acc_limit) - float(acc_excess)) / float(acc_limit)
+    terms["lat_jerk"] = (float(jerk_limit) - float(jerk_excess)) / float(jerk_limit)
+    binding = min(terms, key=lambda k: terms[k])
+    value = terms[binding]
+    if clip is not None:
+        value = max(float(clip[0]), min(float(clip[1]), value))
+    observed = {"lane": {"value": lrr, "unit": "lane_recovery_robustness (dimensionless)", "limit": 0.0},
+                "settle": {"value": settle_hold_s, "unit": "s held", "limit": settle_need_s},
+                "lat_acc": {"value": acc_excess, "unit": "m/s^2 over baseline", "limit": acc_limit},
+                "lat_jerk": {"value": jerk_excess, "unit": "m/s^3 over baseline", "limit": jerk_limit}}
+    for k, v in (detail or {}).items():
+        observed.setdefault(k, {}).update(v)
+    return {"value": value, "binding": "collision" if collision and binding == "lane" else binding,
+            "failing": [("collision" if collision and k == "lane" else k) for k in terms if terms[k] < 0],
+            "terms": terms, "observed": {k: observed[k] for k in terms}}
+
+
+def rescore_safety_margin(record: dict[str, Any], th: dict[str, float]) -> tuple[dict[str, Any] | None, str | None]:
+    """--gp-history: the safety margin of a run_record written before #9, from its logged fields only.
+
+    Returns (margin, None) or (None, reason). The friction-scaled lat_acc limit is metrics.p02_lat_acc_threshold_mps2
+    (else th x metrics.tire_friction_scale); jerk limit, settle hold and clip from th (config). A run without
+    metrics.settle_hold_max_s keeps the settle term only when it cannot change the sign (safe_recovery: held;
+    departure / collision: lane term < 0); an 'unsettled' run without it is excluded. The result must agree with the
+    logged final_safe_recovery, else the run is excluded (thresholds changed since)."""
+    if record.get("sim_status") != "ok":
+        return None, "not sim_status ok"
+    if record.get("switch_time") is None:
+        return None, "no switch (target undefined)"
+    m = record.get("metrics") or {}
+    if m.get("safety_margin") is not None and isinstance(m.get("safety_margin_detail"), dict):
+        return m["safety_margin_detail"], None
+    lim = m.get("p02_lat_acc_threshold_mps2")
+    if lim is None:
+        fs = m.get("tire_friction_scale")
+        fs = fs if isinstance(fs, (int, float)) else (((record.get("parameters") or {}).get("environment") or {})
+                                                      .get("tire_friction_scale") or 1.0)
+        lim = th["lat_acc_threshold_mps2"] * float(fs)
+    hold = m.get("settle_hold_max_s")
+    outcome = record.get("recovery_outcome")
+    if hold is None and outcome == "unsettled":
+        return None, "unsettled run without settle_hold_max_s (logged before #9)"
+    need = th["settle_hold_s"]
+    sm = safety_margin(lrr=record.get("lane_recovery_robustness"),
+                       collision=bool(((record.get("sr_checks") or {}).get("sr") or {}).get("SR4", {}).get("collision"))
+                       or (record.get("lane_recovery_robustness") is not None
+                           and record["lane_recovery_robustness"] <= th["collision_penalty"]),
+                       acc_excess=m.get("lat_acc_excess_mps2"), acc_limit=lim, jerk_excess=m.get("lat_jerk_excess_mps3"),
+                       jerk_limit=th["lat_jerk_threshold_mps3"], settle_hold_s=hold, settle_need_s=need,
+                       clip=(th["robustness_clip_min"], th["robustness_clip_max"]))
+    if sm is None:
+        return None, "missing lrr / lat_acc_excess / lat_jerk_excess"
+    fsr = record.get("final_safe_recovery")
+    if fsr is None:
+        return None, "final_safe_recovery is None"
+    if (sm["value"] >= 0) != bool(fsr):
+        return None, "rescored margin sign != logged final_safe_recovery"
+    sm["rescored_from_record"] = True
+    return sm, None
+
+
 def final_safe_recovery(outcome: str, labels: dict[str, Any]) -> bool | None:
     """safe_recovery AND NOT 가속도/저크 primary. 라벨 계산 불가(None)면 None (안전으로 치지 않음)."""
     if outcome == "simulation_invalid":

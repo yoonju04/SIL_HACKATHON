@@ -13,8 +13,8 @@
   the old +/-1 regression (legacy acquisition).
 * Acquisitions (07):
     level_set  (integration3 default, Gotovos et al. IJCAI 2013 "Active Learning for Level Set Estimation";
-                straddle of Bryan et al. 2005): score = beta*sigma(x) - |mu(x) - h| on lane_recovery_robustness (z),
-                h = recovery threshold (0 = lane boundary), normalised by the target's training std; combined with
+                straddle of Bryan et al. 2005): score = beta*sigma(x) - |mu(x) - h| on the recovery target (z; #9 safety_margin),
+                h = recovery threshold (0 = final_safe boundary), normalised by the target's training std; combined with
                 the same straddle on the switch classifier's latent function (P(switch) = 0.5 boundary):
                 score = max(rec - penalty*(1 - P(switch)), switch).  "uncertain switch OR recovery near the boundary"
     straddle   (legacy) beta*std_z - |mean_z|, with run.switch_aware_score's penalty from the regressed switch GP

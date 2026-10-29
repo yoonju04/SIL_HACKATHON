@@ -45,6 +45,7 @@ def failure_table(records: list[dict], candidates: dict[str, dict]) -> list[dict
                      "observed_switch_behavior": {"switch_time": r.get("switch_time"), "switch_state": r.get("switch_state")},
                      "robustness": r.get("lane_recovery_robustness") if r.get("lane_recovery_robustness") is not None else r.get("P01"),
                      "lane_recovery_robustness": r.get("lane_recovery_robustness"), "lane_margin_min_m": r.get("P01"),
+                     "safety_margin": safety_margin_view(r),
                      "reproduction_count": seen[key], "route_id": c.get("route_id")})
     order = {"unrecovered": 0, "recovered_after_departure": 1, "unsettled": 2}
     rows.sort(key=lambda x: (order.get(x["recovery_outcome"], 3), x["robustness"] if x["robustness"] is not None else 0))
@@ -59,13 +60,31 @@ def few_shot(table: list[dict], explanations: dict[str, dict], k: int = 5) -> li
         e = explanations.get(row["run_id"])
         item = {f: row.get(f) for f in ("route_id", "environment", "fault", "onset_event", "trigger_source",
                                         "recovery_outcome", "recovery_labels", "lane_recovery_robustness",
-                                        "lane_margin_min_m")}
+                                        "lane_margin_min_m", "safety_margin")}
         item["switch_state"] = (row.get("observed_switch_behavior") or {}).get("switch_state")
         if e and e.get("verification", {}).get("accepted"):
             item["verified_video_mechanism"] = {"tags": e["explanation"].get("mechanism_tags"),
                                                 "text": e["explanation"].get("mechanism")}
         out.append(item)
     return out
+
+
+def safety_margin_view(r: dict) -> dict | None:
+    """integration3 #9: the run's GP target (judgment.safety_margin) for Nemotron A in real units: value, binding
+    criterion, failing criteria, and every term as observed vs limit."""
+    sm = (r.get("metrics") or {}).get("safety_margin_detail")
+    if not isinstance(sm, dict):
+        return None
+    rnd = lambda v, n=3: None if v is None else round(float(v), n)   # noqa: E731
+    obs = sm.get("observed") or {}
+    terms = {}
+    for k, t in (sm.get("terms") or {}).items():
+        o = obs.get(k) or {}
+        row = {"margin": rnd(t), "observed": rnd(o.get("value")), "limit": rnd(o.get("limit")), "unit": o.get("unit")}
+        if o.get("min_lane_margin_m") is not None:
+            row["min_lane_margin_m"] = rnd(o["min_lane_margin_m"])
+        terms[k] = {a: b for a, b in row.items() if b is not None}
+    return {"value": rnd(sm.get("value")), "binding": sm.get("binding"), "failing": sm.get("failing") or [], "terms": terms}
 
 
 def failed_reason(r: dict) -> str:
@@ -87,9 +106,12 @@ def outcome_view(r: dict) -> dict:
            "recovery_outcome": r.get("recovery_outcome"), "final_safe_recovery": r.get("final_safe_recovery"),
            "lane_recovery_robustness": rnd(r.get("lane_recovery_robustness")),
            "lane_margin_min_m": rnd(r.get("P01")),
-           "lat_acc_margin_mps2": rnd(r.get("P02"), 2)}
+           "lat_acc_margin_mps2": rnd(r.get("P02"), 2),
+           "safety_margin": safety_margin_view(r)}
     if out["final_safe_recovery"] is False and sw is not None:
         out["failed_reason"] = failed_reason(r)
+        if out["safety_margin"] and out["safety_margin"]["failing"]:
+            out["failed_criteria"] = out["safety_margin"]["failing"]
     return {k: v for k, v in out.items() if v is not None}
 
 
@@ -117,6 +139,10 @@ def tried_view(c: dict, r: dict | None) -> dict:
             out["lane_margin_min_m"] = round(float(r["P01"]), 3)
         if r.get("lane_recovery_robustness") is not None and out["switched"]:
             out["lane_recovery_robustness"] = round(float(r["lane_recovery_robustness"]), 3)
+        m = r.get("metrics") or {}
+        if m.get("safety_margin") is not None and out["switched"]:
+            out["safety_margin"] = round(float(m["safety_margin"]), 3)
+            out["safety_margin_binding"] = m.get("safety_margin_binding")
     return {k: v for k, v in out.items() if v is not None}
 
 

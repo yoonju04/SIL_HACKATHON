@@ -63,13 +63,13 @@ control_faults_per_round_max: 1                 # BUG-025: 대조군(F-01 solver
 objective_acquisition:
   S1:
     metric: recovery_success                    # 02 vulnerability_patterns metric_rules.recovery_success
-    gp_target: lane_recovery_robustness         # absolute_post_switch, scale 0.1 m, 0 = 차선 경계
+    gp_target: safety_margin                    # integration3 #9 (02 metric_rules.recovery_success.gp.target; --gp-target lrr = 예전 lane_recovery_robustness). absolute_post_switch, scale 0.1, 0 = 판정 경계
     # integration3: level_set = Gotovos et al. IJCAI 2013 (LSE, https://www.ijcai.org/Proceedings/13/Papers/202.pdf).
     #   score = max( (beta*std_z - |mean_z - h_z|)/std(y_train) - switch_penalty*(1 - P(switch)),
     #                beta*sd_f - |mu_f|  [전환 분류 GP 잠재함수, P=0.5 경계] )  → engine/surrogate.py boundary_score
     #   "전환 여부가 불확실하거나 OR 복구가 경계 근처"인 점을 고른다. 예전 방식은 acquisition: straddle (legacy).
     acquisition: level_set                      # level_set (기본) | straddle (legacy: run.switch_aware_score) | lower_confidence_bound
-    level: 0.0                                  # h: lane_recovery_robustness 경계 (무차원: 여유/(차선폭/2-반폭), m 아님. 0 = 차체가 차선 경계). z로 바꿔 씀 (integration3 #7 주석 정정)
+    level: 0.0                                  # h: 판정 경계. safety_margin(#9) >= 0 <=> final_safe_recovery (무차원, 가장 빠듯한 기준의 (한계-관측)/한계). lrr이면 0 = 차체가 차선 경계. z로 바꿔 씀
     switch_penalty: 1.0                         # 전환 가능성이 낮은 곳의 복구 점수 감점 (정규화 단위)
     beta: 1.96                                  # PROVISIONAL
   default:

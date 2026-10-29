@@ -377,6 +377,17 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
         lrr = J.lane_recovery_robustness(margins, [float(r["lane_width_m"]) for r in win],
                                          float(win[0]["bbox_half_width_m"]), bool(col_in), th["collision_penalty"],
                                          (th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)))
+    # integration3 #9: signed safety margin over every final_safe_recovery criterion (GP target, judgment.safety_margin)
+    hold = None
+    sm = None
+    if switched and outcome != "simulation_invalid" and margins:
+        hold = J.settle_hold_max_s(margins=margins, e_y=e_y, e_psi=e_psi, dt=dt, th=th)
+        need_s = max(1, round(th["settle_hold_s"] / dt)) * dt     # classify_recovery holds this many samples
+        sm = J.safety_margin(lrr=lrr, collision=bool(col_in), acc_excess=acc_excess,
+                             acc_limit=th["lat_acc_threshold_mps2"], jerk_excess=jerk_excess,
+                             jerk_limit=th["lat_jerk_threshold_mps3"], settle_hold_s=hold, settle_need_s=need_s,
+                             clip=(th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)),
+                             detail={"lane": {"min_lane_margin_m": min(margins)}})
     # P-01..03 over the evaluation window (planned onset .. onset + eval_window_s, as the SR monitor; BUG-022)
     eval_end = eval_start + th.get("eval_window_s", 10.0)
     ewin = _window(ticks, eval_start, min(end_t, eval_end))
@@ -444,6 +455,10 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
         "max_steering_rate_dps": max_rate,
         "margin_delta_m": mdelta,
         "recovery_robustness": None,  # SUPERSEDED (02 outcome_definitions)
+        "settle_hold_max_s": hold,
+        "safety_margin": None if sm is None else sm["value"],
+        "safety_margin_binding": None if sm is None else sm["binding"],
+        "safety_margin_detail": sm,
     }
     baseline_metrics = None
     if baseline is not None and base_win:
