@@ -154,6 +154,9 @@ class Loop:
         self.route_ids = [r["route_id"] for r in self.routes]
         self.runner_cfg = pr["runner"]
         self.fault_pool = orch["fault_pool"]
+        # BUG-025: control faults (solver_fail, stale) always switch at once; at most this many per round
+        self.control_ids = {f["id"] for f in self.space.get("faults", []) if f.get("group") == "control"}
+        self.control_cap = int(orch.get("control_faults_per_round_max", 1))
         self.objectives = orch["active_objectives"]
         self.obj_cfg = orch["objective_acquisition"]
         self.metric_rules = self.cfg["vulnerability_patterns"]["metric_rules"]
@@ -451,6 +454,36 @@ class Loop:
         return forced + batch
 
     # ------------------------------------------------------------------ 08 + 09
+    def is_control(self, c: dict) -> bool:
+        return (c.get("fault") or {}).get("fault_id") in self.control_ids
+
+    def cap_controls(self, batch: list[dict], pool: list[dict], round_index: int = 0) -> list[dict]:
+        """BUG-025: keep at most control_cap control-fault candidates in a round's batch; the extras are swapped
+        for the next non-control candidates of the pool. When the pool has none left (cold start runs the whole
+        pool), new space-filling candidates without control faults are made, gated (04) and asked (05b)."""
+        spare = [c for c in pool if c not in batch and not self.is_control(c)]
+        extra = sum(self.is_control(c) for c in batch) - self.control_cap
+        if extra > len(spare):
+            risk_pool = [f for f in self.fault_pool if f not in self.control_ids]
+            new = self.stage_04([self.quantize(c) for c in SC.space_filling(
+                self.space, self.route_ids, risk_pool, 2 * (extra - len(spare)), self.rng, round_index=round_index)],
+                round_index)
+            new = [c for c in new if c not in pool and not self.is_control(c)]
+            self.stage_05b(new)
+            spare += new
+        out, n_ctrl = [], 0
+        for c in batch:
+            if self.is_control(c):
+                if n_ctrl >= self.control_cap and spare:
+                    s = spare.pop(0)
+                    s["selected_by"] = "control_cap_for_" + c["scenario_id"]
+                    s.setdefault("normalized_features", SC.numeric_features(s, self.space, self.route_ids, self.fault_pool)[0])
+                    out.append(s)
+                    continue
+                n_ctrl += 1
+            out.append(c)
+        return out
+
     def baseline_gate(self, base_dir: Path, onset: float) -> str | None:
         """Reasons the paired baseline cannot grade a fault at `onset` (BUG-003 / BUG-004), or None.
 
@@ -474,6 +507,7 @@ class Loop:
         new = []
         mr = self.metric_rules
         queue, reserve = list(batch), list(reserve or [])
+        n_ctrl = sum(self.is_control(c) for c in queue)
         while queue:
             c = queue.pop(0)
 
@@ -481,8 +515,13 @@ class Loop:
                 self.stats["rejected"].append({"scenario_id": c["scenario_id"], "tags": [tag], "problems": [problem]})
                 self.say(f"  [08] skip {c['scenario_id']} {c['route_id']} {c['environment']['max_speed_kmh']:.0f}km/h "
                          f"{c['fault']['mode']}: {problem}")
-                if reserve:
-                    nxt = reserve.pop(0)
+                nonlocal n_ctrl
+                n_ctrl -= self.is_control(c)
+                # a control-fault reserve only while the round is under its control cap (BUG-025)
+                i = next((k for k, r in enumerate(reserve) if not self.is_control(r) or n_ctrl < self.control_cap), None)
+                if i is not None:
+                    nxt = reserve.pop(i)
+                    n_ctrl += self.is_control(nxt)
                     nxt["selected_by"] = "replacement_for_" + c["scenario_id"]
                     nxt.setdefault("normalized_features",
                                    SC.numeric_features(nxt, self.space, self.route_ids, self.fault_pool)[0])
@@ -662,6 +701,7 @@ class Loop:
                     c["normalized_features"] = SC.numeric_features(c, self.space, self.route_ids, self.fault_pool)[0]
             else:
                 batch = self.stage_07(pool, gps, rnd)
+            batch = self.cap_controls(batch, pool, rnd)
             dump(rdir / "07_batch.json", [{k: c.get(k) for k in ("scenario_id", "source", "selected_by", "gp_mean", "gp_std")} for c in batch])
             self.say(f"[round {rnd}] pool {len(pool)} -> batch {len(batch)} ({self.ablation}, video {'on' if self.video_on else 'off'})")
             self.screen(f"라운드 {rnd}: 시뮬레이션 {len(batch)}개 시작")

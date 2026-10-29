@@ -72,7 +72,7 @@ def test_lateral_acceleration_from_yaw_rate():
 
 def test_load_spec_reads_numbers_from_yaml():
     cfg = load_spec(os.path.join(HERE, "safety_spec.yaml"), lane_width_default_m=3.5)
-    assert cfg.sr2_limit_dps == 60.0 and cfg.sr1_ftti_fraction == 0.5 and cfg.window_s == 10.0
+    assert cfg.sr2_limit_dps == 90.0 and cfg.sr1_ftti_fraction == 0.5 and cfg.window_s == 10.0
     assert cfg.sr5_enforce is False and cfg.gp_clip == (-2.0, 1.0) and cfg.lane_width_default_m == 3.5
 
 
@@ -121,10 +121,14 @@ def test_undetected_but_harmless_is_pass_with_note():
 
 
 def test_fixed_limit_used_without_no_reaction_run():
-    fault = trace(drift(0.2, 0.4), fault_at=ONSET)
+    # a late switch without a no-reaction run is still judged against the fixed fallback limit
+    fault = trace(drift(0.2, 0.4), fault_at=ONSET, switch_at=11.0)
     rec = evaluate_pair(fault, trace(), ONSET, CFG)
     assert rec["outcome_category"] == "F1_no_or_late_switch", rec
     assert rec["sr"]["SR1"]["limit_source"] == "fixed_fallback"
+    # BUG-021: without a switch the fault run is its own no-reaction run (stays in the lane -> harmless)
+    rec = evaluate_pair(trace(drift(0.2, 0.4), fault_at=ONSET), trace(), ONSET, CFG)
+    assert rec["outcome_category"] == "pass" and rec["note"] == "undetected_harmless", rec
 
 
 def test_F2_steer_jump_at_switch():

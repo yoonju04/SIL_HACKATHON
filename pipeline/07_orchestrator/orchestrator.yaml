@@ -40,6 +40,7 @@ budget:
 # ---- 2026-10-27: run.py 가 읽는 값 ----
 active_objectives: [S1]                         # S2/S3는 objective 파일이 아직 template
 fault_pool: [F-01, F-02, F-03, F-04, F-05, F-06, F-07]   # scenario_space faults 중 implemented: true
+control_faults_per_round_max: 1                 # BUG-025: 대조군(F-01 solver_fail, F-02 stale)은 라운드당 최대 1개
 objective_acquisition:
   S1:
     metric: recovery_success                    # 02 vulnerability_patterns metric_rules.recovery_success

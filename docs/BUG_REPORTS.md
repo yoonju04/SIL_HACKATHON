@@ -380,3 +380,45 @@
   - 위 3개 런은 모델이 화면을 잘못 읽은 것이라 검사는 그대로 둠.
 - **확인 (인사이트 "실패 대부분은 커브 진입"):** BUG-016 재채점 뒤 실패 15개의 고장 시점은 curve_entry 9, curve_exit 5, straight 1.
   9/15 = 60%라 "대부분"은 맞음. 검사기(BUG-019 `_check_majority`, 절반 초과)도 이 기준으로 이미 확인함. 수정 없음.
+
+## BUG-021: 감독기가 못 잡았지만 무해했던 고장까지 "전환 실패(F1)"로 판정
+
+- **발견:** 2026-10-28 결과 점검 (`result/result_4`, 20런)
+- **증상:** 전환이 없던 8런이 SR 판정 모두 `F1_no_or_late_switch`. 그중 7런은 차선 여유 +0.23~0.82 m, 충돌 없음.
+- **원인:** 반응 없음 실행(FTTI 측정)이 실제 캠페인에서 기본 off (`paired_runs.yaml no_reaction_run.real: false`). FTTI가 없으면 SR1이
+  고정 한계 0.5 s를 쓰고, 전환이 없으면 지연 = ∞ → 무조건 F1. 무해한 미감지와 위험한 미감지가 구분되지 않음.
+- **수정:** `pipeline/09_monitor/monitor.py grade_pair` — 반응 없음 실행이 없고 전환도 없으면, 감독기가 한 번도 반응하지 않았으니 그
+  고장 실행 자체가 반응 없음 실행이다. 그 실행으로 `measure_ftti`를 재서 차선 이탈·충돌이 없으면 SR1 미적용(`pass`,
+  `undetected_harmless`, 창 안에서만 확인했다는 뜻), 있으면 그 FTTI로 F1 (`limit_source = ftti_from_fault_run_no_switch`).
+  추가 CARLA 실행 없음. 전환이 늦은 런은 여전히 고정 한계(0.5 s)를 쓴다 → 최종 캠페인은 `--no-reaction-runs on` 권장.
+
+## BUG-022: P-01(차선 여유)이 엔진과 SR 모니터에서 서로 다른 값
+
+- **증상:** 같은 런에서 엔진 `P01`과 SR4 여유가 반대 결론. 예: result_4 R00-0004 drift P01 -0.13 / SR4 +0.67, result_2 R00-0001
+  saturate P01 +0.38 / SR4 -0.48 + 충돌.
+- **원인:** 엔진 `P01`은 주입 시점부터 **로그 끝까지**, **차체 중심**(방향각 무시) 여유. SR4는 주입 후 **10 s**, **차체 네 모서리**.
+- **수정:** `engine/monitor.py` — P-01/P-03과 `margin_delta_m`(기준 실행 포함)을 SR 모니터와 같은 창(`evaluation_window.length_s`,
+  10 s)과 같은 차체 모서리 여유(`footprint_margin_m`)로 계산. 방향각·차체 길이가 없으면 예전 중심 여유로 대신. 회복 판정(recovery v2)의
+  여유 계산은 그대로. spec `safety_specification.evaluation_window.end` 설명도 맞춤.
+
+## BUG-023: SR2(전환 매끄러움) 한계 60 °/s가 LQR 설계 조향 속도 90 °/s보다 낮음
+
+- **증상:** solver_fail 35 km/h 런(result_4 R00-0013, R00-0019, 회복 lrr 0.81)이 `F2_switch_transient`.
+- **원인:** PDM 경로의 LQR 전환 후 조향 속도 제한은 90 °/s(`pdm_agent.py TAKEOVER_RATE_DPS`, SR6 한계와 같음)인데 SR2 한계는 60 °/s.
+  LQR이 설계대로 움직여도 F2.
+- **수정:** `safety_spec.yaml requirements.SR2.limit_dps` 60 → 90. SR2는 이제 제한기가 막지 못한 튐(첫 LQR 틱, 필터 우회)을 잡는다.
+
+## BUG-024: 대조군 고장(solver_fail, stale)의 지속 시간 축이 결과를 바꾸지 못함
+
+- **증상:** result_4 R00-0013(1.5 s)과 R00-0019(2.5 s)는 같은 경로·속도·시점, 지속 시간만 다른데 결과가 같음.
+- **원인:** 감독기가 첫 이상 샘플에서 LQR로 넘어가고 돌아오지 않음(latch). 그 뒤 고장 지속 시간은 아무 영향이 없음.
+- **수정:** `scenario_space_av_stack.yaml` F-01·F-02 `params: {}`. 지속 시간이 없으면 경로 끝까지 유지(`to_cli`).
+
+## BUG-025: 결과가 뻔한 대조군 고장이 너무 자주 뽑힘
+
+- **증상:** result_4 20런 중 solver_fail 6런(30 %). 모두 즉시 전환.
+- **수정:** `orchestrator.yaml control_faults_per_round_max: 1`, `run.py Loop.cap_controls` — 라운드 배치의 대조군을 상한까지만 두고,
+  넘치면 풀의 다음 위험 고장 후보로 바꾼다. 풀이 바닥나면(첫 탐색) 위험 고장만으로 space-filling 후보를 새로 만들어 04·05b를 거쳐 채운다.
+  기준 실행 게이트(BUG-003/004)의 교체 후보도 상한을 지킨다.
+- **확인 (021~025):** 09 모니터 테스트 62 + 42, 엔진 테스트 77(실패 1건은 간이 실행기 한계), `run.py --mock` 2라운드
+  → 라운드별 대조군 1개, 무해한 미감지 12런이 `undetected_harmless`.

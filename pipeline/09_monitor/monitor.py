@@ -410,6 +410,12 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
             ftti, limit_src = fr["ftti_s"], "ftti_measured"
         else:
             rec.setdefault("notes", []).append("no_reaction run invalid: " + "; ".join(fr["reasons"]))
+    if ftti is None and switch_time is None:
+        # BUG-021: without a switch the supervisor never reacted, so the fault run itself IS a no-reaction run.
+        # Its own lane/collision record gives the FTTI (inf = the undetected fault stayed harmless in the window).
+        fr = measure_ftti(fault, onset, cfg)
+        if fr["valid"]:
+            ftti, limit_src = fr["ftti_s"], "ftti_from_fault_run_no_switch"
     triggered = trigger is not None
     if not triggered:
         sr1 = {"applies": False, "reason": "fault never effective"}

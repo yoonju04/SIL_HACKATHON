@@ -150,7 +150,23 @@ def thresholds_from_config(stage_cfg: dict | None) -> dict[str, float]:
     clip = rjs.get("robustness_clip")
     if isinstance(clip, (list, tuple)) and len(clip) == 2 and all(_finite(x) for x in clip):
         th["robustness_clip_min"], th["robustness_clip_max"] = float(clip[0]), float(clip[1])
+    # BUG-022: P-01 uses the SR monitor's evaluation window (planned onset + length_s), not onset .. log end
+    ew = ((stage_cfg or {}).get("safety_spec") or {}).get("evaluation_window") or {}
+    th["eval_window_s"] = float(ew["length_s"]) if _finite(ew.get("length_s")) else 10.0
     return th
+
+
+def footprint_margin_m(r: dict) -> float:
+    """Signed margin of the vehicle rectangle (4 corners incl. heading error) to the intended lane, as SR4.
+
+    Falls back to the centre-line margin (lane_width/2 - |offset| - half_width) when heading or length is missing."""
+    w, off, hw = r["lane_width_m"], r["lane_offset_m"], r["bbox_half_width_m"]
+    psi, hl = r.get("lane_heading_err_rad"), r.get("bbox_half_length_m")
+    if not (_finite(psi) and _finite(hl)):
+        return J.lane_margin_m(w, off, hw)
+    s, c = math.sin(psi), math.cos(psi)
+    corners = [off + xc * s + yc * c for xc in (hl, -hl) for yc in (hw, -hw)]
+    return min(w / 2 - max(corners), w / 2 + min(corners))
 
 
 def _rate_limit_dps(run: RunData) -> tuple[float, str]:
@@ -305,7 +321,7 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
         if win:
             acc_excess = J.excess_over_baseline([r["_s"] for r in win], [r["_ay_f"] for r in win], b_s, b_a)
             jerk_excess = J.excess_over_baseline([r["_s"] for r in win], [r["_jerk"] for r in win], b_s, b_j)
-        base_win = _window(baseline.ticks, eval_start, baseline.ticks[-1]["t"])
+        base_win = _window(baseline.ticks, eval_start, min(baseline.ticks[-1]["t"], eval_start + th.get("eval_window_s", 10.0)))
     margin_at_switch = None
     if switched:
         r_sw = next((r for r in ticks if r["t"] >= t_sw - 1e-9), None)
@@ -322,15 +338,17 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
         lrr = J.lane_recovery_robustness(margins, [float(r["lane_width_m"]) for r in win],
                                          float(win[0]["bbox_half_width_m"]), bool(col_in), th["collision_penalty"],
                                          (th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)))
-    # P-01..03 over the evaluation window (planned onset .. end)
-    ewin = _window(ticks, eval_start, end_t)
-    em = margins_of([r for r in ewin if _finite(r.get("lane_width_m"))])
+    # P-01..03 over the evaluation window (planned onset .. onset + eval_window_s, as the SR monitor; BUG-022)
+    eval_end = eval_start + th.get("eval_window_s", 10.0)
+    ewin = _window(ticks, eval_start, min(end_t, eval_end))
+    em = [footprint_margin_m(r) for r in ewin if all(_finite(r.get(k)) for k in ("lane_width_m", "lane_offset_m", "bbox_half_width_m"))]
     p01 = J.robustness_p01(em) if em else None
     p02 = J.robustness_p02([r["_ay_f"] for r in ewin], th["lat_acc_threshold_mps2"]) if ewin else None
-    p03 = not any(_finite(c.get("t")) and c["t"] >= eval_start - 1e-9 for c in run.collisions)
+    p03 = not any(_finite(c.get("t")) and eval_start - 1e-9 <= c["t"] <= eval_end + 1e-9 for c in run.collisions)
     mdelta = None
     if baseline is not None and base_win and p01 is not None:
-        bm = margins_of([r for r in base_win if _finite(r.get("lane_width_m"))])
+        bm = [footprint_margin_m(r) for r in base_win
+              if all(_finite(r.get(k)) for k in ("lane_width_m", "lane_offset_m", "bbox_half_width_m"))]
         if bm:
             mdelta = J.margin_delta_m(p01, J.robustness_p01(bm))
     # switch_state (S1 derived axes) + handover saturation

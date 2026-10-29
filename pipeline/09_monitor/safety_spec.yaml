@@ -35,7 +35,8 @@ safety_specification:
       monitor: boolean
   evaluation_window:
     start: planned_fault_onset_time            # baseline도 같은 시각부터 자름
-    end: simulation_end
+    end: planned_fault_onset_time + evaluation_window.length_s (아래 SR 섹션, 10 s) 또는 simulation_end 중 이른 쪽
+    note: "BUG-022: P-01/P-03 와 margin_delta_m 은 SR4 와 같은 창·같은 차체 모서리 여유로 계산 (예전: onset .. 끝, 차체 중심)"
     align_baseline_to_fault_run: true
   outcome_categories: [no_trigger, triggered_no_switch, switched_safe,
                        switched_unsafe, simulation_invalid]
@@ -307,7 +308,7 @@ requirements:
     question: 전환 순간 조향이 튀지 않았나
     measure: 전환 시각 -dt ~ +0.5 s 구간의 최대 |d steer_cmd / dt| (road-wheel, 실제 송신값)
     applies_if: 전환이 있었을 때
-    limit_dps: 60.0
+    limit_dps: 90.0
     window_after_switch_s: 0.5
     robustness: (limit - max_rate) / limit
     refs:
@@ -316,8 +317,11 @@ requirements:
     - ZACCARIAN_TEEL2005
     role: switch_contract
     basis: design_choice_pending_vehicle_calibration
-    threshold_note: 60 deg/s retained for experiment continuity; not a universal Autoware/ISO/UN limit. Road-wheel
-      command, not steering-wheel rate.
+    threshold_note: 'BUG-023: 90 deg/s = the LQR takeover rate limit of the graded PDM path (pdm_agent.py
+      TAKEOVER_RATE_DPS) and the SR6 command bound. The earlier 60 deg/s flagged every PDM takeover that used its
+      designed rate as F2. With the rate limiter in place SR2 now catches a jump the limiter did not stop (first LQR
+      tick, filter bypass) rather than normal use of the designed rate. Not a universal Autoware/ISO/UN limit.
+      Road-wheel command, not steering-wheel rate.'
     observation_rule: Do not read past evaluated horizon; incomplete transition window => assessment_complete=false.
   SR3:
     name: 요·횡슬립 안정성 / 백업 회복 가능 영역

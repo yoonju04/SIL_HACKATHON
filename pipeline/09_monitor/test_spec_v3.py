@@ -126,6 +126,17 @@ class SpecV3Tests(unittest.TestCase):
         r=self.grade(fault)
         self.assertLess(r['aux']['P02_lat_acc']['max_abs_mps2'],2.0)
 
+    def test_bug021_no_switch_uses_the_fault_run_as_its_own_no_reaction_run(self):
+        grade = lambda f: monitor.view(monitor.evaluate_pair(f, trace(), ONSET, CFG, None, {'run_id': 'r'}))
+        harmless = grade(trace(drift(.3, .2), fault_at=ONSET))           # never switched, stays in the lane
+        self.assertEqual(harmless['outcome_category'], 'pass')
+        self.assertEqual(harmless['note'], 'undetected_harmless')
+        self.assertFalse(harmless['sr']['SR1']['applies'])
+        dangerous = grade(trace(drift(1.0, 2.0), fault_at=ONSET))        # never switched, leaves the lane
+        self.assertEqual(dangerous['outcome_category'], 'F1_no_or_late_switch')
+        self.assertEqual(dangerous['sr']['SR1']['limit_source'], 'ftti_from_fault_run_no_switch')
+        self.assertIsNotNone(dangerous['sr']['SR1']['ftti_s'])
+
     def test_recovery_cannot_look_past_evaluation_window(self):
         cfg=replace(CFG,window_s=1,min_window_s=.5)
         r=self.grade(trace(fault_at=ONSET,switch_at=10.8),cfg)
