@@ -27,15 +27,12 @@ def test_main_screen_renders_compact_insight_panel(tmp_path):
         "limitations": ["표본 부족"]}, ensure_ascii=False), encoding="utf-8")
     page = D.refresh(tmp_path / "run_records.jsonl", tmp_path / "screen", spec={}).read_text(encoding="utf-8")
     panel = page[page.index('id="ins"'):]
-    big = panel[:panel.index("<details>")]
-    assert "실패율 50.0%" in big
-    assert big.index("포화 고장") < big.index("두번째 높음") < big.index("중간 것")   # high confidence first
-    assert "낮은 것" not in big                                                      # only top 3 are big
-    details = panel[panel.index("<details>"):panel.index("</details>")]
-    assert "직선 비교" in details and "표본 부족" in details and "요약 &lt;b&gt;" in details
-    assert "../insights/campaign.html" in details
-    assert 'id="insfold"' in panel and "position:fixed" not in page
-    # a normal card in the right column, directly after the scenario list card
+    assert "인사이트" in panel and "AI 분석 요약" not in panel
+    assert "실패 비율" in panel and "50.0%" in panel
+    assert panel.index("포화 고장") < panel.index("두번째 높음") < panel.index("중간 것")   # high confidence first
+    assert "낮은 것" not in panel                                                      # only top 3
+    assert "<details" not in panel and "원문" not in panel
+    assert "position:fixed" not in page
     right = page[page.index("지금까지 돌린 시나리오"):]
     assert right.index("</section>") < right.index('id="ins"') and right.index('id="ins"') < right.index("</div>\n</div>")
 
@@ -78,7 +75,7 @@ def test_method_card_counts_a_hypotheses(tmp_path):
     assert m["n_obs"] == 25 and m["n_props"] == 2 and m["b_files"] == ["lqr_controller/lqr.py"]
     assert [(x["run_id"], x["hit"]) for x in m["tests"]] == [("R1", True), ("R2", None)]
     html = D.render_method(camp / "screen")
-    assert "A 가설 적중 1/1" in html and "전환 안 돼 시험 못 함 1" in html and "lqr.py" in html
+    assert "예상 적중 1/1" in html and "전환 없음 1" in html and "lqr.py" in html
 
 
 def test_stability_short_no_switch_is_held_not_green():
