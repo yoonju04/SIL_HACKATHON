@@ -1,0 +1,145 @@
+{
+    "_checkpoint": {
+        "global_record": {
+            "index": -1,
+            "route_id": -1,
+            "status": "Failed",
+            "infractions": {
+                "collisions_layout": 10.659,
+                "collisions_pedestrian": 0.0,
+                "collisions_vehicle": 0.0,
+                "red_light": 0.0,
+                "stop_infraction": 0.0,
+                "outside_route_lanes": 0.01,
+                "min_speed_infractions": 138.571,
+                "yield_emergency_vehicle_infractions": 0.0,
+                "scenario_timeouts": 0.0,
+                "route_dev": 0.0,
+                "vehicle_blocked": 0.0,
+                "route_timeout": 0.0
+            },
+            "scores_mean": {
+                "score_composed": 44.97993,
+                "score_route": 77.65,
+                "score_penalty": 0.579265
+            },
+            "scores_std_dev": {
+                "score_composed": 0,
+                "score_route": 0,
+                "score_penalty": 0
+            },
+            "meta": {
+                "total_length": 120.817,
+                "duration_game": 61.05,
+                "duration_system": 45.435,
+                "exceptions": [
+                    [
+                        "RouteScenario_28035_rep0",
+                        0,
+                        "Failed"
+                    ]
+                ]
+            }
+        },
+        "progress": [
+            1,
+            1
+        ],
+        "records": [
+            {
+                "index": 0,
+                "route_id": "RouteScenario_28035_rep0",
+                "scenario_name": "T_Junction_1",
+                "weather_id": "1",
+                "save_name": "RouteScenario_28035_rep0_Town01_T_Junction_1_1_10_28_18_20_31",
+                "status": "Failed",
+                "num_infractions": 15,
+                "infractions": {
+                    "collisions_layout": [
+                        "Agent collided against object with type=static.static and id=0 at (x=85.793, y=314.81, z=0.058)"
+                    ],
+                    "collisions_pedestrian": [],
+                    "collisions_vehicle": [],
+                    "red_light": [],
+                    "stop_infraction": [],
+                    "outside_route_lanes": [
+                        "Agent went outside its route lanes for about 10.209 meters (10.88% of the completed route)"
+                    ],
+                    "min_speed_infractions": [
+                        "Average speed is 44.6% of the surrounding traffic's one",
+                        "Average speed is 127.46% of the surrounding traffic's one",
+                        "Average speed is 103.12% of the surrounding traffic's one",
+                        "Average speed is 81.77% of the surrounding traffic's one",
+                        "Average speed is 81.86% of the surrounding traffic's one",
+                        "Average speed is 163.56% of the surrounding traffic's one",
+                        "Average speed is 104.03% of the surrounding traffic's one",
+                        "Average speed is 74.45% of the surrounding traffic's one",
+                        "Average speed is 139.2% of the surrounding traffic's one",
+                        "Average speed is 108.18% of the surrounding traffic's one",
+                        "Average speed is 13.72% of the surrounding traffic's one",
+                        "Average speed is 533.58% of the surrounding traffic's one",
+                        "Average speed is 869.18% of the surrounding traffic's one"
+                    ],
+                    "yield_emergency_vehicle_infractions": [],
+                    "scenario_timeouts": [],
+                    "route_dev": [],
+                    "vehicle_blocked": [],
+                    "route_timeout": []
+                },
+                "scores": {
+                    "score_route": 77.65,
+                    "score_penalty": 0.579265,
+                    "score_composed": 44.97993
+                },
+                "meta": {
+                    "route_length": 120.817,
+                    "duration_game": 61.05,
+                    "duration_system": 45.435
+                },
+                "town_name": "Town01"
+            }
+        ]
+    },
+    "entry_status": "Finished",
+    "eligible": true,
+    "sensors": [
+        "carla_opendrive_map",
+        "carla_imu",
+        "carla_speedometer",
+        "carla_camera"
+    ],
+    "values": [
+        "44.97993",
+        "77.65",
+        "0.579265",
+        "0.0",
+        "0.0",
+        "10.659",
+        "0.0",
+        "0.0",
+        "0.01",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "138.571"
+    ],
+    "labels": [
+        "Avg. driving score",
+        "Avg. route completion",
+        "Avg. infraction penalty",
+        "Collisions with pedestrians",
+        "Collisions with vehicles",
+        "Collisions with layout",
+        "Red lights infractions",
+        "Stop sign infractions",
+        "Off-road infractions",
+        "Route deviations",
+        "Route timeouts",
+        "Agent blocked",
+        "Yield emergency vehicles infractions",
+        "Scenario timeouts",
+        "Min speed infractions"
+    ]
+}

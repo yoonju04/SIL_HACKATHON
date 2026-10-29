@@ -1,0 +1,35 @@
+[
+  {
+    "scenario_id": "SC-f82434a9ed",
+    "source": "nemotron_a",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "switched_indicator": 1.2226171293228656e-26
+    },
+    "gp_std": {
+      "switched_indicator": 0.7079153020059662
+    }
+  },
+  {
+    "scenario_id": "SC-bb943130ae",
+    "source": "nemotron_a",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "switched_indicator": 1.8394735941169303e-18
+    },
+    "gp_std": {
+      "switched_indicator": 0.7079153020059662
+    }
+  },
+  {
+    "scenario_id": "SC-ebe023f9dd",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "switched_indicator": 2.034965793209468e-18
+    },
+    "gp_std": {
+      "switched_indicator": 0.7079153020059662
+    }
+  }
+]

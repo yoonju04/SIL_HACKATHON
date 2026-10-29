@@ -1,0 +1,12 @@
+{
+  "supervisor": {
+    "safe_stop": false
+  },
+  "meta": {
+    "planner": "PDM-Lite",
+    "controller": "mpc_unprotected",
+    "fault_mode": "solver_fail",
+    "fault_start": 38.11,
+    "fault_magnitude": 0.05
+  }
+}

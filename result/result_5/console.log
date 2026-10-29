@@ -1,0 +1,17 @@
+[00-02] prior payload (25 unverified obs omitted), objectives ['S1'], scenario space C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\04_feasibility_expansion\scenario_space_av_stack.yaml
+[round 0] pool 10 -> batch 4 (X-5, video off)
+  [08/09] R00-0000-saturate bench2drive:28035 30km/h saturate @curve_entry-0.50s -> unrecovered (lrr=-2.00, trigger=46.00s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=cold_start_nemotron_a)
+  [08] skip SC-f8bdd6de31 bench2drive:28035 30km/h saturate: baseline: V-03 window shorter than minimum
+  [08] skip SC-3c4bc6dfc0 bench2drive:28035 35km/h output_delay: baseline: V-03 window shorter than minimum
+  [08/09] R00-0001-intermittent_bias town10_long 40km/h intermittent_bias @curve_exit+0.58s -> no_switch (lrr=None, trigger=42.65s, detected=None, sr=F1_no_or_late_switch, sel=cold_start_space_filling)
+  [08/09] R00-0002-intermittent_bias bench2drive:24206 25km/h intermittent_bias @curve_exit-0.98s -> no_switch (lrr=None, trigger=7.45s, detected=None, sr=F3_not_recovered, sel=replacement_for_SC-f8bdd6de31)
+  [08/09] R00-0003-solver_fail bench2drive:28048 15km/h solver_fail @curve_exit+0.16s -> safe_recovery (lrr=0.89, trigger=38.15s, detected=solver_failure, sr=pass, sel=replacement_for_SC-3c4bc6dfc0)
+[round 1] pool 216 -> batch 3 (X-5, video off)
+  [08] skip SC-f82434a9ed bench2drive:28048 15km/h saturate: baseline: V-03 window shorter than minimum
+  [08] skip SC-bb943130ae bench2drive:28154 35km/h intermittent_bias: baseline: V-03 window shorter than minimum
+  [08] skip SC-ebe023f9dd bench2drive:28035 30km/h intermittent_bias: baseline: V-03 window shorter than minimum
+  [08/09] R01-0004-saturate bench2drive:28035 20km/h saturate @curve_entry+0.00s -> no_switch (lrr=None, trigger=46.70s, detected=None, sr=F1_no_or_late_switch, sel=replacement_for_SC-f82434a9ed)
+  [08/09] R01-0005-saturate town10_long 35km/h saturate @curve_exit+0.00s -> no_switch (lrr=None, trigger=41.55s, detected=None, sr=F1_no_or_late_switch, sel=replacement_for_SC-bb943130ae)
+  [08/09] R01-0006-saturate bench2drive:24206 25km/h saturate @curve_exit+0.00s -> no_switch (lrr=None, trigger=8.40s, detected=None, sr=F3_not_recovered, sel=replacement_for_SC-ebe023f9dd)
+{"n_runs": 7, "n_switched": 2, "n_final_safe_recovery": 1, "n_failures": 4, "both_sides_observed": true, "boundary_band_runs": 0, "explanations": 0, "explanations_accepted": 0}
+outputs: outputs\real_bughunt_1028  (report.md, run_records.jsonl, screen/campaign.html)
