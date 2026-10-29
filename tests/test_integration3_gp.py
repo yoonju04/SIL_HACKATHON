@@ -155,7 +155,7 @@ def test_boundary_metrics():
                                             "gp_mean": {"recovery_success": mu}}
     rs = [rec("saturate", "unrecovered", False, -0.9, -3.0), rec("saturate", "safe_recovery", True, 0.1, 0.4),
           rec("bias", "no_switch", False, None, 0.4), rec("bias", "no_switch", False, None, 0.4)]
-    m = boundary_metrics(rs, {"saturate0.1": {"source": "nemotron_a"}}, band=0.2)
+    m = boundary_metrics(rs, {"saturate0.1": {"source": "nemotron_a"}}, band=0.2, target="lane_recovery_robustness")
     assert m["boundary_band_runs"] == 1 and m["boundary_band_runs_0.5"] == 1
     assert m["modes_with_mixed_outcome"] == ["saturate"] and m["per_fault_mode"]["bias"]["mixed"] is False
     d = m["gp_prediction_diversity"]["recovery_success"]

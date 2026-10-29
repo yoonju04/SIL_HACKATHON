@@ -82,6 +82,29 @@ def sampling_ranges(space: dict, fault: dict) -> dict:
             "tire_friction_scale": list(pick("tire_friction_scale", fax["range"])) if fax else None}
 
 
+def onset_exclusions(space: dict, route_id: str | None, speed_kmh: float | None = None) -> set[str]:
+    """integration3 #8b: onset_events this route cannot grade (scenario_space route_onset_exclusions).
+    An entry is an event name (always excluded) or {event, min_kmh} (excluded at max_speed_kmh >= min_kmh; with
+    speed_kmh None such a conditional entry is not applied)."""
+    out: set[str] = set()
+    for e in ((space.get("route_onset_exclusions") or {}).get(route_id) or []):
+        if isinstance(e, str):
+            out.add(e)
+        elif isinstance(e, dict) and e.get("event"):
+            lo = e.get("min_kmh")
+            if lo is None or (speed_kmh is not None and float(speed_kmh) >= float(lo) - 1e-9):
+                out.add(str(e["event"]))
+    return out
+
+
+def allowed_onset_events(space: dict, route_id: str, fault: dict | None = None, speed_kmh: float | None = None) -> list[str]:
+    """onset_event values minus route_onset_exclusions for this route (and speed). With `fault`, start from the fault's
+    sampling values (handover_axes of the control faults) instead of the global list."""
+    base = sampling_ranges(space, fault)["onset_event"] if fault is not None else space["fault_timing"]["onset_event"]["values"]
+    ex = onset_exclusions(space, route_id, speed_kmh)
+    return [e for e in base if e not in ex]
+
+
 def make_candidate(space: dict, *, route_id: str, speed: float, fault_id: str, params: dict, onset_event: str,
                    offset: float, source: str, objective: str = "S1", round_index: int = 0,
                    seed_scenario_id: str | None = None, friction: float | None = None, **extra) -> dict:
@@ -106,8 +129,77 @@ def unit_dims(space: dict, fault_pool: list[str]) -> int:
 
 
 def space_filling(space: dict, routes: list[str], fault_pool: list[str], n: int, rng: random.Random,
-                  objective: str = "S1", round_index: int = 0, source: str = "space_filling") -> list[dict]:
-    """Latin-hypercube style: every continuous dim is stratified into n bins; categoricals cycle."""
+                  objective: str = "S1", round_index: int = 0, source: str = "space_filling",
+                  max_controls: int | None = None, speed_step: float = 0.0) -> list[dict]:
+    """Latin-hypercube style: every continuous dim is stratified into n bins; categoricals cycle.
+
+    integration3 #8c: fault types really cycle (random start; before, each sample drew a random fault, so a 4-run cold
+    start covered 2-4 of 7 types), and each fault cycles through its onset_events (fault x onset stratified), routes
+    cycle too. max_controls: at most this many control-fault samples (the round's BUG-025 cap, so the cycle does not
+    produce control faults cap_controls would drop); the cycle then moves on to the next risk fault.
+    integration3 #8b: only onset_events the route can grade at that speed (route_onset_exclusions); a route with none
+    left for the fault is swapped for the next route that has one. speed_step: the runner's speed_step_kmh, so the
+    exclusion is checked at the speed quantize() will round to (else 28 km/h passes and is rejected at 30)."""
+    if n <= 0 or not fault_pool or not routes:
+        return []
+    fax = friction_axis(space)
+    faults = faults_by_id(space)
+    strata = [rng.sample(range(n), n) for _ in range(4 if fax else 3)]
+    f0, r0 = rng.randrange(len(fault_pool)), rng.randrange(len(routes))
+    ev_start = {fid: rng.randrange(8) for fid in fault_pool}
+    used: dict[str, int] = {}
+    n_ctrl = 0
+    out = []
+    k = 0          # position in the fault cycle
+    for i in range(n):
+        u_speed, u_par, u_off = ((strata[d][i] + rng.random()) / n for d in range(3))
+        u_fr = (strata[3][i] + rng.random()) / n if fax else None
+        fid = None
+        for _ in range(len(fault_pool)):
+            cand = fault_pool[(f0 + k) % len(fault_pool)]
+            k += 1
+            if max_controls is not None and faults[cand].get("group") == "control" and n_ctrl >= max_controls:
+                continue
+            fid = cand
+            break
+        if fid is None:
+            break
+        f = faults[fid]
+        rg = sampling_ranges(space, f)   # integration3 #3: control faults sample their handover_axes
+        env, off = rg["max_speed_kmh"], rg["offset_s"]
+        friction = None
+        if fax:
+            flo, fhi = rg["tire_friction_scale"]
+            friction = flo + u_fr * (fhi - flo)
+        params = {k_: _param_from_unit(spec, u_par if j == 0 else rng.random()) for j, (k_, spec) in enumerate((f.get("params") or {}).items())}
+        speed = env[0] + u_speed * (env[1] - env[0])
+        q_speed = round(speed / speed_step) * speed_step if speed_step > 0 else speed
+        route = routes[(r0 + i) % len(routes)]
+        order = routes[routes.index(route):] + routes[:routes.index(route)]
+        # onset_event: this fault's next one in its own cycle; the route cycle moves on to the first route that can
+        # grade it (route_onset_exclusions), else to any route with an allowed onset
+        base = rg["onset_event"]
+        j = used.get(fid, 0)
+        want = [base[(ev_start[fid] + j + t) % len(base)] for t in range(len(base))]
+        allowed = {r: allowed_onset_events(space, r, f, q_speed) for r in order}
+        pick = next(((r, ev) for ev in want for r in order if ev in allowed[r]), None)
+        if pick is None:
+            continue
+        route, onset = pick
+        used[fid] = j + 1 + want.index(onset)
+        n_ctrl += f.get("group") == "control"
+        out.append(make_candidate(space, route_id=route,
+                                  speed=speed, fault_id=fid, params=params,
+                                  onset_event=onset, offset=off[0] + u_off * (off[1] - off[0]),
+                                  source=source, objective=objective, round_index=round_index, friction=friction))
+    return out
+
+
+def truth_points(space: dict, routes: list[str], fault_pool: list[str], n: int, rng: random.Random) -> list[dict]:
+    """integration3 #8c: FROZEN copy of space_filling as of 02832ea (random fault per sample, random onset), used only
+    for the mock GP sign-accuracy test set (run.boundary_accuracy, Random(1234)). Changing space_filling must not move
+    the yardstick: with the new cycling sampler the 40 test points changed (truth safe fraction 0.65 -> 0.90) and
+    before/after accuracies were not comparable. Not used to choose scenarios."""
     if n <= 0:
         return []
     fax = friction_axis(space)
@@ -118,7 +210,7 @@ def space_filling(space: dict, routes: list[str], fault_pool: list[str], n: int,
         u_fr = (strata[3][i] + rng.random()) / n if fax else None
         fid = fault_pool[(i + rng.randrange(len(fault_pool))) % len(fault_pool)]
         f = faults_by_id(space)[fid]
-        rg = sampling_ranges(space, f)   # integration3 #3: control faults sample their handover_axes
+        rg = sampling_ranges(space, f)
         env, events, off = rg["max_speed_kmh"], rg["onset_event"], rg["offset_s"]
         friction = None
         if fax:
@@ -128,7 +220,7 @@ def space_filling(space: dict, routes: list[str], fault_pool: list[str], n: int,
         out.append(make_candidate(space, route_id=routes[i % len(routes)] if i < len(routes) else rng.choice(routes),
                                   speed=env[0] + u_speed * (env[1] - env[0]), fault_id=fid, params=params,
                                   onset_event=rng.choice(events), offset=off[0] + u_off * (off[1] - off[0]),
-                                  source=source, objective=objective, round_index=round_index, friction=friction))
+                                  source="truth_set", objective="S1", round_index=0, friction=friction))
     return out
 
 
@@ -157,8 +249,10 @@ def perturb(space: dict, seed: dict, n: int, rng: random.Random, scale: float = 
     return out
 
 
-def validate_against_space(space: dict, c: dict, routes: list[str]) -> list[str]:
-    """G-02: every parameter maps to a run_benchmark.py argument inside the declared range."""
+def validate_against_space(space: dict, c: dict, routes: list[str], *, check_exclusions: bool = True) -> list[str]:
+    """G-02: every parameter maps to a run_benchmark.py argument inside the declared range; integration3 #8b: and the
+    (route, onset_event, speed) is not in route_onset_exclusions (would always fail V-03; check_exclusions=False for
+    --gp-history, where such a run already exists and was graded)."""
     problems = []
     if c.get("route_id") not in routes:
         problems.append(f"unknown route {c.get('route_id')}")
@@ -181,6 +275,10 @@ def validate_against_space(space: dict, c: dict, routes: list[str]) -> list[str]
             problems.append(f"tire_friction_scale {fr} outside {fax['range']}")
     if c.get("onset_event") not in space["fault_timing"]["onset_event"]["values"]:
         problems.append(f"onset_event {c.get('onset_event')}")
+    elif check_exclusions and c.get("onset_event") in onset_exclusions(space, c.get("route_id"),
+                                                                       sp if isinstance(sp, (int, float)) else None):
+        problems.append(f"onset_event {c.get('onset_event')} excluded on {c.get('route_id')} at {sp} km/h "
+                        f"(route_onset_exclusions: < 6 s left after the event, V-03)")
     olo, ohi = space["fault_timing"]["offset_s"]["range"]
     if not isinstance(c.get("onset_offset_s"), (int, float)) or not olo <= c["onset_offset_s"] <= ohi:
         problems.append("onset_offset_s outside range")

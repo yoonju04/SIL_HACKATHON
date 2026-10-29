@@ -22,10 +22,10 @@ objective:
 feasibility:                                     # 실제 트리거 기준 판단 (safety_profile.yaml switching.triggers)
   verdict: partially_feasible
   natural_triggers_possible:
-    tracking_divergence: '계획 경로 대비 |e_y|>1.0 m 또는 |e_psi|>0.6 rad가 0.25 s 지속 (supervised_lateral.py:45-51). 고속 급커브·모델 불일치에서 자연 발생 가능'
-    deadline_miss: 'MPC 호출 wall time > 50 ms (supervised_lateral.py:38-39, 74). 자연 발생 가능하지만 머신 부하에 좌우됨. 관측: drift 0.02 rad/s 런이 drift 감지가 아니라 deadline_miss로 전환 (scenario_space_av_stack.yaml:124, 이전 코드)'
+    tracking_divergence: '계획 경로 대비 |e_y|>0.6 m 또는 |e_psi|>0.35 rad가 0.15 s 지속 (tight, integration3 #8; legacy 1.0 m / 0.6 rad / 0.25 s) (supervised_lateral.py:75-82). 고속 급커브·모델 불일치에서 자연 발생 가능'
+    deadline_miss: 'MPC 호출 wall time > 50 ms (supervised_lateral.py:61-62, 105). 자연 발생 가능하지만 머신 부하에 좌우됨. 관측: drift 0.02 rad/s 런이 drift 감지가 아니라 deadline_miss로 전환 (scenario_space_av_stack.yaml:124, 이전 코드)'
     solver_failure: 'QP status가 error일 때만 (mpc.py:239). max_iter는 ok=True라 트리거 안 됨 (qp.py:47, 97)'
-    controller_exception: 'MPC 계산 중 예외 (supervised_lateral.py:109-112). 드묾'
+    controller_exception: 'MPC 계산 중 예외 (supervised_lateral.py:140-143). 드묾'
   natural_triggers_practically_impossible:
     steer_out_of_range: 'MPC 출력이 이미 lim으로 clip됨 (mpc.py:247)'
     stale_output: 'MPC가 매 호출 stamp_s=t로 출력 (mpc.py:252-254)'

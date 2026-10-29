@@ -19,7 +19,7 @@ purpose: 'S1~S4 어느 목표의 런이든 같은 형식으로 전환 정보를 
 record_every_run:
   trigger_source: 'supervisor_reason (behavior.jsonl, monitor_logs.py:123-124)'
   trigger_attribution: '09 error_table 정의 (모니터 사후 계산)'
-  switch_time: 'switched_at_s (supervised_lateral.py:115, record() :140-144)'
+  switch_time: 'switched_at_s (supervised_lateral.py:146, record() :140-144)'
   switch_count: 'switch_count (record())'
   safe_stop: 'stop_required (record()) / summary.json supervisor.safe_stop (monitor_logs.py:137-138)'
   switch_state: 'S1 derived_axes.switch_state와 같은 정의로 계산 (S1이 아닌 런도 기록)'

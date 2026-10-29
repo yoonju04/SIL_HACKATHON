@@ -120,7 +120,11 @@ An **`av_stack view`** window opens with the chase camera and the steering owner
 | Deadline | computation > 50 ms |
 | Freshness | timestamp older than 0.1 s, or sequence number not increasing |
 | Exception | MPC raised |
-| Tracking divergence | \|e_y\| > 1.0 m or \|e_ψ\| > 0.6 rad for 0.25 s |
+| Steering rate (tight only) | MPC output steering changes faster than 90 °/s (the MPC limits itself to 60 °/s) |
+| Tracking divergence | tight (default): \|e_y\| > 0.6 m or \|e_ψ\| > 0.35 rad for 0.15 s; legacy: 1.0 m / 0.6 rad / 0.25 s |
+
+`run_benchmark.py --supervisor tight|legacy` (default tight; `integration/supervised_lateral.py` `SUPERVISOR_PROFILES`).
+The results below were recorded with the legacy profile.
 
 After a switch: steering is latched to LQR for the rest of the run, LQR steering rate is
 limited to 90 °/s (SR2 bound), and an invalid LQR output commands a full-brake safe stop.
@@ -157,7 +161,7 @@ are the actor's distance from the intended lane centre, no-fault baseline in bra
 Fault table, observations and next hypotheses: [`../../04_feasibility_expansion/README.md`](../../04_feasibility_expansion/README.md).
 
 Availability faults are caught instantly. **Integrity attacks are the supervisor's blind spot**:
-the only check that can see them is path divergence (1 m for 0.25 s), so the car is already past
+under the legacy profile the only check that can see them is path divergence (1 m for 0.25 s), so the car is already past
 the 0.8 m lateral-error safety requirement (SR4) when — or if — the switch happens. Finding such
 cases automatically is the goal of the AI scenario-generation pipeline in [`../pipeline`](../pipeline).
 

@@ -56,12 +56,18 @@ def test_surrogate_summary_picks_ambiguous_regions(space):
     a = dict(_sat(space), gp_mean={"recovery_success": 0.1}, gp_std={"recovery_success": 2.0})    # ambiguous
     b = dict(_sat(space, speed=35), gp_mean={"recovery_success": -15.0}, gp_std={"recovery_success": 0.5})   # clear fail
     recs = [{"sim_status": "ok", "parameters": {"fault": {"mode": "saturate"}}, "recovery_outcome": "unrecovered",
-             "final_safe_recovery": False}] * 3
+             "final_safe_recovery": False, "switch_time": 5.0}] * 3
+    # integration3 #7: training std 4 (z) -> a's std is half of it: explored, ambiguous -> boundary
     s = NM.surrogate_summary(regions=[b, a], records=recs, candidates={}, space=space, metric="recovery_success",
-                             switch_metric="switched_indicator", n_train=3, k=1)
+                             switch_metric="switched_indicator", n_train=3, k=1, gp_info={"y_scale_z": 4.0})
     assert len(s["boundary_regions"]) == 1 and s["boundary_regions"][0]["max_speed_kmh"] == 25
-    assert s["recent_outcomes_by_fault_mode"]["saturate"]["only"] == "failed"
+    assert s["recent_outcomes_by_fault_mode"]["saturate"]["status"] == "failed_whenever_switched"
     assert s["gp"]["n_train"] == 3
+    # with training std 1 the same std 2 is prior-level uncertainty: unexplored, not boundary evidence
+    s = NM.surrogate_summary(regions=[b, a], records=recs, candidates={}, space=space, metric="recovery_success",
+                             switch_metric="switched_indicator", n_train=3, k=1, gp_info={"y_scale_z": 1.0})
+    assert [r["max_speed_kmh"] for r in s["unexplored_regions"]] == [25]
+    assert [r["max_speed_kmh"] for r in s["boundary_regions"]] == [35]
 
 
 def test_offline_stub_uses_boundary_regions(space):

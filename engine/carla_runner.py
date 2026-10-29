@@ -53,8 +53,11 @@ class RunResult:
 
 
 class BaseRunner:
-    def __init__(self, out_root: Path, routes: list[dict], seed: int, space: dict, stop_after_fault_s: float):
+    def __init__(self, out_root: Path, routes: list[dict], seed: int, space: dict, stop_after_fault_s: float,
+                 supervisor: str | None = None):
         self.out_root = Path(out_root)
+        # integration3 #8: run_benchmark.py --supervisor tight|legacy (None = run_benchmark default, tight)
+        self.supervisor = supervisor
         self.routes = {r["route_id"]: r for r in routes}
         self.seed = seed
         self.space = space
@@ -114,7 +117,8 @@ class MockRunner(BaseRunner):
         write_run_folder(out, route=c["route_id"], max_speed_kmh=c["environment"]["max_speed_kmh"], fault=fault,
                          tire_friction_scale=friction_of(c),
                          seed=self.seed, stop_after_fault_s=self.stop_after_fault_s if fault else None,
-                         record_front=fault is not None and controller == "supervised", controller=controller)
+                         record_front=fault is not None and controller == "supervised", controller=controller,
+                         supervisor=self.supervisor or "tight")
         return RunResult(out, 0, ["<synthetic_sim>", c["route_id"], controller], time.time() - t0)
 
     def run_fault(self, c, run_dir, onset_s):
@@ -127,10 +131,10 @@ class MockRunner(BaseRunner):
 class CarlaRunner(BaseRunner):
     """Real mode: one CARLA server already running (tools/wait_carla.py, start_carla_stable.ps1 in sim-eval)."""
 
-    def __init__(self, out_root, routes, seed, space, stop_after_fault_s, *, av_stack: Path, python_exe: str | None,
+    def __init__(self, out_root, routes, seed, space, stop_after_fault_s, supervisor=None, *, av_stack: Path, python_exe: str | None,
                  host: str = "localhost", port: int = 2000, tm_port: int = 8050, timeout_s: float = 120.0,
                  wall_timeout_s: float = 1800.0, chase_view: bool = False):
-        super().__init__(out_root, routes, seed, space, stop_after_fault_s)
+        super().__init__(out_root, routes, seed, space, stop_after_fault_s, supervisor)
         self.av_stack = Path(av_stack)
         self.python = python_exe or default_python(self.av_stack)
         self.host, self.port, self.tm_port = host, port, tm_port
@@ -150,6 +154,8 @@ class CarlaRunner(BaseRunner):
         fr = friction_of(c)
         if abs(fr - 1.0) > 1e-9:   # integration3: same tyres for the baseline, fault and no-reaction runs
             cmd += ["--tire-friction-scale", "%.2f" % fr]
+        if self.supervisor:   # integration3 #8: explicit, so agent_config.json always records the profile
+            cmd += ["--supervisor", str(self.supervisor)]
         if not self.chase_view:
             cmd.append("--no-view")   # view.mp4 needs the chase window (chase_view.py); front.mp4 does not
         cmd += list(r.get("extra_args") or [])

@@ -6,11 +6,12 @@ for human review (auto_apply: false).
 """
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter, defaultdict
 from typing import Any
 
-from .scenarios import faults_by_id, make_candidate, _param_unit, _param_from_unit
+from .scenarios import faults_by_id, make_candidate, numeric_features, _param_unit, _param_from_unit
 
 FAILURE_FIELDS = ("scenario_id", "violated_property", "originating_evidence_ids", "hypothesis_ids", "trigger_source",
                   "trigger_attribution", "recovery_outcome", "recovery_labels", "environment", "fault", "onset_event",
@@ -43,6 +44,8 @@ def failure_table(records: list[dict], candidates: dict[str, dict]) -> list[dict
                      "environment": c.get("environment"), "fault": c.get("fault"), "onset_event": c.get("onset_event"),
                      "observed_switch_behavior": {"switch_time": r.get("switch_time"), "switch_state": r.get("switch_state")},
                      "robustness": r.get("lane_recovery_robustness") if r.get("lane_recovery_robustness") is not None else r.get("P01"),
+                     "lane_recovery_robustness": r.get("lane_recovery_robustness"), "lane_margin_min_m": r.get("P01"),
+                     "safety_margin": safety_margin_view(r),
                      "reproduction_count": seen[key], "route_id": c.get("route_id")})
     order = {"unrecovered": 0, "recovered_after_departure": 1, "unsettled": 2}
     rows.sort(key=lambda x: (order.get(x["recovery_outcome"], 3), x["robustness"] if x["robustness"] is not None else 0))
@@ -50,17 +53,146 @@ def failure_table(records: list[dict], candidates: dict[str, dict]) -> list[dict
 
 
 def few_shot(table: list[dict], explanations: dict[str, dict], k: int = 5) -> list[dict]:
+    """integration3 #7: no unit-less 'robustness' (it mixed lane_recovery_robustness and P01 metres); both are given
+    under their own names."""
     out = []
     for row in table[:k]:
         e = explanations.get(row["run_id"])
         item = {f: row.get(f) for f in ("route_id", "environment", "fault", "onset_event", "trigger_source",
-                                        "recovery_outcome", "recovery_labels", "robustness")}
+                                        "recovery_outcome", "recovery_labels", "lane_recovery_robustness",
+                                        "lane_margin_min_m", "safety_margin")}
         item["switch_state"] = (row.get("observed_switch_behavior") or {}).get("switch_state")
         if e and e.get("verification", {}).get("accepted"):
             item["verified_video_mechanism"] = {"tags": e["explanation"].get("mechanism_tags"),
                                                 "text": e["explanation"].get("mechanism")}
         out.append(item)
     return out
+
+
+def safety_margin_view(r: dict) -> dict | None:
+    """integration3 #9: the run's GP target (judgment.safety_margin) for Nemotron A in real units: value, binding
+    criterion, failing criteria, and every term as observed vs limit."""
+    sm = (r.get("metrics") or {}).get("safety_margin_detail")
+    if not isinstance(sm, dict):
+        return None
+    rnd = lambda v, n=3: None if v is None else round(float(v), n)   # noqa: E731
+    obs = sm.get("observed") or {}
+    terms = {}
+    for k, t in (sm.get("terms") or {}).items():
+        o = obs.get(k) or {}
+        row = {"margin": rnd(t), "observed": rnd(o.get("value")), "limit": rnd(o.get("limit")), "unit": o.get("unit")}
+        if o.get("min_lane_margin_m") is not None:
+            row["min_lane_margin_m"] = rnd(o["min_lane_margin_m"])
+        terms[k] = {a: b for a, b in row.items() if b is not None}
+    return {"value": rnd(sm.get("value")), "binding": sm.get("binding"), "failing": sm.get("failing") or [], "terms": terms}
+
+
+def failed_reason(r: dict) -> str:
+    """Why a switched run is not final_safe_recovery (judgment.final_safe_recovery)."""
+    oc = str(r.get("recovery_outcome"))
+    if oc == "safe_recovery":
+        return "lat_acc_or_jerk_excess"        # settled in the lane, but a P-02 / P-04 excess label is set
+    return oc
+
+
+def outcome_view(r: dict) -> dict:
+    """What a past run showed, for Nemotron A (A may see results; B and Cosmos may not)."""
+    sw = r.get("switch_time")
+    onset = r.get("actual_fault_onset") if r.get("actual_fault_onset") is not None else r.get("planned_fault_onset")
+    rnd = lambda v, n=3: None if v is None else round(float(v), n)   # noqa: E731
+    out = {"sim_status": r.get("sim_status"), "switched": sw is not None,
+           "switch_delay_s": rnd(sw - onset, 2) if sw is not None and onset is not None else None,
+           "trigger": r.get("supervisor_reason") or r.get("trigger_source"),
+           "recovery_outcome": r.get("recovery_outcome"), "final_safe_recovery": r.get("final_safe_recovery"),
+           "lane_recovery_robustness": rnd(r.get("lane_recovery_robustness")),
+           "lane_margin_min_m": rnd(r.get("P01")),
+           "lat_acc_margin_mps2": rnd(r.get("P02"), 2),
+           "safety_margin": safety_margin_view(r)}
+    if out["final_safe_recovery"] is False and sw is not None:
+        out["failed_reason"] = failed_reason(r)
+        if out["safety_margin"] and out["safety_margin"]["failing"]:
+            out["failed_criteria"] = out["safety_margin"]["failing"]
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def outcome_label(r: dict | None) -> str:
+    """integration3 #7: one word per run. never_switched is NOT failed (LQR never acted)."""
+    if r is None:
+        return "not_run"
+    if r.get("sim_status") != "ok":
+        return "invalid"
+    if r.get("switch_time") is None:
+        return "never_switched"
+    fs = r.get("final_safe_recovery")
+    return "recovered" if fs is True else (f"failed:{failed_reason(r)}" if fs is False else "unlabelled")
+
+
+def tried_view(c: dict, r: dict | None) -> dict:
+    """Compact already_tried row: the scenario plus its outcome label, lane_margin_min_m (P01, metres) and switched."""
+    env, f = c.get("environment") or {}, c.get("fault") or {}
+    out = {"route_id": c.get("route_id"), "max_speed_kmh": env.get("max_speed_kmh"),
+           "tire_friction_scale": env.get("tire_friction_scale"), "fault_id": f.get("fault_id"), "params": f.get("params"),
+           "onset_event": c.get("onset_event"), "onset_offset_s": c.get("onset_offset_s"), "outcome": outcome_label(r)}
+    if r is not None and r.get("sim_status") == "ok":
+        out["switched"] = r.get("switch_time") is not None
+        if r.get("P01") is not None:
+            out["lane_margin_min_m"] = round(float(r["P01"]), 3)
+        if r.get("lane_recovery_robustness") is not None and out["switched"]:
+            out["lane_recovery_robustness"] = round(float(r["lane_recovery_robustness"]), 3)
+        m = r.get("metrics") or {}
+        if m.get("safety_margin") is not None and out["switched"]:
+            out["safety_margin"] = round(float(m["safety_margin"]), 3)
+            out["safety_margin_binding"] = m.get("safety_margin_binding")
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def _example(r: dict, c: dict) -> dict:
+    out = {"run_id": r.get("run_id"), "fault_id": (c.get("fault") or {}).get("fault_id"),
+           "fault_mode": (c.get("fault") or {}).get("mode"), "params": (c.get("fault") or {}).get("params"),
+           "route_id": c.get("route_id"), "max_speed_kmh": (c.get("environment") or {}).get("max_speed_kmh"),
+           "tire_friction_scale": (c.get("environment") or {}).get("tire_friction_scale"),
+           "onset_event": c.get("onset_event"), "onset_offset_s": c.get("onset_offset_s"), "outcome": outcome_view(r)}
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def outcome_examples(records: list[dict], candidates: dict[str, dict], space: dict, routes: list[str],
+                     fault_pool: list[str], max_modes: int = 8) -> list[dict]:
+    """integration3 #7: per fault mode the closest (recovered, failed) pair of switched runs in normalised parameter
+    space (scenarios.numeric_features), so Nemotron A sees both sides of the boundary. A mode with only one side
+    gets that side's run nearest to the mode's median and a note; never-switched runs are counted, not shown."""
+    by: dict[str, dict] = {}
+    for r in records:
+        c = candidates.get(r.get("scenario_id"))
+        if c is None or r.get("sim_status") != "ok":
+            continue
+        mode = (c.get("fault") or {}).get("mode")
+        d = by.setdefault(mode, {"rec": [], "fail": [], "never_switched": 0})
+        if r.get("switch_time") is None:
+            d["never_switched"] += 1
+        elif r.get("final_safe_recovery") is True:
+            d["rec"].append((r, c))
+        elif r.get("final_safe_recovery") is False:
+            d["fail"].append((r, c))
+    def x(c):
+        return numeric_features(c, space, routes, fault_pool)[0]
+    out = []
+    for mode in sorted(by, key=lambda m: (not (by[m]["rec"] and by[m]["fail"]), str(m))):
+        d = by[mode]
+        e = {"fault_mode": mode, "never_switched_runs": d["never_switched"]}
+        if d["rec"] and d["fail"]:
+            dist, (rr, rc), (fr_, fc) = min(((math.dist(x(a[1]), x(b[1])), a, b) for a in d["rec"] for b in d["fail"]),
+                                            key=lambda t: t[0])
+            e.update(recovered=_example(rr, rc), failed=_example(fr_, fc), normalized_distance=round(dist, 3),
+                     note="closest recovered/failed pair of switched runs: the boundary lies between them")
+        elif d["rec"] or d["fail"]:
+            side = "recovered" if d["rec"] else "failed"
+            r, c = (d["rec"] or d["fail"])[-1]
+            e[side] = _example(r, c)
+            e["note"] = f"only {side} switched runs so far ({len(d['rec'] or d['fail'])})"
+        else:
+            e["note"] = "never switched: no recovery to judge yet"
+        out.append(e)
+    return out[:max_modes]
 
 
 def accepted(explanations: dict[str, dict]) -> list[dict]:

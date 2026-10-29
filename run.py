@@ -38,12 +38,12 @@ from engine.carla_runner import CarlaRunner, MockRunner, carla_reachable
 from engine.config import (REPO_ROOT, load_stage_configs, load_yaml, resolve_av_stack,
                                     resolve_scenario_space)
 from engine.explainer import explain, stub_explanation, verify
-from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure,
+from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure, outcome_examples, tried_view,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
 from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
 from engine.monitor import (compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline,
                             scale_thresholds_for_friction, thresholds_from_config)
-from engine.surrogate import MetricGPs, acquisition_score, boundary_score, select_batch_scored
+from engine.surrogate import MetricGPs, acquisition_score, boundary_score, boundary_score_parts, select_batch_scored
 from engine.dashboard import refresh as refresh_dashboard
 from engine.video import cover_times, extract_clip, ffmpeg_exe, key_times
 from engine.prior_tools.prior_tools import make_nemotron_payload
@@ -59,8 +59,30 @@ ABLATIONS = {
 }
 
 
+B_STATIC_KEY = "__static__"   # integration3 #6: 05b_answers.json row of the once-per-campaign static B questions
 SWITCH_METRIC = "switched_indicator"   # +1 switched / -1 no switch; S1 boundary only exists where a switch happens
 # integration3: modelled by a GP classifier (06 surrogate.yaml switch_model: classifier) -> gp_mean = P(switch) in [0, 1]
+
+
+def select_gp_target(metric_rules: dict, choice: str | None) -> tuple[str, dict]:
+    """integration3 #9: (choice, metric_rules) with every rule that lists gp.target_choices pointed at `choice`
+    (02 vulnerability_patterns.yaml; default = the rule's own gp.target, i.e. safety_margin). The stage config is not
+    modified (deep copy). Unknown choice -> SystemExit."""
+    import copy
+    rules = copy.deepcopy(metric_rules or {})
+    picked = None
+    for name, rule in rules.items():
+        gp = rule.get("gp") or {}
+        opts = gp.get("target_choices") or {}
+        if not opts:
+            continue
+        default = next((k for k, v in opts.items() if v == gp.get("target")), gp.get("target"))
+        key = choice or default
+        if key not in opts:
+            raise SystemExit(f"--gp-target {key}: not in {name}.gp.target_choices {sorted(opts)}")
+        gp["target"] = opts[key]
+        picked = key
+    return picked or str(choice or ""), rules
 
 
 def switch_aware_score(c: dict, obj: dict, beta: float, weight: float = 2.0) -> float | None:
@@ -140,7 +162,8 @@ class CosmosGuard:
 class Loop:
     def __init__(self, *, mode: str, out: Path, ablation: str, video_on: bool, seed: int, cfg: dict | None = None,
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
-                 quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None):
+                 quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None,
+                 supervisor: str | None = None, gp_target: str | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -149,10 +172,6 @@ class Loop:
         self.quiet = quiet
         self.rng = random.Random(seed)
         orch = self.cfg["orchestrator"]
-        self.cold = cold_start if cold_start is not None else int(orch["cold_start"]["total_runs"])
-        self.batch = batch_size if batch_size is not None else int(orch["acquisition"]["batch_size"])
-        max_sims = (orch.get("budget") or {}).get("max_simulations") or (self.cold + 4 * self.batch)
-        self.rounds = rounds if rounds is not None else max(0, math.ceil((max_sims - self.cold) / self.batch))
         space_path, self.space_synthetic = resolve_scenario_space(allow_fixture=(mode == "mock"))
         self.space = load_yaml(space_path)
         self.space_path = space_path
@@ -160,6 +179,8 @@ class Loop:
         self.routes = [r for r in pr["carla"]["routes"] if r.get("enabled", True)]
         self.route_ids = [r["route_id"] for r in self.routes]
         self.runner_cfg = pr["runner"]
+        # integration3 #8: av_stack supervisor profile (run_benchmark.py --supervisor; mock: synthetic_sim.SUPERVISOR_PROFILES)
+        self.supervisor = str(supervisor or self.runner_cfg.get("supervisor") or "tight")
         self.fault_pool = orch["fault_pool"]
         # BUG-025: control faults (solver_fail, stale) always switch at once; at most this many per round
         self.control_ids = {f["id"] for f in self.space.get("faults", []) if f.get("group") == "control"}
@@ -167,6 +188,8 @@ class Loop:
         self.objectives = orch["active_objectives"]
         self.obj_cfg = orch["objective_acquisition"]
         self.metric_rules = self.cfg["vulnerability_patterns"]["metric_rules"]
+        # integration3 #9: recovery GP target = safety_margin (every final_safe_recovery criterion) | lrr (lane only)
+        self.gp_target_choice, self.metric_rules = select_gp_target(self.metric_rules, gp_target)
         self.gp_metrics = sorted({self.obj_cfg[o]["metric"] for o in self.objectives}) + [SWITCH_METRIC]
         self.th = thresholds_from_config(self.cfg)
         sur = (self.cfg.get("surrogate") or {}).get("surrogate") or {}
@@ -175,6 +198,11 @@ class Loop:
         self.prior_mean_mode = str(sur.get("prior_mean", "level"))   # level (integration3) | training_mean (legacy)
         self.min_train_points = int(sur.get("min_train_points", 4))
         self.min_train_for_acq = int(sur.get("min_train_runs_for_acquisition", 8))
+        # integration3 #8c: cold start size from the orchestrator.yaml rule (total_runs: null) unless given
+        self.cold = cold_start if cold_start is not None else self.cold_start_rule()
+        self.batch = batch_size if batch_size is not None else int(orch["acquisition"]["batch_size"])
+        max_sims = (orch.get("budget") or {}).get("max_simulations") or (self.cold + 4 * self.batch)
+        self.rounds = rounds if rounds is not None else max(0, math.ceil((max_sims - self.cold) / self.batch))
         self.gps: MetricGPs | None = None
         self.gp_ready = False
         self.history_rows: list[tuple[dict, dict]] = []
@@ -183,7 +211,8 @@ class Loop:
         self.no_reaction_on = bool(nr.get("mock" if mode == "mock" else "real", False)) if no_reaction is None else no_reaction
         self.vcfg = self.cfg["video_explainer"]
         self.taxonomy = self.vcfg["mechanism_taxonomy"]
-        self.questions = self.cfg["nemotron_b"]["B_question_answering"]["question_bank"]
+        # integration3 #6: yes/no as strings, scope (per_scenario | static) and gp_feature defaults
+        self.questions = NM.normalize_questions(self.cfg["nemotron_b"]["B_question_answering"]["question_bank"])
         self.av_stack = resolve_av_stack()
         self.records: list[dict] = []
         self.candidates: dict[str, dict] = {}
@@ -202,6 +231,21 @@ class Loop:
         self._setup_runner()
 
     # ------------------------------------------------------------------ setup
+    def cold_start_rule(self) -> int:
+        """integration3 #8c (orchestrator.yaml cold_start): total_runs if set, else
+        max(min_train_runs_for_acquisition, per_fault_type x fault types round 0 can run), capped at max_runs.
+        Fault types round 0 can run = risk faults + min(control faults, control_faults_per_round_max) (BUG-025 cap)."""
+        cs = self.cfg["orchestrator"]["cold_start"]
+        if cs.get("total_runs") is not None:
+            return int(cs["total_runs"])
+        rule = cs.get("rule") or {}
+        n_ctrl = sum(f in self.control_ids for f in self.fault_pool)
+        eligible = len(self.fault_pool) - n_ctrl + min(n_ctrl, self.control_cap)
+        n = max(self.min_train_for_acq, int(rule.get("per_fault_type", 2)) * eligible)
+        if rule.get("max_runs") is not None:
+            n = min(n, int(rule["max_runs"]))
+        return max(n, self.min_train_for_acq)
+
     def say(self, msg: str) -> None:
         if not self.quiet:
             log(msg)
@@ -231,7 +275,7 @@ class Loop:
     def _setup_runner(self) -> None:
         rc = self.runner_cfg
         common = dict(out_root=self.out / "runs", routes=self.routes, seed=int(rc["seed"]), space=self.space,
-                      stop_after_fault_s=float(rc["stop_after_fault_s"]))
+                      stop_after_fault_s=float(rc["stop_after_fault_s"]), supervisor=self.supervisor)
         if self.mode == "mock":
             self.runner = MockRunner(**common)
         else:
@@ -314,6 +358,140 @@ class Loop:
             return ev
         return None
 
+    # ------------------------------------------------------------------ integration3 #7: what A needs to judge the boundary
+    def judgment_criteria(self) -> dict:
+        """The recovery judgment with the configured values (engine.monitor.thresholds_from_config + safety_spec P-02)."""
+        th = self.th
+        props = {q.get("id"): q for q in ((self.cfg["safety_spec"].get("safety_specification") or {}).get("properties") or [])
+                 if isinstance(q, dict)}
+        f = (props.get("P-02") or {}).get("lateral_acc_formula") or {"mu": 0.9, "g_mps2": 9.81, "factor": 0.5}
+        lat = th["lat_acc_threshold_mps2"]
+        return {
+            "recovered": (f"final_safe_recovery: within {th['window_s']:g} s after the switch, |e_y| <= {th['e_settle_m']:g} m and "
+                          f"|e_psi| <= {th['psi_settle_rad']:g} rad with lane margin >= 0 held for {th['settle_hold_s']:g} s, "
+                          f"no lane departure, no collision, and neither lat_acc_excess nor lat_jerk_excess"),
+            "lat_acc_limit": (f"lat_acc_excess: post-switch lateral acceleration (relative to the same-route baseline) > "
+                              f"{lat:g} * tire_friction_scale m/s^2 = {f['factor']:g} * {f['mu']:g} * tire_friction_scale * "
+                              f"{f['g_mps2']:g} (P-02); lat_jerk_excess: > {th['lat_jerk_threshold_mps3']:g} m/s^3 (P-04)"),
+            "not_a_failure": ("a run with no switch is not a failed recovery (LQR never acted): it says the fault was too "
+                              "mild / short or started too late for the supervisor to fire"),
+            "gp_target": self.target_meaning(),
+            "evaluation_window": (f"P-01 lane margin is measured over onset .. onset + {th['eval_window_s']:g} s; an onset "
+                                  f"less than {float(self.cfg['safety_spec']['evaluation_window']['min_length_s']):g} s "
+                                  f"before the route end is rejected (V-03)"),
+        }
+
+    def target_name(self) -> str:
+        rule = (self.metric_rules or {}).get(self.obj_cfg[self.objectives[0]]["metric"]) or {}
+        return str((rule.get("gp") or {}).get("target") or "")
+
+    def target_units(self) -> str:
+        if self.target_name() == "safety_margin":
+            return ("dimensionless safety_margin = min over the final_safe_recovery criteria of (limit - observed) / limit "
+                    "(lane term: lane_recovery_robustness); >= 0 <=> final_safe_recovery, 0 = at the binding limit")
+        return "dimensionless lane_recovery_robustness (NOT metres): lane margin / (lane_width/2 - vehicle half width)"
+
+    def target_meaning(self) -> str:
+        th = self.th
+        lrr = ("lane_recovery_robustness = min over the window of lane margin / (lane_width/2 - vehicle half "
+               f"width), dimensionless: 1 = centred, 0 = body at the lane edge, < 0 departed, collision <= "
+               f"{th['collision_penalty']:g}")
+        clip = f"clipped to [{th['robustness_clip_min']:g}, {th['robustness_clip_max']:g}]"
+        if self.target_name() != "safety_margin":
+            return f"{lrr}, {clip} (boundary 0 = lane edge only; jerk / lat_acc / settling are not in this target)"
+        return ("safety_margin = min(lane, settle, lat_acc, lat_jerk), " + clip + "; >= 0 exactly when the run is "
+                f"final_safe_recovery. lane = {lrr}; settle = (longest hold with |e_y| <= {th['e_settle_m']:g} m, |e_psi| "
+                f"<= {th['psi_settle_rad']:g} rad, margin >= 0 within {th['window_s']:g} s - {th['settle_hold_s']:g} s) / "
+                f"{th['settle_hold_s']:g} s; lat_acc = ({th['lat_acc_threshold_mps2']:g} * tire_friction_scale m/s^2 - "
+                f"lat_acc_excess) / limit; lat_jerk = ({th['lat_jerk_threshold_mps3']:g} m/s^3 - lat_jerk_excess) / "
+                f"{th['lat_jerk_threshold_mps3']:g}. Each run reports the binding (smallest) term; observed outcomes give "
+                "every term in real units (observed.safety_margin)")
+
+    def _geom_candidate(self, rid: str, kmh: float, fr: float) -> dict:
+        return {"route_id": rid, "environment": {"max_speed_kmh": kmh, "tire_friction_scale": fr},
+                "fault": {"fault_id": self.fault_pool[0], "params": {}}, "onset_event": "curve_apex", "onset_offset_s": 0.0}
+
+    def route_geometry(self) -> dict:
+        """integration3 #7: per route and onset_event the baseline time, curvature, speed, v^2*kappa and the latest
+        onset_offset_s that still passes V-03, from cached no-fault baselines (route_events). mock probes baselines at
+        route_geometry.probe_speeds_kmh (synthetic fixture); real mode only reports baselines that already exist."""
+        gcfg = self.cfg["nemotron_a"].get("route_geometry") or {}
+        mw = float(self.cfg["safety_spec"]["evaluation_window"]["min_length_s"])
+        if (gcfg.get("probe_baselines") or {}).get(self.mode, False) and not getattr(self, "_geom_probed", False):
+            self._geom_probed = True
+            for rid in self.route_ids:
+                for kmh in gcfg.get("probe_speeds_kmh") or []:
+                    self.runner.ensure_baseline(self._geom_candidate(rid, float(kmh), 1.0))
+        found: dict[str, list[tuple[float, float, Path]]] = {}
+        for comp in sorted((self.runner.out_root / "baselines").glob("*/.complete")):
+            try:
+                key = json.loads(comp.read_text())
+            except (OSError, ValueError):
+                continue
+            if key.get("route_id") in self.route_ids and key.get("max_speed_kmh") is not None:
+                found.setdefault(key["route_id"], []).append(
+                    (float(key["max_speed_kmh"]), float(key.get("tire_friction_scale") or 1.0), comp.parent))
+        events = [e for e in self.space["fault_timing"]["onset_event"]["values"]]
+        olo = min(float(((f.get("handover_axes") or {}).get("offset_s") or {}).get("range", self.space["fault_timing"]["offset_s"]["range"])[0])
+                  for f in self.space.get("faults", []))
+        lat = self.th["lat_acc_threshold_mps2"]
+        nmax = int(gcfg.get("max_baselines_per_route", 3))
+        routes = {}
+        for rid in self.route_ids:
+            rows = sorted(set(found.get(rid, [])), key=lambda t: (abs(t[1] - 1.0), t[0]))
+            nominal = [t for t in rows if abs(t[1] - 1.0) < 1e-9] or rows
+            nominal.sort(key=lambda t: t[0])
+            if len(nominal) > nmax:
+                idx = sorted({round(i * (len(nominal) - 1) / (nmax - 1)) for i in range(nmax)}) if nmax > 1 else [0]
+                nominal = [nominal[i] for i in idx]
+            out_b, grad = [], {e: [] for e in events}
+            rows_by_ev: dict[str, list] = {e: [] for e in events}
+            ends = {}
+            for kmh, fr, d in nominal:
+                ev = self.route_events(self._geom_candidate(rid, kmh, fr))
+                if ev is None:
+                    continue
+                t_end = ev.get("t_end")
+                evs = {}
+                for e in events:
+                    t = ev.get(e)
+                    if t is None:
+                        evs[e] = None
+                        continue
+                    k = (ev.get("kappa_at") or {}).get(e)
+                    v = min(kmh / 3.6, (ev.get("speed_at") or {}).get(e, 1e9))
+                    latest = None if t_end is None else t_end - mw - float(t)
+                    evs[e] = {"t_s": round(float(t), 2), "kappa_per_m": None if k is None else round(float(k), 4),
+                              "speed_mps": round(v, 2),
+                              "v2kappa_mps2": None if k is None else round(v * v * abs(float(k)), 2),
+                              "latest_onset_offset_s_for_V03": None if latest is None else round(latest, 2)}
+                    if latest is not None and latest >= olo:
+                        grad[e].append(kmh)
+                for e in events:
+                    x = evs[e]
+                    rows_by_ev[e].append([kmh] + ([None] * 5 if x is None else
+                                                  [x["t_s"], x["kappa_per_m"], x["speed_mps"], x["v2kappa_mps2"],
+                                                   x["latest_onset_offset_s_for_V03"]]))
+                ends[f"{kmh:g}"] = None if t_end is None else round(float(t_end), 2)
+                out_b.append(kmh)
+            fr_used = sorted({t[1] for t in nominal})
+            routes[rid] = {"town": next((r.get("town") for r in self.routes if r.get("route_id") == rid), None),
+                           "baseline_tire_friction_scale": fr_used[0] if len(fr_used) == 1 else fr_used,
+                           "route_end_s_by_kmh": ends, "events": rows_by_ev,
+                           "events_gradable_at_kmh": grad,
+                           **({} if out_b else {"note": "no completed baseline yet: geometry unknown, V-03 decided after the baseline run"})}
+        return {"columns": ["max_speed_kmh", "t_s", "kappa_per_m", "speed_mps", "v2kappa_mps2", "latest_onset_offset_s_for_V03"],
+                "rules": {
+            "V03": f"onset = max(0.5, t_s + onset_offset_s); rejected when route_end_s - onset < {mw:g} s, i.e. "
+                   f"onset_offset_s must be <= latest_onset_offset_s_for_V03 (null row = event not detected on that baseline = rejected); events_gradable_at_kmh lists the probed speeds with room for some allowed offset",
+            "friction_demand": (f"v2kappa_mps2 = speed^2 * |kappa| is the nominal lateral demand; the P-02 limit is "
+                                f"{lat:g} * tire_friction_scale m/s^2. DF-06 friction_utilization = v2kappa / "
+                                f"(0.9 * tire_friction_scale * 9.81): near 1 the tyres are close to the grip limit and LQR "
+                                f"has little margin left to recover; v2kappa above the P-02 limit only tags stress_test"),
+            "speed": "speed_mps is the baseline speed at the event (the car may be slower than max_speed_kmh in curves); "
+                     "it scales roughly with max_speed_kmh, the event times shift with speed"},
+            "routes": routes}
+
     def features(self, c: dict, *, train_round: int | None = None) -> tuple[list[float], list[str]]:
         x, names = SC.numeric_features(c, self.space, self.route_ids, self.fault_pool)
         if self.flags["use_df"]:
@@ -322,11 +500,13 @@ class Loop:
             kappa = None if ev is None else (ev.get("kappa_at") or {}).get(c["onset_event"])
             scen = {"speed_mps": c["environment"]["max_speed_kmh"] / 3.6, "road_curvature_per_m": None if kappa is None else abs(kappa),
                     "fault": {"delay_ms": 50.0 * c["fault"]["params"]["delay_ticks"]} if "delay_ticks" in c["fault"]["params"] else {}}
+            scen["tire_friction_scale"] = (c.get("environment") or {}).get("tire_friction_scale", 1.0)
             df = J.compute_df(scen, profile).as_dict()
-            for k in ("DF-03", "DF-05"):
+            # integration3 #6: DF-06 friction utilization v^2|kappa| / (0.9 * scale * g) next to DF-05
+            for k, scale_by in (("DF-03", 100.0), ("DF-05", 5.0), ("DF-06", 2.0)):
                 v = df.get(k)
                 names += [k, f"{k}_missing"]
-                x += [0.0 if v is None else float(v) / (100.0 if k == "DF-03" else 5.0), 1.0 if v is None else 0.0]
+                x += [0.0 if v is None else float(v) / scale_by, 1.0 if v is None else 0.0]
         if self.flags["use_b"]:
             bx, bn = NM.b_features((self.b_cache.get(self.b_key(c)) or {}).get("answers"), self.questions)
             x += bx; names += bn
@@ -337,7 +517,8 @@ class Loop:
         return x, names
 
     def b_key(self, c: dict) -> str:
-        return f"{c['fault']['mode']}|{c['onset_event']}"
+        # integration3 #6/#8: + bins of the fault parameters a question depends on (Q-B4: saturate duration_s <= 0.15 s, ramp_s 0)
+        return f"{c['fault']['mode']}|{c['onset_event']}" + NM.param_bin_suffix(self.questions, c["fault"].get("params") or {})
 
     # ------------------------------------------------------------------ 03 Nemotron A
     def stage_03(self, n: int, round_index: int, near: list[dict] | None = None,
@@ -347,16 +528,29 @@ class Loop:
         evidence = NM.evidence_enum(self.cfg["safety_profile"], self.cfg["prior_knowledge"], self.space, self.objectives)
         schema = NM.candidate_schema(self.space, self.route_ids, self.fault_pool, self.objectives, evidence, n)
         table = failure_table(self.records, self.candidates)
+        acfg = self.cfg["nemotron_a"]
+        s1 = self.cfg["S1"]
+        # integration3 #7: judgment criteria with the configured values, route geometry (V-03 / v^2 kappa), per-mode
+        # recovered/failed pairs and outcomes of already-tried scenarios: the material A needs to place a boundary
+        geom = self.route_geometry()
+        dump(self.out / f"round_{round_index:02d}" / "03_route_geometry.json", geom)
+        by_sid = {r.get("scenario_id"): r for r in self.records}
+        tried = [tried_view(c, by_sid.get(c.get("scenario_id")))
+                 for c in list(self.candidates.values())[-int((acfg.get("already_tried") or {}).get("max_items", 40)):]]
+        oe_cfg = acfg.get("outcome_examples") or {}
+        examples = (outcome_examples(self.records, self.candidates, self.space, self.route_ids, self.fault_pool,
+                                     int(oe_cfg.get("max_modes", 8))) if oe_cfg.get("enabled", True) else [])
         ctx = NM.a_context(profile=self.cfg["safety_profile"], prior=self.cfg["prior_knowledge"], space=self.space,
-                           objective_cfg={"id": "S1", **self.cfg["S1"]["objective"],
-                                          "natural_switch_bound": self.cfg["S1"]["switch_state_control"]["natural_switch_bound"]},
-                           routes=[{k: r.get(k) for k in ("route_id", "town", "note")} for r in self.routes],
-                           few_shot=few_shot(table, self.explanations, int(self.cfg["nemotron_a"]["feedback_in"]["k"])),
+                           objective_cfg={"id": "S1", **s1["objective"],
+                                          "natural_switch_bound": s1["switch_state_control"]["natural_switch_bound"],
+                                          "natural_switch_bound_en": s1["switch_state_control"].get("natural_switch_bound_en"),
+                                          "judgment_criteria": self.judgment_criteria()},
+                           routes=[{k: r.get(k) for k in ("route_id", "town", "note", "note_en")} for r in self.routes],
+                           few_shot=few_shot(table, self.explanations, int(acfg["feedback_in"]["k"])),
                            mechanisms=mechanism_summary(self.explanations) if self.video_on else [],
-                           tried=[{k: c.get(k) for k in ("route_id", "environment", "fault", "onset_event", "onset_offset_s")}
-                                  for c in list(self.candidates.values())[-40:]],
-                           include_unreviewed=bool(self.cfg["nemotron_a"].get("include_unreviewed_observations", True)),
-                           surrogate_summary=gp_summary)
+                           tried=tried,
+                           include_unreviewed=bool(acfg.get("include_unreviewed_observations", True)),
+                           surrogate_summary=gp_summary, outcome_examples=examples, route_geometry=geom)
         msgs = NM.a_messages(schema=schema, n=n, context=ctx)
         obj, st = NM.call_a(self.client_a, self.a_settings, msgs, schema, tag="A")
         st.update(round=round_index, requested=n)
@@ -366,7 +560,10 @@ class Loop:
         st["range_extreme_unjustified"] = sum("range_extreme_unjustified" in c.get("tags", []) for c in cands)
         if near and self.a_refine.get("enabled", True) and self.cfg["nemotron_a"].get("refine", {}).get("enabled", True):
             schema_r = NM.candidate_schema(self.space, self.route_ids, self.fault_pool, self.objectives, evidence, len(near))
-            obj_r, st_r = NM.call_a(self.client_a, self.a_refine, NM.refine_messages(schema_r, near, ctx), schema_r, tag="A_refine")
+            near_items = [NM.region_item(c, self.summary_scorer(c) or {}, metric=self.obj_cfg[self.objectives[0]]["metric"],
+                                         native=self.native, y_scale=self.target_y_scale(), level_z=self.level_z(self.obj_cfg[self.objectives[0]]),
+                                         runs=by_sid, target=self.target_name()) for c in near]
+            obj_r, st_r = NM.call_a(self.client_a, self.a_refine, NM.refine_messages(schema_r, near_items, ctx), schema_r, tag="A_refine")
             st_r.update(round=round_index, requested=len(near), refine=True)
             self.stats["a_calls"].append(st_r)
             cands += NM.a_to_candidates(obj_r or {}, self.space, round_index=round_index, source="nemotron_a_refine")
@@ -411,17 +608,27 @@ class Loop:
         if not sizes:
             code = "(av_stack source not available on this machine; mock stub answers)" if self.mode == "mock" else code
             sizes = {f: 10_000 for f in files} if self.mode == "mock" else sizes
-        schema = NM.b_schema(self.questions, list(sizes))
+        regions = NM.resolve_regions(self.av_stack, self.questions)
+        per_q, static_q = NM.questions_of_scope(self.questions, "per_scenario"), NM.questions_of_scope(self.questions, "static")
+        jobs = []
+        if static_q and B_STATIC_KEY not in self.b_cache:
+            # static: one fixed code fact per campaign (Q-B2 latch, Q-B3 takeover), not per scenario
+            jobs.append((B_STATIC_KEY, static_q, {"scope": "static (whole supervisor, any fault)", "planner": "pdm",
+                                                  "controller": "supervised"}))
+        seen = set()
         for c in cands:
             k = self.b_key(c)
-            if k in self.b_cache:
+            if k in self.b_cache or k in seen or not per_q:
                 continue
-            ctx = {"fault_mode": c["fault"]["mode"], "fault_params": c["fault"]["params"], "onset_event": c["onset_event"],
-                   "planner": "pdm", "controller": "supervised"}
+            seen.add(k)
+            jobs.append((k, per_q, {"fault_mode": c["fault"]["mode"], "fault_params": c["fault"]["params"],
+                                    "onset_event": c["onset_event"], "planner": "pdm", "controller": "supervised"}))
+        for k, qs, ctx in jobs:
+            schema = NM.b_schema(qs, list(sizes))
             samples = []
             for i in range(int(self.b_settings.get("repeats", 3))):
                 try:
-                    res = self.client_b.chat(self.b_settings.get("model", "stub/B"), NM.b_messages(code, self.questions, ctx, schema),
+                    res = self.client_b.chat(self.b_settings.get("model", "stub/B"), NM.b_messages(code, qs, ctx, schema),
                                              temperature=self.b_settings.get("temperature"), top_p=self.b_settings.get("top_p"),
                                              max_tokens=self.b_settings.get("max_tokens"), thinking=self.b_settings.get("thinking"),
                                              chat_template_kwargs=self.b_settings.get("chat_template_kwargs_extra"),
@@ -431,7 +638,10 @@ class Loop:
                     samples.append(extract_json(res.content))
                 except (LLMError, ValueError) as e:
                     self.stats["llm_errors"].append({"role": "B", "key": k, "error": str(e)[:200]})
-            self.b_cache[k] = {"answers": NM.aggregate_b(samples, self.questions, sizes), "n_samples": len(samples), "context": ctx}
+            self.b_cache[k] = {"answers": NM.aggregate_b(samples, qs, sizes, ctx=ctx, regions=regions),
+                               "n_samples": len(samples), "context": ctx}
+        self.stats["nemotron_b"] = NM.b_hallucination_summary([e.get("answers") for e in self.b_cache.values()])
+        self.stats["b_hallucination_rate"] = self.stats["nemotron_b"]["b_hallucination_rate"]
 
     # ------------------------------------------------------------------ 06 + 07
     def load_gp_history(self, patterns: list[str]) -> None:
@@ -457,6 +667,11 @@ class Loop:
                     why = "route not in this campaign"
                 elif fault.get("fault_id") not in self.fault_pool or fault.get("fault_id") not in faults:
                     why = "fault not in this pool"
+                elif (self.runner_cfg.get("gp_history_same_supervisor", True)
+                      and str(r.get("supervisor_profile") or "legacy") != self.supervisor):
+                    # integration3 #8: a run graded under another supervisor switches at a different time (tight
+                    # switches earlier), so its switch / recovery labels do not describe this campaign
+                    why = f"supervisor {r.get('supervisor_profile') or 'legacy'} != {self.supervisor}"
                 if why is None:
                     spec = faults[fault["fault_id"]].get("params") or {}
                     params = {k: (fault.get("params") or {}).get(k, v.get("default")) for k, v in spec.items()}
@@ -465,18 +680,40 @@ class Loop:
                                           fault_id=fault["fault_id"], params=params, onset_event=p.get("onset_event"),
                                           offset=p.get("onset_offset_s", 0.0), source="history",
                                           friction=env.get(SC.FRICTION))
-                    probs = SC.validate_against_space(self.space, c, self.route_ids)
+                    probs = SC.validate_against_space(self.space, c, self.route_ids, check_exclusions=False)
                     if probs:
                         why = "outside current space: " + probs[0].split(" ")[0]
                 if why is not None:
                     skipped[why] = skipped.get(why, 0) + 1
                     continue
-                tg = dict(r.get("gp_targets") or {})
+                tg, why = self.history_targets(r)
+                if why is not None:
+                    skipped[why] = skipped.get(why, 0) + 1
+                    continue
                 tg[SWITCH_METRIC] = 1.0 if r.get("switch_time") is not None else -1.0
                 self.history_rows.append((c, tg))
-        self.stats["gp_history"] = {"files": files, "loaded": len(self.history_rows), "skipped": skipped}
+        self.stats["gp_history"] = {"files": files, "loaded": len(self.history_rows), "skipped": skipped,
+                                    "gp_target": self.gp_target_choice}
         self.say(f"[06] --gp-history: {len(self.history_rows)} earlier runs from {len(files)} file(s) pooled into GP training"
                  + (f", skipped {skipped}" if skipped else ""))
+
+    def history_targets(self, r: dict) -> tuple[dict, str | None]:
+        """integration3 #9: GP targets of one --gp-history run under THIS campaign's metric_rules. Old records stored
+        z of lane_recovery_robustness under 'recovery_success'; with --gp-target safety_margin the run is re-scored from
+        its logged metrics (judgment.rescore_safety_margin, thresholds from config); a switched run that cannot be
+        re-scored is excluded with the reason. Never-switched runs keep only the switch label (target undefined)."""
+        tg = {k: v for k, v in (r.get("gp_targets") or {}).items() if k not in self.metric_rules}
+        metrics = dict(r.get("metrics") or {})
+        if r.get("switch_time") is not None:
+            for name, rule in self.metric_rules.items():
+                if (rule.get("gp") or {}).get("target") == "safety_margin":
+                    sm, why = J.rescore_safety_margin(r, self.th)
+                    if sm is None:
+                        return {}, f"safety_margin: {why}"
+                    metrics["safety_margin"] = sm["value"]
+            has_fault = (((r.get("parameters") or {}).get("fault") or {}).get("mode") or "none") != "none"
+            tg.update(J.gp_targets(self.metric_rules, metrics, r.get("baseline_metrics"), has_fault))
+        return tg, None
 
     def fit_gp(self, round_index: int) -> MetricGPs | None:
         if not self.flags["use_gp"]:
@@ -519,6 +756,36 @@ class Loop:
             if obj.get("acquisition") == "level_set":
                 out[obj["metric"]] = self.level_z(obj)
         return out
+
+    def target_y_scale(self) -> float:
+        m = self.obj_cfg[self.objectives[0]]["metric"]
+        return self.gps.y_scale.get(m, 1.0) if self.gps else 1.0
+
+    def summary_scorer(self, c: dict) -> dict | None:
+        """integration3 #7: the same terms as acq_score (level_set) for Nemotron A's summary; None when not level_set
+        or the GP is not ready (the summary then falls back to its own default score)."""
+        obj = self.obj_cfg[self.objectives[0]]
+        if not self.gp_ready or obj.get("acquisition") != "level_set":
+            return None
+        return boundary_score_parts(c, obj["metric"], SWITCH_METRIC, beta=float(obj.get("beta", 1.96)),
+                                    level_z=self.level_z(obj), y_scale=self.target_y_scale(),
+                                    switch_penalty=float(obj.get("switch_penalty", 1.0)))
+
+    def native(self, mean_z: float, std_z: float) -> tuple[float, float]:
+        """GP z -> the recovery target's own units (safety_margin or lane_recovery_robustness; inverse of judgment.orient)."""
+        rule = (self.metric_rules or {}).get(self.obj_cfg[self.objectives[0]]["metric"]) or {}
+        sc = float((rule.get("gp") or {}).get("scale", 1.0))
+        sign = 1.0 if rule.get("support_direction", "negative") == "negative" else -1.0
+        return sign * mean_z * sc, std_z * sc
+
+    def gp_info(self) -> dict:
+        obj = self.obj_cfg[self.objectives[0]]
+        rule = (self.metric_rules or {}).get(obj["metric"]) or {}
+        ys = self.target_y_scale()
+        return {"y_scale_z": ys, "level_z": self.level_z(obj), "target": (rule.get("gp") or {}).get("target", obj["metric"]),
+                "units": self.target_units(),
+                "level": float(obj.get("level", 0.0)), "training_std": round(self.native(0.0, ys)[1], 3),
+                "meaning": self.judgment_criteria()["gp_target"]}
 
     def acq_score(self, c: dict, beta: float) -> float | None:
         """07 acquisition for the active objective. level_set (integration3 default): engine.surrogate.boundary_score;
@@ -599,6 +866,24 @@ class Loop:
         return [c for s, c in sorted(scored, key=lambda p: -math.inf if p[0] is None else p[0], reverse=True)]
 
     # ------------------------------------------------------------------ 08 + 09
+    def speed_step(self) -> float:
+        return float(self.runner_cfg.get("speed_step_kmh") or 0)
+
+    def refill_cold_pool(self, pool: list[dict], want: int, round_index: int, attempts: int = 3) -> list[dict]:
+        """integration3 #8c: stage 04 rejects (route_onset_exclusions, dedup, G-01..03) left the cold start short of
+        its size + reserve (mock probe before #8c: cold start 24 ran 21). Top it up with risk-fault space filling (no new control
+        faults: the round's cap is already spent by the pool)."""
+        risk = [f for f in self.fault_pool if f not in self.control_ids] or self.fault_pool
+        for _ in range(attempts):
+            if len(pool) >= want:
+                break
+            more = self.stage_04([self.quantize(c) for c in SC.space_filling(
+                self.space, self.route_ids, risk, 2 * (want - len(pool)), self.rng, round_index=round_index,
+                speed_step=self.speed_step())], round_index)
+            ids = {c["scenario_id"] for c in pool}
+            pool = pool + [c for c in more if c["scenario_id"] not in ids][: want - len(pool)]
+        return pool
+
     def is_control(self, c: dict) -> bool:
         return (c.get("fault") or {}).get("fault_id") in self.control_ids
 
@@ -708,7 +993,9 @@ class Loop:
                         else f"라운드 {round_index}: {run_id} 끝 ({len(new)}/{len(batch)})")
             self.say(f"  [08/09] {run_id} {c['route_id']} {c['environment']['max_speed_kmh']:.0f}km/h {c['fault']['mode']} "
                      f"@{c['onset_event']}{c['onset_offset_s']:+.2f}s -> {rec['recovery_outcome']} "
-                     f"(lrr={_f(rec['lane_recovery_robustness'])}, trigger={_f(rec['trigger_time'])}s, "
+                     f"(margin={_f((rec.get('metrics') or {}).get('safety_margin'))}"
+                     f"[{(rec.get('metrics') or {}).get('safety_margin_binding') or '-'}], "
+                     f"lrr={_f(rec['lane_recovery_robustness'])}, trigger={_f(rec['trigger_time'])}s, "
                      f"detected={rec['trigger_source']}, "
                      f"sr={rec.get('sr_outcome')}, sel={c.get('selected_by')})")
         return new
@@ -725,8 +1012,8 @@ class Loop:
         sel = self.vcfg["select_runs"]
         picks = []
         for r in new:
-            lrr = r.get("lane_recovery_robustness")
-            near = lrr is not None and abs(lrr) < float(sel["boundary_near_abs_robustness"])
+            y = recovery_target_value(r, self.target_name())     # #9: the GP target (safety_margin by default)
+            near = y is not None and abs(y) < float(sel["boundary_near_abs_robustness"])
             if (sel["failed"] and is_failure(r)) or near:
                 picks.append((0 if is_failure(r) else 1, r))
         picks = [r for _, r in sorted(picks, key=lambda p: p[0])][: int(sel["max_per_round"])]
@@ -793,6 +1080,7 @@ class Loop:
         self.out.mkdir(parents=True, exist_ok=True)
         dump(self.out / "run_config.json", {"mode": self.mode, "ablation": self.ablation, "flags": self.flags,
                                             "video_explainer": self.video_on, "seed": self.seed, "cold_start": self.cold,
+                                            "supervisor": self.supervisor, "gp_target": self.gp_target_choice,
                                             "batch_size": self.batch, "rounds": self.rounds, "synthetic": self.mode == "mock",
                                             "scenario_space": str(self.space_path), "av_stack": str(self.av_stack)})
         self.screen("시작: 사전 지식 정리 중")
@@ -808,9 +1096,16 @@ class Loop:
                     n_a = self.cold
                 self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
                 a_c = self.stage_03(n_a, rnd)
-                sf = SC.space_filling(self.space, self.route_ids, self.fault_pool, self.cold - len(a_c) + 6, self.rng, round_index=rnd)
-                pool = self.stage_04([self.quantize(c) for c in a_c + sf], rnd)
+                a_pool = self.stage_04([self.quantize(c) for c in a_c], rnd)
+                # integration3 #8c: fault types cycle; control faults only up to what the round's cap (BUG-025) leaves
+                # after Nemotron A's accepted candidates (cap_controls would drop the rest)
+                ctrl_left = max(0, self.control_cap - sum(self.is_control(c) for c in a_pool))
+                sf = SC.space_filling(self.space, self.route_ids, self.fault_pool, self.cold - len(a_pool) + 6, self.rng,
+                                      round_index=rnd, max_controls=ctrl_left, speed_step=self.speed_step())
+                ids = {c["scenario_id"] for c in a_pool}
+                pool = a_pool + [c for c in self.stage_04([self.quantize(c) for c in sf], rnd) if c["scenario_id"] not in ids]
                 target = self.cold
+                pool = self.refill_cold_pool(pool, target + 6, rnd)
                 gps = None
             else:
                 gps = self.fit_gp(rnd)
@@ -834,17 +1129,22 @@ class Loop:
                 else:
                     regions = []
                 # integration3 #4: Nemotron A gets a compact GP summary EVERY round (boundary regions + outcome mix)
+                sv2 = self.cfg["nemotron_a"].get("summary_v2") or {}
                 gp_summary = NM.surrogate_summary(
                     regions=regions, records=self.records, candidates=self.candidates, space=self.space,
                     metric=self.obj_cfg[self.objectives[0]]["metric"], switch_metric=SWITCH_METRIC,
                     n_train=sum(r.get("sim_status") == "ok" for r in self.records) if gps is not None else None,
-                    k=int(self.cfg["nemotron_a"].get("surrogate_summary", {}).get("k", 6)))
+                    k=int(self.cfg["nemotron_a"].get("surrogate_summary", {}).get("k", 6)),
+                    scorer=self.summary_scorer if (self.gp_ready and self.obj_cfg[self.objectives[0]].get("acquisition") == "level_set") else None,
+                    native=self.native, gp_info=self.gp_info(),
+                    k_unexplored=int(sv2.get("k_unexplored", 3)), unexplored_std_frac=float(sv2.get("unexplored_std_frac", 0.75)))
                 dump(rdir / "03_gp_summary.json", gp_summary)
                 n_a = int(self.cfg["nemotron_a"]["A_scenario_generation"]["per_round"]) if self.flags["use_a"] else 0
                 self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
                 a_c = self.stage_03(n_a, rnd, near=near if self.flags["use_gp"] else None, gp_summary=gp_summary)
                 sf = SC.space_filling(self.space, self.route_ids, self.fault_pool,
-                                      int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd)
+                                      int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd,
+                                      speed_step=self.speed_step())
                 cf, self.cf_queue = self.cf_queue, []
                 pool = self.stage_04([self.quantize(c) for c in a_c + sf] + cf, rnd)
                 target = self.batch
@@ -892,6 +1192,13 @@ def _f(x):
     return "None" if x is None else f"{x:.2f}"
 
 
+def recovery_target_value(r: dict, target: str | None = "safety_margin") -> float | None:
+    """integration3 #9: a run's recovery GP target in its own units (metrics.safety_margin | lane_recovery_robustness)."""
+    if target == "lane_recovery_robustness":
+        return r.get("lane_recovery_robustness")
+    return (r.get("metrics") or {}).get(target or "safety_margin")
+
+
 def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Loop | None = None) -> dict:
     """Boundary-estimation quality (evaluation/ablations.yaml metrics, v2)."""
     valid = [r for r in records if r.get("sim_status") == "ok"]
@@ -899,6 +1206,8 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
     safe = [r for r in switched if r.get("final_safe_recovery") is True]
     fail = [r for r in valid if is_failure(r)]
     first_fail = next((i + 1 for i, r in enumerate(records) if is_failure(r)), None)
+    target = loop.target_name() if loop is not None else "safety_margin"
+    ys = [y for r in switched if (y := recovery_target_value(r, target)) is not None]
     lrr = [r["lane_recovery_robustness"] for r in switched if r.get("lane_recovery_robustness") is not None]
     band = 0.2
     uniq = {(candidates[r["scenario_id"]]["route_id"], candidates[r["scenario_id"]]["fault"]["mode"],
@@ -910,7 +1219,9 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         "n_runs": len(records), "n_valid": len(valid), "n_switched": len(switched),
         "n_final_safe_recovery": len(safe), "n_failures": len(fail),
         "both_sides_observed": bool(safe) and any(r.get("final_safe_recovery") is False for r in switched),
-        "boundary_band_runs": sum(abs(x) < band for x in lrr), "boundary_band": band,
+        "boundary_band_runs": sum(abs(x) < band for x in ys), "boundary_band": band, "boundary_target": target,
+        "boundary_band_runs_lrr": sum(abs(x) < band for x in lrr),
+        "target_negative_runs": sum(x < 0 for x in ys),
         "failures_per_simulation": len(fail) / max(1, len(records)), "simulations_to_first_failure": first_fail,
         "unique_failure_conditions": len(uniq),
         "outcome_counts": _count(r.get("recovery_outcome") for r in records),
@@ -919,7 +1230,7 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         "explanations": len(expl), "explanations_accepted": len(acc),
         "explanation_acceptance_rate": (len(acc) / len(expl)) if expl else None,
         "hallucination_rate": (1 - len(acc) / len(expl)) if expl else None,
-        "boundary_metrics": boundary_metrics(records, candidates, band),
+        "boundary_metrics": boundary_metrics(records, candidates, band, target),
     }
     if loop is not None:
         m["gp_boundary_sign_accuracy"] = boundary_accuracy(loop)
@@ -927,8 +1238,35 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         m["a_items_returned"] = sum(s.get("items_returned", 0) for s in loop.stats["a_calls"])
         m["rejected_candidates"] = len(loop.stats["rejected"])
         m["nemotron_a"] = nemotron_a_metrics(loop)
+        m["nemotron_b"] = nemotron_b_metrics(loop)
         m["llm_usage"] = llm_usage(loop.llm_log)
     return m
+
+
+def nemotron_b_metrics(loop: Loop) -> dict:
+    """integration3 #6: B hallucination check (majority answer vs expected_from_code) and how much the B one-hot
+    columns actually vary over the GP training runs (a column constant over all runs carries no information)."""
+    if not loop.flags["use_b"]:
+        return {"enabled": False}
+    out = NM.b_hallucination_summary([e.get("answers") for e in loop.b_cache.values()])
+    out["per_question"] = {q: {k: d[k] for k in ("asked", "checked", "hallucinated", "distinct_answers", "answers")}
+                           for q, d in out["per_question"].items()}
+    cols = None
+    rows = []
+    for r in loop.records:
+        c = loop.candidates.get(r.get("scenario_id"))
+        if r.get("sim_status") != "ok" or c is None:
+            continue
+        bx, bn = NM.b_features((loop.b_cache.get(loop.b_key(c)) or {}).get("answers"), loop.questions)
+        cols = bn; rows.append(bx)
+    if rows:
+        const = [n for j, n in enumerate(cols) if len({row[j] for row in rows}) <= 1]
+        out["gp_b_columns"] = len(cols)
+        out["gp_b_constant_columns"] = len(const)
+        out["gp_b_constant_fraction"] = len(const) / len(cols) if cols else None
+        out["gp_b_questions"] = sorted({n.split("=")[0] for n in cols})
+    out["b_keys"] = sum(1 for k in loop.b_cache if k != B_STATIC_KEY)
+    return out
 
 
 def nemotron_a_metrics(loop: Loop) -> dict:
@@ -949,14 +1287,17 @@ def nemotron_a_metrics(loop: Loop) -> dict:
             "expected_side": _count(c.get("expected_side") for c in a)}
 
 
-def boundary_metrics(records: list[dict], candidates: dict, band: float = 0.2) -> dict:
+def boundary_metrics(records: list[dict], candidates: dict, band: float = 0.2, target: str = "safety_margin") -> dict:
     """integration3: is the campaign finding a boundary at all? (result_1..5: every fault mode had a single outcome)
 
-    boundary_band_runs: switched runs with |lane_recovery_robustness| < band (also for 0.5 m);
+    boundary_band_runs: switched runs with |GP target| < band (also 0.5; #9: safety_margin, lrr kept as *_lrr);
     per_fault_mode: n, recovery_outcome mix, final_safe_recovery count and whether both safe and unsafe occurred;
     gp_prediction_diversity: distinct gp_mean values the executed runs were chosen with (constant = GP not learning);
     selection_sources: candidate source of the executed runs (Nemotron A share)."""
     lrr = [r["lane_recovery_robustness"] for r in records if r.get("lane_recovery_robustness") is not None]
+    ys = [y for r in records if (y := recovery_target_value(r, target)) is not None]
+    binding = _count((r.get("metrics") or {}).get("safety_margin_binding") for r in records
+                     if (r.get("metrics") or {}).get("safety_margin_binding"))
     per: dict[str, dict] = {}
     for r in records:
         if r.get("sim_status") != "ok":
@@ -978,8 +1319,10 @@ def boundary_metrics(records: list[dict], candidates: dict, band: float = 0.2) -
                            "std": (sum((x - mean) ** 2 for x in v) / len(v)) ** 0.5}
     src = _count(str((candidates.get(r["scenario_id"]) or {}).get("source")) for r in records)
     n_a = sum(v for k, v in src.items() if k.startswith("nemotron_a"))
-    return {"band": band, "boundary_band_runs": sum(abs(x) < band for x in lrr),
-            "boundary_band_runs_0.5": sum(abs(x) < 0.5 for x in lrr), "n_lrr": len(lrr),
+    return {"band": band, "target": target, "boundary_band_runs": sum(abs(x) < band for x in ys),
+            "boundary_band_runs_0.5": sum(abs(x) < 0.5 for x in ys), "n_target": len(ys),
+            "target_negative": sum(x < 0 for x in ys), "safety_margin_binding": binding,
+            "boundary_band_runs_lrr": sum(abs(x) < band for x in lrr), "n_lrr": len(lrr),
             "per_fault_mode": per, "modes_with_mixed_outcome": sorted(k for k, d in per.items() if d["mixed"]),
             "gp_prediction_diversity": div, "selection_sources": src,
             "nemotron_a_share": (n_a / len(records)) if records else None}
@@ -1008,7 +1351,7 @@ def llm_usage(path: Path) -> dict:
 
 
 def boundary_accuracy(loop: Loop) -> dict | None:
-    """Sign accuracy of the final S1 GP (mean_z of lane_recovery_robustness) against held-out truth.
+    """Sign accuracy of the final S1 GP (mean_z of the recovery target: safety_margin (#9) or lrr) against held-out truth.
 
     mock: truth from the SYNTHETIC simulator on 40 fixed random scenarios. real: leave-one-out on observed runs.
     """
@@ -1024,10 +1367,11 @@ def boundary_accuracy(loop: Loop) -> dict | None:
         if metric not in gps.models:
             return None
         rng = random.Random(1234)
-        test = [loop.quantize(c) for c in SC.space_filling(loop.space, loop.route_ids, loop.fault_pool, 40, rng)]
+        test = [loop.quantize(c) for c in SC.truth_points(loop.space, loop.route_ids, loop.fault_pool, 40, rng)]   # #8c: frozen test set
         tmp = loop.out / "_truth"
         ok = n = 0
         pairs: list[tuple[bool, bool]] = []
+        pairs_fs: list[tuple[bool, bool]] = []       # #9: the same GP sign against final_safe_recovery (any target)
         for i, c in enumerate(test):
             base, _ = loop.runner.ensure_baseline(c)
             onset = SC.onset_time(c, loop.route_events(c) or {})
@@ -1037,7 +1381,7 @@ def boundary_accuracy(loop: Loop) -> dict | None:
             d = write_run_folder(tmp / f"t{i}", route=c["route_id"], max_speed_kmh=c["environment"]["max_speed_kmh"],
                                  fault=SC.fault_dict_for_sim(loop.space, c, onset), seed=loop.runner.seed,
                                  stop_after_fault_s=loop.runner.stop_after_fault_s, record_front=False,
-                                 tire_friction_scale=SC.friction_of(c))
+                                 tire_friction_scale=SC.friction_of(c), supervisor=loop.supervisor)   # #8c: truth under the run's profile
             rec = compute_run_record(load_av_stack_run(d), load_av_stack_run(base), candidate=c, metric_rules=loop.metric_rules,
                                      th=scale_thresholds_for_friction(loop.th, SC.friction_of(c)))
             y = (rec.get("gp_targets") or {}).get(metric)
@@ -1046,10 +1390,14 @@ def boundary_accuracy(loop: Loop) -> dict | None:
             mu = gps.predict([loop.features(c)[0]])[0][0].get(metric)
             n += 1; ok += int((mu >= 0) == (y >= 0))
             pairs.append((mu >= 0, y >= 0))
+            if rec.get("final_safe_recovery") is not None:
+                pairs_fs.append((mu >= 0, bool(rec["final_safe_recovery"])))
         shutil.rmtree(tmp, ignore_errors=True)
-        return {"n": n, "accuracy": ok / n if n else None, "truth": "SYNTHETIC simulator (mock)", **_sign_detail(pairs)}
+        return {"n": n, "accuracy": ok / n if n else None, "truth": "SYNTHETIC simulator (mock)", **_sign_detail(pairs),
+                "vs_final_safe": _vs_final_safe(pairs_fs)}
     ok = 0
     pairs = []
+    pairs_fs = []
     for i in range(len(rows)):
         train = rows[:i] + rows[i + 1:]
         g = MetricGPs([metric], loop.seed, kernel_opts=loop.kernel_opts, prior_means=loop.gp_prior_means())
@@ -1059,7 +1407,18 @@ def boundary_accuracy(loop: Loop) -> dict | None:
         mu = g.predict([loop.features(rows[i][0])[0]])[0][0][metric]
         ok += int((mu >= 0) == (rows[i][1]["gp_targets"][metric] >= 0))
         pairs.append((mu >= 0, rows[i][1]["gp_targets"][metric] >= 0))
-    return {"n": len(rows), "accuracy": ok / len(rows), "truth": "leave-one-out on observed runs", **_sign_detail(pairs)}
+        if rows[i][1].get("final_safe_recovery") is not None:
+            pairs_fs.append((mu >= 0, bool(rows[i][1]["final_safe_recovery"])))
+    return {"n": len(rows), "accuracy": ok / len(rows), "truth": "leave-one-out on observed runs", **_sign_detail(pairs),
+            "vs_final_safe": _vs_final_safe(pairs_fs)}
+
+
+def _vs_final_safe(pairs: list[tuple[bool, bool]]) -> dict:
+    """integration3 #9: GP sign (mean >= level) vs final_safe_recovery. With the safety_margin target this equals the
+    target-sign accuracy; with --gp-target lrr it shows how far the lane-only sign is from the judgment."""
+    if not pairs:
+        return {}
+    return {"n": len(pairs), "accuracy": sum(p == t for p, t in pairs) / len(pairs), **_sign_detail(pairs)}
 
 
 def _sign_detail(pairs: list[tuple[bool, bool]]) -> dict:
@@ -1082,9 +1441,10 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
     lines = [f"# 파이프라인 실행 보고서 ({loop.ablation} {ABLATIONS[loop.ablation]['name']}, 영상 해설 {'on' if loop.video_on else 'off'})",
              "", f"- 데이터: **{syn}**", f"- 출력 폴더: `{out}`",
              f"- 런 {m['n_runs']}개 (유효 {m['n_valid']}, 전환 {m['n_switched']}), final_safe_recovery {m['n_final_safe_recovery']}개, 실패 {m['n_failures']}개",
-             f"- 경계 양쪽 관측: {'예' if m['both_sides_observed'] else '아니오 (경계 미추정)'}; |lane_recovery_robustness| < {m['boundary_band']} 런 {m['boundary_band_runs']}개",
+             f"- 경계 양쪽 관측: {'예' if m['both_sides_observed'] else '아니오 (경계 미추정)'}; |{m.get('boundary_target', 'lane_recovery_robustness')}| < {m['boundary_band']} 런 {m['boundary_band_runs']}개 (GP 타깃 < 0: {m.get('target_negative_runs')}개)",
              f"- 첫 실패까지 런 수: {m['simulations_to_first_failure']}, 고유 실패 조건: {m['unique_failure_conditions']}",
              f"- GP 경계 부호 정확도: {m.get('gp_boundary_sign_accuracy')}",
+             f"- GP 부호 vs final_safe_recovery (#9): {(m.get('gp_boundary_sign_accuracy') or {}).get('vs_final_safe')}",
              f"- 영상 해설: {m['explanations']}건, 검증 통과 {m['explanations_accepted']}건 (환각률 {m['hallucination_rate']})",
              f"- recovery_outcome 분포: {m['outcome_counts']}", f"- trigger_source 분포: {m['trigger_counts']}",
              f"- SR 검사 (engine/sr_checks.py, 참고) sr_outcome 분포: {m.get('sr_outcome_counts')}; 화면: `screen/campaign.html`",
@@ -1101,8 +1461,10 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
 def _boundary_lines(b: dict) -> list[str]:
     if not b:
         return ["- (없음)"]
-    lines = [f"- |lane_recovery_robustness| < {b['band']}: {b['boundary_band_runs']}개, < 0.5: {b['boundary_band_runs_0.5']}개 "
-             f"(복구 지표가 있는 런 {b['n_lrr']}개)",
+    lines = [f"- GP 타깃 {b.get('target', 'lane_recovery_robustness')}: |값| < {b['band']} {b['boundary_band_runs']}개, "
+             f"< 0.5 {b['boundary_band_runs_0.5']}개, < 0 (불안전) {b.get('target_negative')}개 (타깃이 있는 런 {b.get('n_target', b['n_lrr'])}개); "
+             f"제한 기준 (binding): {b.get('safety_margin_binding') or '-'}; 참고 |lane_recovery_robustness| < {b['band']}: "
+             f"{b.get('boundary_band_runs_lrr')}개 / {b['n_lrr']}개",
              f"- 같은 고장 안에서 안전·불안전이 둘 다 나온 고장: {b['modes_with_mixed_outcome'] or '없음 (결과가 고장 종류만으로 갈림)'}",
              f"- Nemotron A 후보 비율 (실행된 런): {b['nemotron_a_share']}; 출처: {b['selection_sources']}"]
     for mode, d in sorted((b.get("per_fault_mode") or {}).items()):
@@ -1230,7 +1592,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="open OUT/screen/campaign.html in the default browser at start; it is re-drawn after every run "
                          "and stage, and the page reloads itself every 5 s")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--cold-start", type=int)
+    ap.add_argument("--cold-start", type=int, help="cold start runs (default: orchestrator.yaml cold_start rule)")
+    ap.add_argument("--supervisor", choices=("tight", "legacy"),
+                    help="av_stack supervisor profile (default: paired_runs.yaml runner.supervisor, tight)")
     ap.add_argument("--batch-size", type=int)
     ap.add_argument("--rounds", type=int, help="rounds after the cold start (default from orchestrator budget)")
     ap.add_argument("--ablation-suite", action="store_true", help="mock only: run evaluation/ablations.yaml mock_suite")
@@ -1238,6 +1602,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="SR1 FTTI runs (same fault, --controller mpc_unprotected); default 08 paired_runs.yaml no_reaction_run")
     ap.add_argument("--conditions", nargs="*")
     ap.add_argument("--repeats", type=int)
+    ap.add_argument("--gp-target", choices=("safety_margin", "lrr"),
+                    help="recovery GP target (default 02 metric_rules.recovery_success.gp.target = safety_margin; "
+                         "lrr = lane_recovery_robustness, the target before integration3 #9)")
     ap.add_argument("--gp-history", action="append", metavar="GLOB",
                     help="pool earlier campaigns' run_records.jsonl (glob, repeatable) into GP training (warm start)")
     args = ap.parse_args(argv)
@@ -1263,7 +1630,7 @@ def main(argv: list[str] | None = None) -> int:
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
-                gp_history=args.gp_history)
+                gp_history=args.gp_history, supervisor=args.supervisor, gp_target=args.gp_target)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":

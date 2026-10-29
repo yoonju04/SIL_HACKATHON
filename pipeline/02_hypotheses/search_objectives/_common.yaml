@@ -15,9 +15,10 @@ set:
   R:  {file: R_regression_verification.yaml, kind: regression_verification, source_hypotheses: [H-03, H-08, H-10, H-11]}
 on_hold: [H-07]   # 오라클 방법 검증용, 보류
 
-# 실제 감독기 트리거 이름 (safety_profile.yaml switching.triggers, AV/integration/supervised_lateral.py:28-52, 109-112)
+# 실제 감독기 트리거 이름 (safety_profile.yaml switching.triggers, AV/integration/supervised_lateral.py:28-83, 140-143)
 trigger_names: [solver_failure, missing_steer, nonfinite_output, steer_out_of_range, deadline_miss,
-                stale_output, stale_sequence, tracking_divergence, controller_exception]
+                stale_output, stale_sequence, tracking_divergence, controller_exception,
+                steer_rate_exceeded]   # integration3 #8: tight 감독기 (T-10)
 
 # 실제 주입기 모드 (AV/integration/fault_injection.py:22-23). 주입 위치는 모두 MPC 출력 (fault_injection.py:1, 105-122)
 # 주의: 템플릿 scenario_space.yaml의 F-01~04와 scenario_space_av_stack.yaml의 F-01~07은 ID가 다르다.

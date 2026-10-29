@@ -27,11 +27,14 @@ supervisor:
                    deadline_miss, stale_output, stale_sequence, steer_rate_exceeded]
   stale_output_tolerance_s: 0.1                 # |t - stamp| > 0.1 s면 전환
   steer_out_of_range: "최대각 초과만 검사 (정확히 최대각은 통과)"
+  steer_out_of_range_en: "only a command beyond the maximum angle fails (exactly the maximum passes)"
   # integration4: run_benchmark --supervisor tight(기본) | legacy (SUPERVISOR_PROFILES)
-  steer_rate_exceeded: {max_dps: 90.0, note: "MPC 출력 조향 속도. MPC는 스스로 60 °/s로 제한하므로 90 °/s 초과는 고장 (legacy: 검사 없음)"}
+  steer_rate_exceeded: {max_dps: 90.0, note: "MPC 출력 조향 속도. MPC는 스스로 60 °/s로 제한하므로 90 °/s 초과는 고장 (legacy: 검사 없음)",
+                        note_en: "rate of the MPC output steering command. The MPC limits itself to 60 deg/s, so > 90 deg/s is a fault (legacy: no check)"}
   tracking_divergence: {e_y_m: 0.6, e_psi_rad: 0.35, hold_s: 0.15,
                         legacy: {e_y_m: 1.0, e_psi_rad: 0.6, hold_s: 0.25},
-                        note: "MPC가 보고한 오차를 씀. 정상 샘플 하나면 타이머 리셋. 고장 없는 기준 실행 61개 최대 |e_y| 0.46 m, |e_psi| 0.23 rad"}
+                        note: "MPC가 보고한 오차를 씀. 정상 샘플 하나면 타이머 리셋. 고장 없는 기준 실행 61개 최대 |e_y| 0.46 m, |e_psi| 0.23 rad",
+                        note_en: "uses the error the MPC reports; one healthy sample resets the 0.15 s timer. 61 fault-free baselines: max |e_y| 0.46 m, |e_psi| 0.23 rad"}
   latched: true                                 # LQR로 넘어가면 MPC로 돌아오지 않음
 
 environment:
@@ -46,6 +49,26 @@ fault_timing:
   onset_event: {values: [straight, curve_entry, curve_apex, curve_exit]}
   offset_s:    {range: [-1.0, 1.0], unit: s}
 
+# integration3 #8b: 이 경로에서는 이 시작 이벤트를 쓰지 않음 (이벤트 뒤 6 s 미만 = 5 s 평가창(V-03) + 시작 오프셋 최대 +1 s.
+#   V-03으로 항상 버려짐). result_6: 15개 중 7개가 baseline V-03로 버려졌고 그중 6개가 아래 무조건 목록, 1개(28035
+#   curve_entry 35 km/h)가 속도 조건 항목에 걸린다. 실측 = result_1~6 고장 없는 baseline (경로 끝 - 이벤트 시각):
+#     28035 (10개, 15~40 km/h): straight 45.3~53.3 s, curve_entry 4.2~10.9, curve_apex 3.1~8.1, curve_exit 2.1~6.0
+#     28154 (12개, 10~40 km/h): straight 24.6~58.6, curve_entry 4.6~14.6, curve_apex 1.1~11.4, curve_exit 0.0 (커브 중 경로 끝)
+#     28048 (4개, 15~25 km/h):  straight 1.9~3.3, curve_entry 7.8~13.4, curve_apex 5.7~9.6, curve_exit 4.4~7.6
+#   무조건 제외 = 실측 baseline 의 80% 이상이 6 s 미만인 조합. 28048 curve_exit 은 4개 중 2개만 6 s 미만(15 km/h 7.6 s 두 번,
+#   20 km/h 5.8, 25 km/h 4.4)이라 사용자 제안(무조건 제외) 대신 20 km/h 이상만 제외.
+#   {event, min_kmh}: 그 속도 이상에서만 제외 (그 아래에서는 6 s 이상 남음). 28035 curve_entry: 25 km/h 6.4 s, 30 km/h 5.5 s;
+#   28154 curve_entry: 20 km/h 7.4 s, 25 km/h 4.7 s; 28048 curve_apex: 20 km/h 7.9 s, 25 km/h 5.7 s. 측정 안 한 더 빠른 속도는
+#   더 짧아지는 방향. 판정은 여전히 baseline 이 생긴 뒤 gate(BUG-028)/baseline_gate 가 정확히 한다; 이 표는 baseline 이
+#   없는 첫 조합에서 CARLA 시간을 아끼는 사전 필터다. (engine/scenarios.py allowed_onset_events, validate_against_space)
+# integration3 #8b: onset events this route never grades (< 6 s left after the event = 5 s V-03 window + max +1 s
+#   offset). Measured on the fault-free baselines of result_1..6 (route end - event time). {event, min_kmh} = excluded
+#   from that speed up only. A pre-filter for (route, speed) pairs whose baseline has not run yet.
+route_onset_exclusions:
+  bench2drive:28035: [curve_apex, curve_exit, {event: curve_entry, min_kmh: 30}]
+  bench2drive:28154: [curve_apex, curve_exit, {event: curve_entry, min_kmh: 25}]
+  bench2drive:28048: [straight, {event: curve_exit, min_kmh: 20}, {event: curve_apex, min_kmh: 25}]
+
 # group: control = 대조군, risk = 위험 고장
 # injector_mode = run_benchmark.py --mpc-fault 값 (integration/fault_injection.py)
 faults:
@@ -54,7 +77,9 @@ faults:
     group: control
     role: 명시적 계산 실패
     description: "MPC가 '답을 못 구했다'고 보고"
+    description_en: "MPC reports that it found no solution (ok = False)"
     check: "실패 상태를 받으면 정상 전환하는가"
+    check_en: "Does the supervisor switch correctly when it receives the failure status?"
     layer: mpc_output
     injector_mode: solver_fail
     implemented: true
@@ -65,22 +90,27 @@ faults:
     # 검증(G-02)은 위의 전체 범위 그대로. result_2~5: 25 km/h 통과, 35 km/h 커브 진입 실패가 유일한 경계 단서.
     handover_axes:
       onset_event:         {values: [curve_entry, curve_apex]}
-      offset_s:            {range: [-0.5, 0.5], unit: s, note: "커브 진입·정점 주변을 촘촘히 (전체 -1~1 s의 절반 폭)"}
+      offset_s:            {range: [-0.5, 0.5], unit: s, note: "커브 진입·정점 주변을 촘촘히 (전체 -1~1 s의 절반 폭)",
+                            note_en: "dense around curve entry / apex (half of the full -1..1 s width)"}
       max_speed_kmh:       {range: [25, 40], unit: km/h}
       tire_friction_scale: {range: [0.3, 1.0]}
       todo: "측풍·질량·속도 외란 노브는 run_benchmark.py 에 아직 없다 (CARLA 물리 API 확인 전). 새 물리를 만들지 않고, 생기면 여기에 추가"
+      todo_en: "cross-wind, mass and speed disturbance knobs do not exist in run_benchmark.py yet; no new physics is invented"
     params: {}
     observations:
       - {source: route_26956, result: "0.0 s에 전환 (solver_failure), 최대 e_y 0.625 m, 차선 이탈 0%, 점수 100", runs: 1}
       - {source: town10_live, result: "0.0 s에 전환 (30 km/h, 60 km/h 각 1회)", runs: 2}
     next_question: "커브 정점·고속에서 전환 직후 조향 점프와 회복 거리는 얼마인가"
+    next_question_en: "At the curve apex / high speed, how large is the steering jump right after the switch and how long is the recovery?"
 
   - id: F-02
     name: stale
     group: control
     role: 오래된 메시지
     description: "직전 메시지를 값·시각·번호까지 통째로 반복 (freshness 단서가 남는 경우)"
+    description_en: "Repeats the previous message whole: value, time stamp and sequence number (the freshness cue remains)"
     check: "출력 중단을 제때 감지하는가"
+    check_en: "Is the output stall detected in time?"
     layer: mpc_output
     injector_mode: stale
     implemented: true
@@ -91,21 +121,26 @@ faults:
     # 검증(G-02)은 위의 전체 범위 그대로. result_2~5: 25 km/h 통과, 35 km/h 커브 진입 실패가 유일한 경계 단서.
     handover_axes:
       onset_event:         {values: [curve_entry, curve_apex]}
-      offset_s:            {range: [-0.5, 0.5], unit: s, note: "커브 진입·정점 주변을 촘촘히 (전체 -1~1 s의 절반 폭)"}
+      offset_s:            {range: [-0.5, 0.5], unit: s, note: "커브 진입·정점 주변을 촘촘히 (전체 -1~1 s의 절반 폭)",
+                            note_en: "dense around curve entry / apex (half of the full -1..1 s width)"}
       max_speed_kmh:       {range: [25, 40], unit: km/h}
       tire_friction_scale: {range: [0.3, 1.0]}
       todo: "측풍·질량·속도 외란 노브는 run_benchmark.py 에 아직 없다 (CARLA 물리 API 확인 전). 새 물리를 만들지 않고, 생기면 여기에 추가"
+      todo_en: "cross-wind, mass and speed disturbance knobs do not exist in run_benchmark.py yet; no new physics is invented"
     params: {}
     observations:
       - {source: route_26956, result: "0.0 s에 전환 (stale_sequence)", runs: 1}
     next_question: "값만 고정하고 시각·번호를 갱신하면 감지되는가 (확장 E-01)"
+    next_question_en: "If only the value is frozen while stamp and sequence are refreshed, is it still detected? (extension E-01)"
 
   - id: F-03
     name: output_delay
     group: risk
     role: 시간 문제
     description: "k틱 전에 계산한 명령을 현재 시각·번호로 내보냄 (처리 지연. 옛 시각이면 시작 순간 번호 검사에 걸림)"
+    description_en: "Sends the command computed k ticks ago under the current stamp and sequence (processing latency; an old stamp would be caught by the sequence check at onset)"
     check: "늦은 명령 처리와 전환 지연"
+    check_en: "Handling of late commands and the switch delay"
     layer: mpc_output
     injector_mode: output_delay
     implemented: true
@@ -116,13 +151,16 @@ faults:
       - {source: check_1027, result: "B, 4틱: 3.65 s 뒤 전환, 최대 편차 1.47 m (기준 0.34), 차체가 차선 넘음", runs: 1}
       - {source: check_1027, result: "C, 4틱: 전환 못 함, 최대 편차 0.59 m (기준 0.22), 차선 안", runs: 1}
     next_question: "몇 틱부터 전환이 늦어지고 충돌로 이어지는가. 속도와 곡률에 따라 경계가 어떻게 바뀌는가"
+    next_question_en: "From how many ticks does the switch become late and lead to a collision? How does that boundary move with speed and curvature?"
 
   - id: F-04
     name: bias
     group: risk
     role: 은밀한 값 오염
     description: "조향값에 일정한 각도를 계속 더함"
+    description_en: "Adds a constant angle to the steering command"
     check: "감지 누락과 전환 후 회복"
+    check_en: "Missed detection and recovery after the switch"
     layer: mpc_output
     injector_mode: bias
     implemented: true
@@ -135,13 +173,16 @@ faults:
       - {source: town10_live, result: "0.05 rad: 전환 못 함", runs: 1}
       - {source: route_26956, result: "0.02 rad 전환 못 함, 0.05 rad 4.7 s 뒤 전환, 0.10 rad 2.3 s 뒤 전환 (이전 코드)", runs: 3}
     next_question: "감지 경계 크기는 어디인가. 주입 방향(커브 안쪽/바깥쪽)에 따라 달라지는가"
+    next_question_en: "Where is the magnitude at which detection starts? Does it depend on the direction (inside / outside of the curve)?"
 
   - id: F-05
     name: drift
     group: risk
     role: 점진적 값 오염
     description: "조향 오차가 시간이 갈수록 커짐"
+    description_en: "The steering error grows with time since the fault start"
     check: "악화 속도에 따른 감지·전환 지연"
+    check_en: "Detection / switch delay as a function of the growth rate"
     layer: mpc_output
     injector_mode: drift
     implemented: true
@@ -153,13 +194,16 @@ faults:
       - {source: check_1027, result: "C, 0.03 rad/s: 3.75 s 뒤 전환, 최대 편차 1.18 m (기준 0.22), 차체가 차선을 0.35 m 넘음", runs: 1}
       - {source: route_26956, result: "0.05 rad/s 2.6 s 뒤 전환. 0.02 rad/s는 deadline_miss로 전환 (drift 감지 아님, 이전 코드)", runs: 2}
     next_question: "악화 속도와 전환 지연은 어떤 관계인가"
+    next_question_en: "How does the drift rate relate to the switch delay?"
 
   - id: F-06
     name: saturate
     group: risk
     role: 급격한 이상
     description: "조향을 최대각의 magnitude 배로 고정 (1.0 = 정확히 최대각, 범위 검사 통과). ramp_s 동안 MPC 명령에서 선형으로 올라감"
+    description_en: "Holds steering at magnitude x the maximum angle (1.0 = exactly the limit, which passes the range check); with ramp_s the command rises linearly from the MPC command"
     check: "급격히 악화된 상태에서의 인계·회복"
+    check_en: "Handover and recovery from a sharply degraded state"
     layer: mpc_output
     injector_mode: saturate
     implemented: true
@@ -168,23 +212,28 @@ faults:
     # run_benchmark.py --saturate-level / --fault-ramp (engine/fault_args.py to_cli).
     params:
       duration_s: {range: [0.1, 1.0], unit: s}
-      side:       {values: [positive, negative], note: "MPC 조향 부호"}
+      side:       {values: [positive, negative], note: "MPC 조향 부호", note_en: "sign of the held steering command"}
       magnitude:  {range: [0.2, 1.0], unit: fraction_of_max_steer, default: 1.0, cli: --saturate-level,
-                   note: "최대 조향각 대비 비율. 1.0 미만이면 범위 검사는 원래도 통과하고, 추적 오차로만 감지됨"}
+                   note: "최대 조향각 대비 비율. 1.0 미만이면 범위 검사는 원래도 통과하고, 추적 오차로만 감지됨",
+                   note_en: "fraction of the maximum steering angle; values up to 1.0 pass the range check, so detection is only via tracking error"}
       ramp_s:     {range: [0.0, 0.3], unit: s, default: 0.0, cli: --fault-ramp,
-                   note: "0 = 한 틱에 점프 (실제 액추에이터로는 불가능, SR6 위반이 구조적으로 생김). >0 = 선형 상승"}
+                   note: "0 = 한 틱에 점프 (실제 액추에이터로는 불가능, SR6 위반이 구조적으로 생김). >0 = 선형 상승",
+                   note_en: "0 = jump within one tick (impossible for a real actuator, violates SR6 by construction); >0 = linear rise"}
     observations:
       - {source: check_1027, result: "A, 0.5 s (+): 0.75 s 뒤 전환, 최대 편차 7.06 m, 차선 이탈, 점수 51.1", runs: 1}
       - {source: check_1027, result: "B, 0.5 s (+): 0.85 s 뒤 전환, 최대 편차 8.26 m, 차선 이탈, 점수 74.8", runs: 1}
       - {source: check_1027, result: "C, 0.5 s (+): 0.70 s 뒤 전환, 최대 편차 8.84 m, 차선 이탈, 신호등 충돌", runs: 1}
     next_question: "몇 초·어느 세기(magnitude)부터 전환해도 차선 안에서 회복하지 못하는가. ramp를 주면 감지가 늦어지는가"
+    next_question_en: "From which duration and magnitude does LQR fail to recover inside the lane even after the switch? Does a ramp delay detection?"
 
   - id: F-07
     name: intermittent_bias
     group: risk
     role: 감독기 취약점
     description: "bias를 간헐·주기적으로 켜고 끔"
+    description_en: "Switches a bias on and off periodically"
     check: "타이머 리셋으로 인한 전환 누락"
+    check_en: "Missed switch because the tracking timer resets"
     layer: mpc_output
     injector_mode: intermittent_bias
     implemented: true
@@ -198,6 +247,7 @@ faults:
       - {source: check_1027, result: "C, 같은 조건: 2.10 s 뒤 전환, 최대 편차 1.03 m (기준 0.22), 차체가 차선을 0.20 m 넘음", runs: 1}
       - {source: check_1027, result: "세 경로 모두 타이머 리셋(1 m 초과가 0.25 s 안에 풀림)은 관찰되지 않음", runs: 3}
     next_question: "꺼짐 시간을 늘리면 타이머 리셋이 생기는가, 아니면 평균 bias가 줄어든 효과뿐인가"
+    next_question_en: "Does a longer off time reset the tracking timer, or does it only lower the mean bias?"
 
 # 확장 목록: CARLA에서 아직 검증하지 않음, 샘플링하지 않음
 extensions:

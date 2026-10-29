@@ -13,8 +13,8 @@
   the old +/-1 regression (legacy acquisition).
 * Acquisitions (07):
     level_set  (integration3 default, Gotovos et al. IJCAI 2013 "Active Learning for Level Set Estimation";
-                straddle of Bryan et al. 2005): score = beta*sigma(x) - |mu(x) - h| on lane_recovery_robustness (z),
-                h = recovery threshold (0 = lane boundary), normalised by the target's training std; combined with
+                straddle of Bryan et al. 2005): score = beta*sigma(x) - |mu(x) - h| on the recovery target (z; #9 safety_margin),
+                h = recovery threshold (0 = final_safe boundary), normalised by the target's training std; combined with
                 the same straddle on the switch classifier's latent function (P(switch) = 0.5 boundary):
                 score = max(rec - penalty*(1 - P(switch)), switch).  "uncertain switch OR recovery near the boundary"
     straddle   (legacy) beta*std_z - |mean_z|, with run.switch_aware_score's penalty from the regressed switch GP
@@ -223,14 +223,11 @@ def level_set_score(mean: float, std: float, beta: float = 1.96, level: float = 
     return beta * std - abs(mean - level)
 
 
-def boundary_score(c: dict, metric: str, switch_metric: str | None, *, beta: float, level_z: float = 0.0,
-                   y_scale: float = 1.0, switch_penalty: float = 1.0, beta_switch: float | None = None) -> float | None:
-    """integration3 default acquisition: max(recovery level-set score - penalty*(1-P(switch)), switch level-set score).
-
-    recovery part: (beta*std_z - |mean_z - h_z|) / y_scale (training std of the target, so both parts are O(1));
-    penalised where a switch is unlikely (no recovery target exists without a switch).
-    switch part: beta*sd_f - |mu_f| on the classifier's latent function (P(switch) = 0.5 <=> f = 0).
-    None when neither model has a prediction (caller falls back to space filling)."""
+def boundary_score_parts(c: dict, metric: str, switch_metric: str | None, *, beta: float, level_z: float = 0.0,
+                         y_scale: float = 1.0, switch_penalty: float = 1.0, beta_switch: float | None = None) -> dict:
+    """The terms of boundary_score (integration3 #7: the same numbers go into Nemotron A's surrogate_summary).
+    recovery: level-set score in training-std units minus switch_penalty*(1-P(switch)); switch: level-set score of
+    the switch classifier's latent function; score = max of the available terms; dominant = which term won."""
     gm, gs = c.get("gp_mean") or {}, c.get("gp_std") or {}
     rec = None
     if gm.get(metric) is not None and gs.get(metric) is not None:
@@ -242,11 +239,28 @@ def boundary_score(c: dict, metric: str, switch_metric: str | None, *, beta: flo
         mu_f, sd_f = gm.get(switch_metric + LATENT), gs.get(switch_metric + LATENT)
         if mu_f is not None and sd_f is not None:
             sw = level_set_score(mu_f, sd_f, beta if beta_switch is None else beta_switch, 0.0)
-    if rec is None:
-        return sw
-    if p is not None and 0.0 <= p <= 1.0:
+    if rec is not None and p is not None and 0.0 <= p <= 1.0:
         rec -= switch_penalty * (1.0 - p)
-    return rec if sw is None else max(rec, sw)
+    if rec is None and sw is None:
+        score, dominant = None, None
+    elif rec is None or (sw is not None and sw > rec):
+        score, dominant = sw, "switch_uncertainty"
+    else:
+        score, dominant = rec, "recovery_level_set"
+    return {"score": score, "recovery_term": rec, "switch_term": sw, "p_switch": p if p is not None and 0.0 <= p <= 1.0 else None,
+            "dominant": dominant}
+
+
+def boundary_score(c: dict, metric: str, switch_metric: str | None, *, beta: float, level_z: float = 0.0,
+                   y_scale: float = 1.0, switch_penalty: float = 1.0, beta_switch: float | None = None) -> float | None:
+    """integration3 default acquisition: max(recovery level-set score - penalty*(1-P(switch)), switch level-set score).
+
+    recovery part: (beta*std_z - |mean_z - h_z|) / y_scale (training std of the target, so both parts are O(1));
+    penalised where a switch is unlikely (no recovery target exists without a switch).
+    switch part: beta*sd_f - |mu_f| on the classifier's latent function (P(switch) = 0.5 <=> f = 0).
+    None when neither model has a prediction (caller falls back to space filling)."""
+    return boundary_score_parts(c, metric, switch_metric, beta=beta, level_z=level_z, y_scale=y_scale,
+                                switch_penalty=switch_penalty, beta_switch=beta_switch)["score"]
 
 
 def select_batch_scored(candidates: list[dict], score_of, *, batch_size: int, acquisition_fraction: float,

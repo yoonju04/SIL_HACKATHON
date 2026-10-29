@@ -43,10 +43,10 @@ system_under_test:
     e_psi_dot: 'yaw_rate - kappa*vx (reference.py:73)'
   linear_model: 'x_dot = A(v) x + B delta, 선형 오차 모델 (lqr.py:11-18)'
   command: 'delta = clip(-K x + delta_ff, ±limit) (lqr.py:166-172), limit = max_steer_rad (max_lat_acc 옵션은 미사용)'
-  rate_limit_after_takeover: 'supervised_lateral.py:131-133, 직전 적용 조향 기준 ±rate*dt'
+  rate_limit_after_takeover: 'supervised_lateral.py:162-164, 직전 적용 조향 기준 ±rate*dt'
   configs:                                   # planner 선택은 아직 미정 (remaining decision)
     pdm: {Q: '(0.5, 0, 1, 0)', R: 1.0, preview_s: 0.2, rate_limit_dps: 90, source: 'AV/integration/pdm_agent.py:85-86, 227-229'}
-    tfpp_default: {Q: '(0.05, 0, 1, 0)', R: 1.0, preview_s: 0.0, rate_limit_dps: 60, source: 'lqr.py:66-73; supervised_lateral.py:82; tfpp_control.py:52'}
+    tfpp_default: {Q: '(0.05, 0, 1, 0)', R: 1.0, preview_s: 0.0, rate_limit_dps: 60, source: 'lqr.py:66-73; supervised_lateral.py:113; tfpp_control.py:52'}
   max_steer_rad: 'CARLA 앞바퀴 max_steer_angle 평균 (AV/integration/carla_io.py:48-49), 런 출력 agent_config.json의 geometry에 저장 (tfpp_benchmark.py:111-113; run_benchmark.py:106-107)'
   steering_normalization: 'CARLA steer = -delta/max_steer, [-1,1] clip (carla_io.py:29-31). steering curve를 1.0으로 평탄화해서 이 관계가 모든 속도에서 성립 (carla_io.py:75-80; tfpp_benchmark.py:109-110)'
 
@@ -54,13 +54,21 @@ system_under_test:
 # 전환 순간 오차는 입력이 아니라 결과다. 아래 '제어 입력'으로 간접 조절한다.
 switch_state_control:
   natural_switch_bound: >
-    tracking_divergence는 |e_y|>1.0 m 또는 |e_psi|>0.6 rad가 0.25 s 지속될 때 울린다
-    (AV/integration/supervised_lateral.py:45-51). 그래서 이 트리거로 전환되면 전환 순간 오차는
-    대략 임계값 이상(+0.25 s 동안 더 커진 만큼)으로 고정된다. 임계값보다 작은 오차에서의 전환은
-    즉시 검사 트리거(solver_failure 등)로만 만들 수 있고, 임계값보다 훨씬 큰 오차는 감지가 늦어질 때만 생긴다.
+    tracking_divergence는 |e_y|>0.6 m 또는 |e_psi|>0.35 rad가 0.15 s 지속될 때 울린다 (integration3 #8 tight 프로파일;
+    legacy = 1.0 m / 0.6 rad / 0.25 s, result_1~6) (AV/integration/supervised_lateral.py:75-82). 그래서 이 트리거로
+    전환되면 전환 순간 오차는 대략 임계값 이상(+0.15 s 동안 더 커진 만큼)으로 고정된다. 임계값보다 작은 오차에서의 전환은
+    즉시 검사 트리거(solver_failure, steer_rate_exceeded = MPC 명령 속도 > 90 °/s 등)로만 만들 수 있고,
+    임계값보다 훨씬 큰 오차는 감지가 늦어질 때만 생긴다.
+  natural_switch_bound_en: >                    # integration3 #7: Nemotron A prompt (English); Korean above is the original
+    tracking_divergence fires when |e_y| > 0.6 m or |e_psi| > 0.35 rad holds for 0.15 s (integration3 #8 tight profile;
+    the legacy profile used in result_1..6 was 1.0 m / 0.6 rad / 0.25 s) (av_stack integration/supervised_lateral.py:75-82).
+    A switch by this trigger therefore happens at an error of roughly the threshold or more (plus whatever it grew
+    during the 0.15 s). A switch at a smaller error is only possible through an instant check (solver_failure,
+    stale_sequence, steer_rate_exceeded = MPC command rate > 90 deg/s, ...); a much larger error only arises when
+    detection is delayed (e.g. output_delay sends the old state, a slow saturate ramp passes the range and rate checks).
   detection_delay_sources_seen:
     output_delay: '옛 상태(state)를 감독기에 보냄 (AV/integration/fault_injection.py:100-103) → 추종 오차 감지가 늦어짐. 관측 최대 편차 4.86 m (pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:85)'
-    saturate: '최대각 정확히 = 범위 검사 통과 (AV/integration/fault_injection.py:95-98; supervised_lateral.py:36). 관측 0.70~0.85 s 뒤 전환, 최대 편차 7~9 m (pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:140-142)'
+    saturate: '최대각 정확히 = 범위 검사 통과 (AV/integration/fault_injection.py:95-98; supervised_lateral.py:59). 관측 0.70~0.85 s 뒤 전환, 최대 편차 7~9 m (pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:140-142)'
   methods:
     - id: M-1
       name: single_fault_natural_detection
@@ -71,7 +79,7 @@ switch_state_control:
     - id: M-2
       name: single_fault_immediate_switch
       supported_now: true
-      how: 'solver_fail를 원하는 시각에 주입 → 같은 틱 전환 (AV/integration/fault_injection.py:111; supervised_lateral.py:29-30, 113-117)'
+      how: 'solver_fail를 원하는 시각에 주입 → 같은 틱 전환 (AV/integration/fault_injection.py:111; supervised_lateral.py:52-53, 144-148)'
       reachable_region: '그 순간의 정상 MPC 추종 오차 (작음, 무고장 기준 최대 편차 0.22~0.46 m, pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:85-87)'
     - id: M-3
       name: two_stage_degrade_then_force_switch
@@ -107,13 +115,13 @@ context_axes:
 # ---------------------------------------------------------------- 탐색 축 (결과에서 계산)
 derived_axes:
   switch_state:
-    e_y_at_switch: {source: 'agent_controls.jsonl tracking_error at t = switched_at_s (pdm_agent.py:287, 296-297)', note: '전환 틱의 result는 LQR 출력이라 LQR 자신의 오차 (supervised_lateral.py:118-120)', loggable_now: true}
+    e_y_at_switch: {source: 'agent_controls.jsonl tracking_error at t = switched_at_s (pdm_agent.py:287, 296-297)', note: '전환 틱의 result는 LQR 출력이라 LQR 자신의 오차 (supervised_lateral.py:149-151)', loggable_now: true}
     e_psi_at_switch: {source: 'agent_controls.jsonl heading_error at t = switched_at_s (pdm_agent.py:288)', loggable_now: true}
     e_y_dot_at_switch: {formula: 'vx*sin(e_psi) + vy*cos(e_psi)', source: 'steps.jsonl vx, vy + heading_error (monitor_logs.py:121-122)', loggable_now: derivable}
     e_psi_dot_at_switch: {formula: 'yaw_rate - kappa*vx', loggable_now: false, needs: L-3 (kappa)}
     normalized_switch_error:
-      formula: 'max(|e_y_at_switch| / 1.0, |e_psi_at_switch| / 0.6)'
-      basis: '감독기 tracking_divergence 임계값 (supervised_lateral.py:45). 1 = 자연 전환 경계'
+      formula: 'max(|e_y_at_switch| / e_y_th, |e_psi_at_switch| / e_psi_th); tight 0.6 m / 0.35 rad, legacy 1.0 / 0.6 (run agent_config supervisor, engine/monitor.py supervisor_thresholds)'
+      basis: '감독기 tracking_divergence 임계값 (supervised_lateral.py:75). 1 = 자연 전환 경계'
       loggable_now: true
     linearization_validity:
       status: todo
@@ -147,7 +155,7 @@ derived_axes:
 logging_todo:   # sim-eval 코드는 수정하지 않음. 필요한 최소 추가만 적는다
   L-1:
     what: 'LQR 클립 전 명령(steer_feedback + steer_feedforward), 클립 후(steer), 속도 제한 후 적용값'
-    where: 'supervised_lateral.py:120 step_controller 호출부는 LQROutput을 버린다 (AV/integration/episode.py:53-55). SupervisedLateral에 last_lqr_unclipped / last_lqr_clipped / last_applied 필드를 두고 record()(:140-144)에 포함'
+    where: 'supervised_lateral.py:151 step_controller 호출부는 LQROutput을 버린다 (AV/integration/episode.py:53-55). SupervisedLateral에 last_lqr_unclipped / last_lqr_clipped / last_applied 필드를 두고 record()(:140-144)에 포함'
   L-2:
     what: 'max_steer_rad, rate_dps, LQR Q/R/preview를 런 메타에 기록'
     where: 'monitor_logs meta (pdm_agent.py:167-169). 현재 max_steer는 agent_config.json에만 있음'
