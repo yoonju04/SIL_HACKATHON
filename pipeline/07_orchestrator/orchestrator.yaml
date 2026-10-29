@@ -21,7 +21,10 @@ acquisition:
   selection: minimize
   beta_schedule: {start: 2.0, end: 0.5, decay: linear_over_rounds}   # 예시
   batch_size: 12
-  batch_composition: {lcb: 0.75, random_space_filling: 0.25}
+  batch_composition: {lcb: 0.75, random_space_filling: 0.25, nemotron_a: 0.3}
+  # integration3 #4: nemotron_a = 라운드마다 배치의 이 비율(올림)을 Nemotron A 후보에 먼저 배정 (run.py Loop.nemotron_share).
+  #   나머지 자리를 lcb/random 비율로 나눈다. 범위 끝값을 근거 없이 쓴 후보(range_extreme_unjustified)는 뒤로 밀림.
+  #   (result_2~5: A 후보가 매 라운드 15개 나왔지만 GP·랜덤이 배치를 다 차지해 cold start 1개만 실행됨)
   diversity:
     min_normalized_distance: 0.1                # 예시
     max_per_seed: 2

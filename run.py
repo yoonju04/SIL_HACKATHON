@@ -321,7 +321,8 @@ class Loop:
         return f"{c['fault']['mode']}|{c['onset_event']}"
 
     # ------------------------------------------------------------------ 03 Nemotron A
-    def stage_03(self, n: int, round_index: int, near: list[dict] | None = None) -> list[dict]:
+    def stage_03(self, n: int, round_index: int, near: list[dict] | None = None,
+                 gp_summary: dict | None = None) -> list[dict]:
         if n <= 0 or not self.flags["use_a"]:
             return []
         evidence = NM.evidence_enum(self.cfg["safety_profile"], self.cfg["prior_knowledge"], self.space, self.objectives)
@@ -335,12 +336,15 @@ class Loop:
                            mechanisms=mechanism_summary(self.explanations) if self.video_on else [],
                            tried=[{k: c.get(k) for k in ("route_id", "environment", "fault", "onset_event", "onset_offset_s")}
                                   for c in list(self.candidates.values())[-40:]],
-                           include_unreviewed=bool(self.cfg["nemotron_a"].get("include_unreviewed_observations", True)))
+                           include_unreviewed=bool(self.cfg["nemotron_a"].get("include_unreviewed_observations", True)),
+                           surrogate_summary=gp_summary)
         msgs = NM.a_messages(schema=schema, n=n, context=ctx)
         obj, st = NM.call_a(self.client_a, self.a_settings, msgs, schema, tag="A")
         st.update(round=round_index, requested=n)
         self.stats["a_calls"].append(st)
         cands = NM.a_to_candidates(obj or {}, self.space, round_index=round_index)
+        st["boundary_regions_given"] = len((gp_summary or {}).get("boundary_regions") or [])
+        st["range_extreme_unjustified"] = sum("range_extreme_unjustified" in c.get("tags", []) for c in cands)
         if near and self.a_refine.get("enabled", True) and self.cfg["nemotron_a"].get("refine", {}).get("enabled", True):
             schema_r = NM.candidate_schema(self.space, self.route_ids, self.fault_pool, self.objectives, evidence, len(near))
             obj_r, st_r = NM.call_a(self.client_a, self.a_refine, NM.refine_messages(schema_r, near, ctx), schema_r, tag="A_refine")
@@ -453,13 +457,34 @@ class Loop:
             beta = J.beta_schedule(round_index, self.rounds + 1)
             obj = self.obj_cfg[self.objectives[0]]
             div = orch["acquisition"]["diversity"]
-            batch = select_batch_scored(rest, lambda c: switch_aware_score(c, obj, beta), batch_size=self.batch - len(forced),
+            share = self.nemotron_share(rest, self.batch - len(forced), lambda c: switch_aware_score(c, obj, beta))
+            rest = [c for c in rest if c not in share]
+            batch = share + select_batch_scored(rest, lambda c: switch_aware_score(c, obj, beta),
+                                        batch_size=self.batch - len(forced) - len(share),
                                         acquisition_fraction=float(orch["acquisition"]["batch_composition"]["lcb"]),
                                         min_distance=float(div["min_normalized_distance"]), max_per_seed=int(div["max_per_seed"]),
                                         rng=self.rng, maximize=True)
         for c in forced:
             c["selected_by"] = "counterfactual_check"
         return forced + batch
+
+    def nemotron_share(self, cands: list[dict], n_batch: int, score_of) -> list[dict]:
+        """integration3 #4: reserve ceil(fraction * batch) slots for Nemotron A candidates every round (07
+        orchestrator.yaml acquisition.batch_composition.nemotron_a, default 0.3). Before, GP + random took the whole
+        batch after the cold start, so A's boundary proposals almost never ran. Order: justified / interior candidates
+        first (range_extreme_unjustified last), then the acquisition score, then A's own order."""
+        frac = float((self.cfg["orchestrator"]["acquisition"].get("batch_composition") or {}).get("nemotron_a", 0.3))
+        if not self.flags["use_a"] or frac <= 0 or n_batch <= 0:
+            return []
+        a = [c for c in cands if c.get("source", "").startswith("nemotron_a")]
+        def key(ic):
+            i, c = ic
+            sc = score_of(c)
+            return ("range_extreme_unjustified" in c.get("tags", []), -(sc if sc is not None else -1e9), i)
+        picked = [c for _, c in sorted(enumerate(a), key=key)][: math.ceil(n_batch * frac)]
+        for c in picked:
+            c["selected_by"] = "nemotron_a_share"
+        return picked
 
     def reserve_order(self, pool: list[dict], batch: list[dict], round_index: int) -> list[dict]:
         """BUG-029: replacements for rejected batch candidates (08 baseline gate) in the same acquisition order stage 07
@@ -697,9 +722,19 @@ class Loop:
                     scored = sorted(((abs(mu.get(m, 1e9)), c, mu, sd) for c, mu, sd in zip(prev, means, stds)), key=lambda p: p[0])
                     for _, c, mu, sd in scored[: int(self.cfg["nemotron_a"].get("refine", {}).get("max_candidates", 3))]:
                         near.append({**c, "gp_mean": mu, "gp_std": sd})
+                    regions = [{**c, "gp_mean": mu, "gp_std": sd} for c, mu, sd in zip(prev, means, stds)]
+                else:
+                    regions = []
+                # integration3 #4: Nemotron A gets a compact GP summary EVERY round (boundary regions + outcome mix)
+                gp_summary = NM.surrogate_summary(
+                    regions=regions, records=self.records, candidates=self.candidates, space=self.space,
+                    metric=self.obj_cfg[self.objectives[0]]["metric"], switch_metric=SWITCH_METRIC,
+                    n_train=sum(r.get("sim_status") == "ok" for r in self.records) if gps is not None else None,
+                    k=int(self.cfg["nemotron_a"].get("surrogate_summary", {}).get("k", 6)))
+                dump(rdir / "03_gp_summary.json", gp_summary)
                 n_a = int(self.cfg["nemotron_a"]["A_scenario_generation"]["per_round"]) if self.flags["use_a"] else 0
                 self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
-                a_c = self.stage_03(n_a, rnd, near=near if self.flags["use_gp"] else None)
+                a_c = self.stage_03(n_a, rnd, near=near if self.flags["use_gp"] else None, gp_summary=gp_summary)
                 sf = SC.space_filling(self.space, self.route_ids, self.fault_pool,
                                       int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd)
                 cf, self.cf_queue = self.cf_queue, []
@@ -707,7 +742,8 @@ class Loop:
                 target = self.batch
             dump(rdir / "03_04_pool.json", [{k: c.get(k) for k in ("scenario_id", "source", "route_id", "environment", "fault",
                                                                     "onset_event", "onset_offset_s", "tags", "evidence_ids",
-                                                                    "expected_mechanism", "expected_side")} for c in pool])
+                                                                    "expected_mechanism", "expected_side", "range_extremes",
+                                                                    "extreme_justification")} for c in pool])
             self.screen(f"라운드 {rnd}: Nemotron B가 후보 {len(pool)}개 검토 중")
             self.stage_05b(pool)
             dump(rdir / "05b_answers.json", self.b_cache)
@@ -781,8 +817,27 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         m["a_schema_valid_items"] = sum(s.get("items_valid", 0) for s in loop.stats["a_calls"])
         m["a_items_returned"] = sum(s.get("items_returned", 0) for s in loop.stats["a_calls"])
         m["rejected_candidates"] = len(loop.stats["rejected"])
+        m["nemotron_a"] = nemotron_a_metrics(loop)
         m["llm_usage"] = llm_usage(loop.llm_log)
     return m
+
+
+def nemotron_a_metrics(loop: Loop) -> dict:
+    """integration3 #4: how much Nemotron A contributes and how close its proposals sit to the range ends.
+    edge distance = smallest unit distance of any continuous field to its range end (0 = at an end, 0.5 = mid)."""
+    a = [c for c in loop.candidates.values() if str(c.get("source", "")).startswith("nemotron_a")]
+    ran = {r["scenario_id"] for r in loop.records}
+    ex = [c for c in a if c["scenario_id"] in ran]
+    d = [x for x in (NM.edge_distance(c, loop.space) for c in a) if x is not None]
+    after = [r for r in loop.records if (r.get("round") or 0) > 0]
+    return {"proposals_in_pool": len(a), "executed": len(ex),
+            "share_of_executed_runs": len(ex) / len(loop.records) if loop.records else None,
+            "share_after_cold_start": (sum(str((loop.candidates.get(r["scenario_id"]) or {}).get("source", "")).startswith("nemotron_a")
+                                           for r in after) / len(after)) if after else None,
+            "proposals_with_range_extreme": sum(bool(NM.extreme_fields(c, loop.space)) for c in a),
+            "proposals_extreme_unjustified": sum("range_extreme_unjustified" in c.get("tags", []) for c in a),
+            "mean_edge_distance": (sum(d) / len(d)) if d else None,
+            "expected_side": _count(c.get("expected_side") for c in a)}
 
 
 def _count(it) -> dict:
