@@ -79,6 +79,66 @@ Official judgment is still Recovery v2 (`engine/monitor.py`); SR checks remain r
   < 0.5 m), per-fault-mode outcome mix and `modes_with_mixed_outcome`, GP prediction diversity, selection sources;
   `gp_boundary_sign_accuracy` adds truth balance, majority baseline and balanced accuracy.
 
+## 6. Nemotron B code questions + DF-06 (integration3 #6)
+
+Problem (result_1..5, 224 answer sets): Q-B2 was 'no' 202× and Q-B3 'no' 194× (near-constant GP columns); Q-B1 only
+mirrored the fault mode and had no option for "the corrupted MPC command reaches the vehicle" (bias / drift /
+intermittent_bias / saturate → B answered `unknown`); `[yes, no, unknown]` was unquoted (YAML booleans), so
+`expected_from_code: 'no'` never matched and was never compared; citations were only checked for being inside the
+file; the cache key ignored fault parameters.
+
+* **Question bank** (`pipeline/05b_nemotron_b/nemotron_b.yaml`): every question has `scope` (`per_scenario` = asked
+  per `b_key`, `static` = asked once per campaign, stored as `05b_answers.json["__static__"]`) and `gp_feature`.
+  Only per_scenario + gp_feature questions become GP one-hot (`engine.nemotron.b_features`).
+
+  | id | scope | GP | options | expected_from_code (av_stack line refs) |
+  |---|---|---|---|---|
+  | Q-B1 | per_scenario | yes | hold_last, zero, stale_mpc, **corrupted_mpc**, lqr_early, unknown | solver_fail, stale → lqr_early (fault_injection.py:111-112, supervised_lateral.py:29-30, 42-43); bias/drift/intermittent_bias/saturate → corrupted_mpc (fault_injection.py:79-97); output_delay → stale_mpc (:99-102) |
+  | Q-B4 | per_scenario | yes | solver_failure, missing_steer, nonfinite_output, steer_out_of_range, deadline_miss, stale_output, stale_sequence, tracking_divergence, controller_exception, none_during_fault, unknown | first check while the fault is active: solver_fail → solver_failure; stale → stale_sequence; saturate with duration_s ≤ 0.25 → none_during_fault (0.25 s hold, supervised_lateral.py:50), longer → {tracking_divergence, none_during_fault} (level ≤ 1 passes the strict range check :36); output_delay → {tracking_divergence, none_during_fault}; bias/drift/intermittent_bias → {steer_out_of_range, tracking_divergence, none_during_fault} |
+  | Q-B5 | per_scenario | no | ok_flag, sequence_or_stamp, steer_value_only, steer_and_reported_state, none, unknown | solver_fail → ok_flag; stale → sequence_or_stamp; output_delay → steer_and_reported_state (fault_injection.py:101 also replaces `state`, so the tracking check sees k-tick-old errors); others → steer_value_only |
+  | Q-B2 | static | no | yes, no, unknown | no — latched, no switch-back (supervised_lateral.py:99, 116-117) |
+  | Q-B3 | static | no | yes, no, unknown | no — LQR has no internal state (lqr.py:158-174), takeover is rate-limited from the last applied steer (supervised_lateral.py:134-136) |
+
+  A list means "the code rules out everything else"; which allowed answer happens depends on vehicle dynamics.
+  `mpc_controller/mpc.py` was added to B's code context (seq increment :205, steering clamp :246).
+* **YAML**: all options quoted; `normalize_questions` maps booleans back to 'yes'/'no' for old banks and old answers.
+* **b_key** = `fault_mode|onset_event` + bins of the parameters a question declares in `param_bins`
+  (Q-B4: `duration_s` at 0.25 s, so only saturate gets `|duration_s#0/1`). Cache stays bounded.
+* **Hallucination check**: `aggregate_b` records `expected_from_code` (resolved for the scenario), `matches_code`
+  (true / false / null when the code does not decide) and `hallucinated` (mismatch and not `unknown`).
+  `loop_stats.json` and `evaluation_metrics.json["nemotron_b"]` carry `b_hallucination_rate`, code-agreement rate,
+  per-question answer counts, and how many GP B columns are constant over the training runs.
+* **Citation relevance**: each question lists `evidence_regions` (file + function or line range, resolved with
+  `ast`). `citations_relevant` = in range AND at least one cited line inside a region (`citation_relevant_rate`).
+* **Mock stub B** (SYNTHETIC): mostly the code answer, with a deliberate Q-B1 stale → stale_mpc mistake (what the
+  real model said) plus 15 % random answers and 15 % unrelated citations, own RNG stream.
+* **DF-06** `friction_utilization = v²|κ| / (0.9 · tire_friction_scale · 9.81)` (same μ as P-02; 1.0 = nominal
+  tyre limit, 0.5 = P-02 limit). GP input next to DF-05 (/2.0) with `DF-06_missing`.
+* **Video clip fix** (`engine/video.py`): the ffmpeg `select` sum of ~100 `eq()` terms failed with "Cannot allocate
+  memory" on long dense clips (crashed a mock campaign); consecutive frames are now `between()` and terms are
+  chunked (40 per ffmpeg call).
+
+Offline check of the real answers in `result/result_1..5` against the new key (old options; 224 answer sets incl.
+round-to-round repeats, 108 unique per campaign):
+Q-B1 — 126 (62 unique) sets were bias/drift/intermittent_bias/saturate where the correct option did not exist
+(all `unknown`); of the 98 (46) decidable, 70 (32) match and 28 (14) are wrong: stale → stale_mpc 25 (12),
+stale → hold_last 3 (2) — the code catches a stale output on the first tick (stale_sequence), which the real
+run records also show (5/5 stale runs switched by stale_sequence). Q-B2 — 202 match, 22 unknown, 0 wrong.
+Q-B3 — 194 match, 28 unknown, 2 wrong. Overall hallucination rate on decidable answers: 30/546 = 5.5 %
+(15/262 unique), concentrated in Q-B1 stale (28/98 = 29 %).
+
+Mock (`python run.py --mock --ablation X-5 --seed S --cold-start 24 --batch-size 12 --rounds 4`, before = 09397ec
+with only the video fix applied, SYNTHETIC simulator and stub LLMs):
+
+| seed | GP sign acc. before → after | balanced before → after | B GP columns non-constant / total | B hallucination (mock) |
+|---|---|---|---|---|
+| 0 | 0.905 → 0.905 | 0.893 → 0.857 | 4/11 → 6/17 | – → 0.072 |
+| 1 | 0.905 → 0.909 | 0.857 → 0.857 | 3/11 → 8/17 | – → 0.035 |
+| 2 | 0.857 → 0.909 | 0.786 → 0.857 | 5/11 → 6/17 | – → 0.060 |
+
+The remaining constant columns are options nobody chose (one-hot zeros). The mock B is synthetic, so these numbers
+only show the plumbing works; real-model effects need a real run.
+
 ## Mock comparison (seed 0, `PYTHONHASHSEED=0`, SYNTHETIC simulator, stub LLMs)
 
 `python run.py --mock --seed 0 --open-screen off`; before = `bd683b5`, after = `651add7`.
@@ -102,6 +162,7 @@ run on CARLA.
 
 ## Tests
 
-`tests/test_integration3_faults.py`, `tests/test_integration3_nemotron.py`, `tests/test_integration3_gp.py`
+`tests/test_integration3_faults.py`, `tests/test_integration3_nemotron.py`, `tests/test_integration3_gp.py`,
+`tests/test_integration3_nemotron_b.py`
 (plus updated existing tests). Root suite, `pipeline/09_monitor` and the av_stack suite (without GPU / reference
 tests) pass.
