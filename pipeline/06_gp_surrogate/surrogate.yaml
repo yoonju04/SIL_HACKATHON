@@ -14,11 +14,6 @@ surrogate:
   backend: sklearn                              # engine/surrogate.py (GaussianProcessRegressor, normalize_y)
   min_train_points: 4                           # 지표별 학습점이 이보다 적으면 GP 없음 → 무작위 몫
   kernel: "Matern 5/2 with ARD + WhiteKernel"
-  # integration4: 점 4~9개로 학습하자 거리 척도가 예전 한계(0.01/100)에 붙고 노이즈가 0이 되어, 학습점만 따라 그리고 나머지는 사전값만 냈다
-  kernel_bounds: {length_scale: [0.1, 10.0], noise: [1.0e-3, 1.0]}
-  classify: [switched_indicator]                # 0/1 라벨은 GP 분류기 (평균 = 전환 확률, std = sqrt(p(1-p)))
-  feature_scaling: scenario_space_ranges        # 05a numeric_features가 이미 [0, 1]; 학습 데이터 최소/최대로 다시 맞추지 않음
-  prior_runs: "run.py --prior-runs result/result_2 ... : 이전 캠페인 런을 학습 데이터에 더함 (재판정 기록 우선)"
   per_metric: true                              # 지표 하나당 GP 하나, 같은 feature 입력
   targets_from: 02_hypotheses/vulnerability_patterns.yaml#metric_rules.*.gp
   active_metrics: metrics_of_hypotheses_with_status [proposed, testing]   # blocked 가설 지표는 학습 안 함

@@ -43,12 +43,8 @@ fault_pool: [F-01, F-02, F-03, F-04, F-05, F-06, F-07]   # scenario_space faults
 control_faults_per_round_max: 1                 # BUG-025: 대조군(F-01 solver_fail, F-02 stale)은 라운드당 최대 1개
 objective_acquisition:
   S1:
-    # integration4: 위험 고장에서 제때 전환된 런이 0개(result_2~5, 15/15 전환 전에 차선 이탈)라 전환 후 복구 경계는 없다.
-    # 그래서 모든 런에 정의되는 SR4 차선 여유 점수(1 지킴, 0 차선 경계, <0 이탈, -2 충돌)의 0 경계 = 유해/무해 경계를 찾는다.
-    # 예전: metric recovery_success (gp_target lane_recovery_robustness, 전환된 런만, needs_switch: true)
-    metric: sr4_margin_score                    # run.py gp_row_targets: run_record.sr_scores.SR4
-    gp_target: sr4_margin_score
-    needs_switch: false                         # true면 전환 분류기가 '전환 없음'이라 보는 후보에 벌점
+    metric: recovery_success                    # 02 vulnerability_patterns metric_rules.recovery_success
+    gp_target: lane_recovery_robustness         # absolute_post_switch, scale 0.1 m, 0 = 차선 경계
     acquisition: straddle                       # beta*std_z - |mean_z| 최대화 (Bryan et al. 2005, 경계 추정용)
     beta: 1.96                                  # PROVISIONAL
   default:

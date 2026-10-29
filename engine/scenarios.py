@@ -190,11 +190,7 @@ def dedup(cands: list[dict], space: dict, routes: list[str], fault_pool: list[st
 
 
 def numeric_features(c: dict, space: dict, routes: list[str], fault_pool: list[str]) -> tuple[list[float], list[str]]:
-    """X-3 'numeric only' block: route one-hot, speed, fault one-hot, fault params (unit), onset one-hot, offset.
-
-    Every value is already on [0, 1] from the scenario-space ranges, so the GP must not re-scale them on its
-    training data. Each (fault, parameter) pair has its own column (`F-05.rate_rad_s`, ...), 0 for the other
-    faults: saturate duration, drift rate and bias size are different quantities and must not share an axis."""
+    """X-3 'numeric only' block: route one-hot, speed, fault one-hot, fault params (unit), onset one-hot, offset."""
     names, x = [], []
     for r in routes:
         names.append(f"route={r}"); x.append(1.0 if c.get("route_id") == r else 0.0)
@@ -202,11 +198,10 @@ def numeric_features(c: dict, space: dict, routes: list[str], fault_pool: list[s
     names.append("max_speed_u"); x.append((c["environment"]["max_speed_kmh"] - lo) / (hi - lo))
     for fid in fault_pool:
         names.append(f"fault={fid}"); x.append(1.0 if c["fault"]["fault_id"] == fid else 0.0)
-    by_id = faults_by_id(space)
-    for fid in fault_pool:
-        for k, spec in (by_id[fid].get("params") or {}).items():
-            u = _param_unit(spec, c["fault"]["params"].get(k)) if c["fault"]["fault_id"] == fid else None
-            names.append(f"{fid}.{k}"); x.append(0.0 if u is None else u)
+    f = faults_by_id(space)[c["fault"]["fault_id"]]
+    pu = [_param_unit(spec, c["fault"]["params"].get(k)) for k, spec in (f.get("params") or {}).items()]
+    pu = [u for u in pu if u is not None]
+    names += ["param_u0", "param_u1"]; x += [pu[0] if pu else 0.5, pu[1] if len(pu) > 1 else 0.5]
     for ev in space["fault_timing"]["onset_event"]["values"]:
         names.append(f"onset={ev}"); x.append(1.0 if c.get("onset_event") == ev else 0.0)
     olo, ohi = space["fault_timing"]["offset_s"]["range"]
