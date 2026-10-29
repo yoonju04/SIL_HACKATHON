@@ -59,10 +59,32 @@ def to_cli(space: Dict[str, Any], scenario: Dict[str, Any], onset_s: float) -> L
         args += ['--fault-magnitude', '%.4f' % magnitude]
     if 'on_s' in params:
         args += ['--fault-on', '%.3f' % params['on_s'], '--fault-off', '%.3f' % params['off_s']]
-    for name, value in (scenario.get('environment') or {}).items():
-        flag = (space.get('environment', {}).get(name) or {}).get('cli')
-        if flag:
-            args += [flag, '%.1f' % value]
+    args += param_flags(fault, params)
+    args += environment_flags(space, scenario.get('environment') or {})
+    return args
+
+
+def param_flags(fault: Dict[str, Any], params: Dict[str, Any]) -> List[str]:
+    """Extra per-parameter flags declared with `cli:` in the catalog (integration3: saturate --saturate-level /
+    --fault-ramp). A parameter that is absent from the plan is not passed, so run_benchmark.py keeps its default
+    (level 1.0, ramp 0 = the original saturate)."""
+    args: List[str] = []
+    for name, spec in (fault.get('params') or {}).items():
+        flag = (spec or {}).get('cli')
+        if flag and params.get(name) is not None:
+            args += [flag, '%.4f' % float(params[name])]
+    return args
+
+
+def environment_flags(space: Dict[str, Any], environment: Dict[str, Any]) -> List[str]:
+    """Environment axes with a `cli:` flag (max_speed_kmh -> --max-speed '%.1f'; tire_friction_scale ->
+    --tire-friction-scale '%.2f', integration3). Format from the axis' `cli_format`, default '%.1f'."""
+    args: List[str] = []
+    for name, value in environment.items():
+        spec = space.get('environment', {}).get(name) or {}
+        flag = spec.get('cli')
+        if flag and value is not None:
+            args += [flag, spec.get('cli_format', '%.1f') % float(value)]
     return args
 
 

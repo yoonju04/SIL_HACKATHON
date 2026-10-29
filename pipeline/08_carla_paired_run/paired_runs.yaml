@@ -99,6 +99,7 @@ runner:
     mock: true                                 # mock 에서는 합성 런이라 비용 0
     real: false                                # CARLA 런이 후보마다 1개 더 → 기본 off (run.py --no-reaction-runs on)
   speed_step_kmh: 5                            # PROVISIONAL: baseline 캐시 재사용을 위해 속도를 5 km/h 격자로
+  friction_step: 0.1                           # integration3: tire_friction_scale 도 0.1 격자로 (마찰마다 baseline 이 따로 필요)
   seed: 17                                     # run_benchmark.py 기본값
   host: localhost                              # 환경변수 CARLA_HOST
   port: 2000                                   # 환경변수 CARLA_PORT

@@ -41,8 +41,9 @@ from engine.explainer import explain, stub_explanation, verify
 from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
 from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
-from engine.monitor import compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline, thresholds_from_config
-from engine.surrogate import MetricGPs, acquisition_score, select_batch_scored
+from engine.monitor import (compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline,
+                            scale_thresholds_for_friction, thresholds_from_config)
+from engine.surrogate import MetricGPs, acquisition_score, boundary_score, select_batch_scored
 from engine.dashboard import refresh as refresh_dashboard
 from engine.video import cover_times, extract_clip, ffmpeg_exe, key_times
 from engine.prior_tools.prior_tools import make_nemotron_payload
@@ -59,14 +60,20 @@ ABLATIONS = {
 
 
 SWITCH_METRIC = "switched_indicator"   # +1 switched / -1 no switch; S1 boundary only exists where a switch happens
+# integration3: modelled by a GP classifier (06 surrogate.yaml switch_model: classifier) -> gp_mean = P(switch) in [0, 1]
 
 
 def switch_aware_score(c: dict, obj: dict, beta: float, weight: float = 2.0) -> float | None:
-    """S1 straddle on recovery_success, penalised where the switch GP predicts no switch (no S1 target there)."""
+    """LEGACY (acquisition: straddle). S1 straddle on recovery_success, penalised where the switch GP predicts no
+    switch (no S1 target there). Meant for switch_model: regression (mu_sw in [-1, 1]); the integration3 default is
+    acquisition: level_set (engine.surrogate.boundary_score)."""
     s = acquisition_score(c, obj, beta)
-    mu_sw = (c.get("gp_mean") or {}).get(SWITCH_METRIC)
+    gm = c.get("gp_mean") or {}
+    mu_sw = gm.get(SWITCH_METRIC)
     if mu_sw is None:
         return s
+    if gm.get(SWITCH_METRIC + "__latent") is not None:   # classifier: P(switch) in [0, 1] -> [-1, 1] like the old regression
+        mu_sw = 2.0 * mu_sw - 1.0
     if s is None:   # no recovery GP yet: prefer uncertain/likely-switch candidates
         return min(0.0, mu_sw) * weight + (c.get("gp_std") or {}).get(SWITCH_METRIC, 0.0)
     return s + weight * min(0.0, mu_sw)
@@ -133,7 +140,7 @@ class CosmosGuard:
 class Loop:
     def __init__(self, *, mode: str, out: Path, ablation: str, video_on: bool, seed: int, cfg: dict | None = None,
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
-                 quiet: bool = False, no_reaction: bool | None = None):
+                 quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -162,6 +169,16 @@ class Loop:
         self.metric_rules = self.cfg["vulnerability_patterns"]["metric_rules"]
         self.gp_metrics = sorted({self.obj_cfg[o]["metric"] for o in self.objectives}) + [SWITCH_METRIC]
         self.th = thresholds_from_config(self.cfg)
+        sur = (self.cfg.get("surrogate") or {}).get("surrogate") or {}
+        self.switch_model = str(sur.get("switch_model", "classifier"))
+        self.kernel_opts = sur.get("kernel_bounds") or {}
+        self.prior_mean_mode = str(sur.get("prior_mean", "level"))   # level (integration3) | training_mean (legacy)
+        self.min_train_points = int(sur.get("min_train_points", 4))
+        self.min_train_for_acq = int(sur.get("min_train_runs_for_acquisition", 8))
+        self.gps: MetricGPs | None = None
+        self.gp_ready = False
+        self.history_rows: list[tuple[dict, dict]] = []
+        self.gp_history = list(gp_history or [])
         nr = (self.cfg["paired_runs"]["runner"].get("no_reaction_run") or {})
         self.no_reaction_on = bool(nr.get("mock" if mode == "mock" else "real", False)) if no_reaction is None else no_reaction
         self.vcfg = self.cfg["video_explainer"]
@@ -176,6 +193,8 @@ class Loop:
         self.events_cache: dict[str, dict] = {}
         self.cf_queue: list[dict] = []
         self.stats: dict[str, Any] = {"a_calls": [], "rejected": [], "llm_errors": []}
+        if self.gp_history:
+            self.load_gp_history(self.gp_history)
         self.cosmos = CosmosGuard()       # main() swaps in the auto guard for --real --cosmos-power auto
         self.insights_next = False        # campaign insights follow the last round -> keep Cosmos on
         self.open_screen = False          # main(): --open-screen on -> open screen/campaign.html once at start
@@ -271,6 +290,13 @@ class Loop:
             lo, hi = self.space["environment"]["max_speed_kmh"]["range"]
             v = round(c["environment"]["max_speed_kmh"] / step) * step
             c["environment"]["max_speed_kmh"] = float(min(hi, max(lo, v)))
+        fstep = float(self.runner_cfg.get("friction_step") or 0)
+        fax = SC.friction_axis(self.space)
+        if fstep > 0 and fax and SC.FRICTION in c["environment"]:
+            flo, fhi = fax["range"]
+            fv = round(round(c["environment"][SC.FRICTION] / fstep) * fstep, 3)
+            c["environment"][SC.FRICTION] = float(min(fhi, max(flo, fv)))
+        if step > 0 or (fstep > 0 and fax):
             c["scenario_id"] = SC.cand_id(c)
             if c.get("source") != "perturbation" and c.get("source") != "counterfactual":
                 c["seed_scenario_id"] = c["scenario_id"]
@@ -314,7 +340,8 @@ class Loop:
         return f"{c['fault']['mode']}|{c['onset_event']}"
 
     # ------------------------------------------------------------------ 03 Nemotron A
-    def stage_03(self, n: int, round_index: int, near: list[dict] | None = None) -> list[dict]:
+    def stage_03(self, n: int, round_index: int, near: list[dict] | None = None,
+                 gp_summary: dict | None = None) -> list[dict]:
         if n <= 0 or not self.flags["use_a"]:
             return []
         evidence = NM.evidence_enum(self.cfg["safety_profile"], self.cfg["prior_knowledge"], self.space, self.objectives)
@@ -328,12 +355,15 @@ class Loop:
                            mechanisms=mechanism_summary(self.explanations) if self.video_on else [],
                            tried=[{k: c.get(k) for k in ("route_id", "environment", "fault", "onset_event", "onset_offset_s")}
                                   for c in list(self.candidates.values())[-40:]],
-                           include_unreviewed=bool(self.cfg["nemotron_a"].get("include_unreviewed_observations", True)))
+                           include_unreviewed=bool(self.cfg["nemotron_a"].get("include_unreviewed_observations", True)),
+                           surrogate_summary=gp_summary)
         msgs = NM.a_messages(schema=schema, n=n, context=ctx)
         obj, st = NM.call_a(self.client_a, self.a_settings, msgs, schema, tag="A")
         st.update(round=round_index, requested=n)
         self.stats["a_calls"].append(st)
         cands = NM.a_to_candidates(obj or {}, self.space, round_index=round_index)
+        st["boundary_regions_given"] = len((gp_summary or {}).get("boundary_regions") or [])
+        st["range_extreme_unjustified"] = sum("range_extreme_unjustified" in c.get("tags", []) for c in cands)
         if near and self.a_refine.get("enabled", True) and self.cfg["nemotron_a"].get("refine", {}).get("enabled", True):
             schema_r = NM.candidate_schema(self.space, self.route_ids, self.fault_pool, self.objectives, evidence, len(near))
             obj_r, st_r = NM.call_a(self.client_a, self.a_refine, NM.refine_messages(schema_r, near, ctx), schema_r, tag="A_refine")
@@ -404,6 +434,50 @@ class Loop:
             self.b_cache[k] = {"answers": NM.aggregate_b(samples, self.questions, sizes), "n_samples": len(samples), "context": ctx}
 
     # ------------------------------------------------------------------ 06 + 07
+    def load_gp_history(self, patterns: list[str]) -> None:
+        """--gp-history: pool earlier campaigns' run_records.jsonl into GP training (warm start; result_5 had a
+        recovery GP on 2 points). Runs are re-encoded with THIS space (missing new parameters take their catalog
+        default, e.g. saturate magnitude 1.0 / ramp 0, friction 1.0). Skipped: invalid runs, routes / faults not in
+        this campaign, plans outside the current ranges. They train the GP only; they are never re-labelled."""
+        import glob
+        files = sorted({f for pat in patterns for f in glob.glob(str(pat), recursive=True)})
+        skipped: dict[str, int] = {}
+        faults = SC.faults_by_id(self.space)
+        for fpath in files:
+            for line in Path(fpath).read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                r = json.loads(line)
+                why = None
+                p = r.get("parameters") or {}
+                fault = p.get("fault") or {}
+                if r.get("sim_status") != "ok":
+                    why = "not sim_status ok"
+                elif p.get("route_id") not in self.route_ids:
+                    why = "route not in this campaign"
+                elif fault.get("fault_id") not in self.fault_pool or fault.get("fault_id") not in faults:
+                    why = "fault not in this pool"
+                if why is None:
+                    spec = faults[fault["fault_id"]].get("params") or {}
+                    params = {k: (fault.get("params") or {}).get(k, v.get("default")) for k, v in spec.items()}
+                    env = dict(p.get("environment") or {})
+                    c = SC.make_candidate(self.space, route_id=p["route_id"], speed=env.get("max_speed_kmh", 30.0),
+                                          fault_id=fault["fault_id"], params=params, onset_event=p.get("onset_event"),
+                                          offset=p.get("onset_offset_s", 0.0), source="history",
+                                          friction=env.get(SC.FRICTION))
+                    probs = SC.validate_against_space(self.space, c, self.route_ids)
+                    if probs:
+                        why = "outside current space: " + probs[0].split(" ")[0]
+                if why is not None:
+                    skipped[why] = skipped.get(why, 0) + 1
+                    continue
+                tg = dict(r.get("gp_targets") or {})
+                tg[SWITCH_METRIC] = 1.0 if r.get("switch_time") is not None else -1.0
+                self.history_rows.append((c, tg))
+        self.stats["gp_history"] = {"files": files, "loaded": len(self.history_rows), "skipped": skipped}
+        self.say(f"[06] --gp-history: {len(self.history_rows)} earlier runs from {len(files)} file(s) pooled into GP training"
+                 + (f", skipped {skipped}" if skipped else ""))
+
     def fit_gp(self, round_index: int) -> MetricGPs | None:
         if not self.flags["use_gp"]:
             return None
@@ -416,10 +490,49 @@ class Loop:
             tg = dict(r.get("gp_targets") or {})
             tg[SWITCH_METRIC] = 1.0 if r.get("switch_time") is not None else -1.0
             rows.append((x, tg))
-        gps = MetricGPs(self.gp_metrics, self.seed)
+        n_own = len(rows)
+        rows += [(self.features(c, train_round=0)[0], tg) for c, tg in self.history_rows]
+        gps = MetricGPs(self.gp_metrics, self.seed, switch_metric=SWITCH_METRIC, switch_model=self.switch_model,
+                        kernel_opts=self.kernel_opts, min_train_points=self.min_train_points,
+                        prior_means=self.gp_prior_means())
         counts = gps.fit(rows)
-        self.stats.setdefault("gp_train_counts", []).append({"round": round_index, **counts})
+        self.gps = gps
+        # integration3: below this many training runs the GP share of the batch is space filling (06 surrogate.yaml)
+        self.gp_ready = len(rows) >= self.min_train_for_acq
+        self.stats.setdefault("gp_train_counts", []).append({"round": round_index, **counts, "rows": len(rows),
+                                                             "own_runs": n_own, "history_runs": len(rows) - n_own,
+                                                             "gp_acquisition_active": self.gp_ready})
         return gps
+
+    def level_z(self, obj: dict) -> float:
+        level = float(obj.get("level", 0.0))
+        rule = (self.metric_rules or {}).get(obj["metric"])
+        return J.orient(level, rule) if rule and level else 0.0
+
+    def gp_prior_means(self) -> dict[str, float]:
+        """06 surrogate.yaml prior_mean: level -> level-set objectives' GP prior mean = their level h (z units)."""
+        if self.prior_mean_mode != "level":
+            return {}
+        out = {}
+        for o in self.objectives:
+            obj = self.obj_cfg[o]
+            if obj.get("acquisition") == "level_set":
+                out[obj["metric"]] = self.level_z(obj)
+        return out
+
+    def acq_score(self, c: dict, beta: float) -> float | None:
+        """07 acquisition for the active objective. level_set (integration3 default): engine.surrogate.boundary_score;
+        straddle (legacy): switch_aware_score; otherwise LCB. None until the GP has min_train_runs_for_acquisition."""
+        if not self.gp_ready:
+            return None
+        obj = self.obj_cfg[self.objectives[0]]
+        if obj.get("acquisition") == "level_set":
+            metric = obj["metric"]
+            level_z = self.level_z(obj)
+            return boundary_score(c, metric, SWITCH_METRIC, beta=float(obj.get("beta", 1.96)), level_z=level_z,
+                                  y_scale=(self.gps.y_scale.get(metric, 1.0) if self.gps else 1.0),
+                                  switch_penalty=float(obj.get("switch_penalty", 1.0)))
+        return switch_aware_score(c, obj, beta)
 
     def stage_07(self, pool: list[dict], gps: MetricGPs | None, round_index: int) -> list[dict]:
         if gps is not None and pool:
@@ -446,13 +559,34 @@ class Loop:
             beta = J.beta_schedule(round_index, self.rounds + 1)
             obj = self.obj_cfg[self.objectives[0]]
             div = orch["acquisition"]["diversity"]
-            batch = select_batch_scored(rest, lambda c: switch_aware_score(c, obj, beta), batch_size=self.batch - len(forced),
+            share = self.nemotron_share(rest, self.batch - len(forced), lambda c: self.acq_score(c, beta))
+            rest = [c for c in rest if c not in share]
+            batch = share + select_batch_scored(rest, lambda c: self.acq_score(c, beta),
+                                        batch_size=self.batch - len(forced) - len(share),
                                         acquisition_fraction=float(orch["acquisition"]["batch_composition"]["lcb"]),
                                         min_distance=float(div["min_normalized_distance"]), max_per_seed=int(div["max_per_seed"]),
                                         rng=self.rng, maximize=True)
         for c in forced:
             c["selected_by"] = "counterfactual_check"
         return forced + batch
+
+    def nemotron_share(self, cands: list[dict], n_batch: int, score_of) -> list[dict]:
+        """integration3 #4: reserve ceil(fraction * batch) slots for Nemotron A candidates every round (07
+        orchestrator.yaml acquisition.batch_composition.nemotron_a, default 0.3). Before, GP + random took the whole
+        batch after the cold start, so A's boundary proposals almost never ran. Order: justified / interior candidates
+        first (range_extreme_unjustified last), then the acquisition score, then A's own order."""
+        frac = float((self.cfg["orchestrator"]["acquisition"].get("batch_composition") or {}).get("nemotron_a", 0.3))
+        if not self.flags["use_a"] or frac <= 0 or n_batch <= 0:
+            return []
+        a = [c for c in cands if c.get("source", "").startswith("nemotron_a")]
+        def key(ic):
+            i, c = ic
+            sc = score_of(c)
+            return ("range_extreme_unjustified" in c.get("tags", []), -(sc if sc is not None else -1e9), i)
+        picked = [c for _, c in sorted(enumerate(a), key=key)][: math.ceil(n_batch * frac)]
+        for c in picked:
+            c["selected_by"] = "nemotron_a_share"
+        return picked
 
     def reserve_order(self, pool: list[dict], batch: list[dict], round_index: int) -> list[dict]:
         """BUG-029: replacements for rejected batch candidates (08 baseline gate) in the same acquisition order stage 07
@@ -461,8 +595,7 @@ class Loop:
         if round_index == 0 or not self.flags["use_gp"]:
             return reserve
         beta = J.beta_schedule(round_index, self.rounds + 1)
-        obj = self.obj_cfg[self.objectives[0]]
-        scored = [(switch_aware_score(c, obj, beta), c) for c in reserve]
+        scored = [(self.acq_score(c, beta), c) for c in reserve]
         return [c for s, c in sorted(scored, key=lambda p: -math.inf if p[0] is None else p[0], reverse=True)]
 
     # ------------------------------------------------------------------ 08 + 09
@@ -687,12 +820,29 @@ class Loop:
                     X = [self.features(c)[0] for c in prev]
                     means, stds = gps.predict(X)
                     m = self.obj_cfg[self.objectives[0]]["metric"]
-                    scored = sorted(((abs(mu.get(m, 1e9)), c, mu, sd) for c, mu, sd in zip(prev, means, stds)), key=lambda p: p[0])
+                    beta = J.beta_schedule(rnd, self.rounds + 1)
+                    # integration3: boundary candidates = highest level-set ambiguity (falls back to |mean| when the
+                    # GP is not ready yet)
+                    def near_key(mu: dict, sd: dict) -> float:
+                        sc = self.acq_score({"gp_mean": mu, "gp_std": sd}, beta)
+                        return -sc if sc is not None else abs(mu.get(m, 1e9))
+                    scored = sorted(((near_key(mu, sd), c, mu, sd) for c, mu, sd in zip(prev, means, stds)),
+                                    key=lambda p: p[0])
                     for _, c, mu, sd in scored[: int(self.cfg["nemotron_a"].get("refine", {}).get("max_candidates", 3))]:
                         near.append({**c, "gp_mean": mu, "gp_std": sd})
+                    regions = [{**c, "gp_mean": mu, "gp_std": sd} for c, mu, sd in zip(prev, means, stds)]
+                else:
+                    regions = []
+                # integration3 #4: Nemotron A gets a compact GP summary EVERY round (boundary regions + outcome mix)
+                gp_summary = NM.surrogate_summary(
+                    regions=regions, records=self.records, candidates=self.candidates, space=self.space,
+                    metric=self.obj_cfg[self.objectives[0]]["metric"], switch_metric=SWITCH_METRIC,
+                    n_train=sum(r.get("sim_status") == "ok" for r in self.records) if gps is not None else None,
+                    k=int(self.cfg["nemotron_a"].get("surrogate_summary", {}).get("k", 6)))
+                dump(rdir / "03_gp_summary.json", gp_summary)
                 n_a = int(self.cfg["nemotron_a"]["A_scenario_generation"]["per_round"]) if self.flags["use_a"] else 0
                 self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
-                a_c = self.stage_03(n_a, rnd, near=near if self.flags["use_gp"] else None)
+                a_c = self.stage_03(n_a, rnd, near=near if self.flags["use_gp"] else None, gp_summary=gp_summary)
                 sf = SC.space_filling(self.space, self.route_ids, self.fault_pool,
                                       int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd)
                 cf, self.cf_queue = self.cf_queue, []
@@ -700,7 +850,8 @@ class Loop:
                 target = self.batch
             dump(rdir / "03_04_pool.json", [{k: c.get(k) for k in ("scenario_id", "source", "route_id", "environment", "fault",
                                                                     "onset_event", "onset_offset_s", "tags", "evidence_ids",
-                                                                    "expected_mechanism", "expected_side")} for c in pool])
+                                                                    "expected_mechanism", "expected_side", "range_extremes",
+                                                                    "extreme_justification")} for c in pool])
             self.screen(f"라운드 {rnd}: Nemotron B가 후보 {len(pool)}개 검토 중")
             self.stage_05b(pool)
             dump(rdir / "05b_answers.json", self.b_cache)
@@ -768,14 +919,70 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         "explanations": len(expl), "explanations_accepted": len(acc),
         "explanation_acceptance_rate": (len(acc) / len(expl)) if expl else None,
         "hallucination_rate": (1 - len(acc) / len(expl)) if expl else None,
+        "boundary_metrics": boundary_metrics(records, candidates, band),
     }
     if loop is not None:
         m["gp_boundary_sign_accuracy"] = boundary_accuracy(loop)
         m["a_schema_valid_items"] = sum(s.get("items_valid", 0) for s in loop.stats["a_calls"])
         m["a_items_returned"] = sum(s.get("items_returned", 0) for s in loop.stats["a_calls"])
         m["rejected_candidates"] = len(loop.stats["rejected"])
+        m["nemotron_a"] = nemotron_a_metrics(loop)
         m["llm_usage"] = llm_usage(loop.llm_log)
     return m
+
+
+def nemotron_a_metrics(loop: Loop) -> dict:
+    """integration3 #4: how much Nemotron A contributes and how close its proposals sit to the range ends.
+    edge distance = smallest unit distance of any continuous field to its range end (0 = at an end, 0.5 = mid)."""
+    a = [c for c in loop.candidates.values() if str(c.get("source", "")).startswith("nemotron_a")]
+    ran = {r["scenario_id"] for r in loop.records}
+    ex = [c for c in a if c["scenario_id"] in ran]
+    d = [x for x in (NM.edge_distance(c, loop.space) for c in a) if x is not None]
+    after = [r for r in loop.records if (r.get("round") or 0) > 0]
+    return {"proposals_in_pool": len(a), "executed": len(ex),
+            "share_of_executed_runs": len(ex) / len(loop.records) if loop.records else None,
+            "share_after_cold_start": (sum(str((loop.candidates.get(r["scenario_id"]) or {}).get("source", "")).startswith("nemotron_a")
+                                           for r in after) / len(after)) if after else None,
+            "proposals_with_range_extreme": sum(bool(NM.extreme_fields(c, loop.space)) for c in a),
+            "proposals_extreme_unjustified": sum("range_extreme_unjustified" in c.get("tags", []) for c in a),
+            "mean_edge_distance": (sum(d) / len(d)) if d else None,
+            "expected_side": _count(c.get("expected_side") for c in a)}
+
+
+def boundary_metrics(records: list[dict], candidates: dict, band: float = 0.2) -> dict:
+    """integration3: is the campaign finding a boundary at all? (result_1..5: every fault mode had a single outcome)
+
+    boundary_band_runs: switched runs with |lane_recovery_robustness| < band (also for 0.5 m);
+    per_fault_mode: n, recovery_outcome mix, final_safe_recovery count and whether both safe and unsafe occurred;
+    gp_prediction_diversity: distinct gp_mean values the executed runs were chosen with (constant = GP not learning);
+    selection_sources: candidate source of the executed runs (Nemotron A share)."""
+    lrr = [r["lane_recovery_robustness"] for r in records if r.get("lane_recovery_robustness") is not None]
+    per: dict[str, dict] = {}
+    for r in records:
+        if r.get("sim_status") != "ok":
+            continue
+        mode = (((r.get("parameters") or {}).get("fault") or {}).get("mode")) or "?"
+        d = per.setdefault(mode, {"n": 0, "outcomes": {}, "final_safe": 0})
+        d["n"] += 1
+        d["outcomes"][str(r.get("recovery_outcome"))] = d["outcomes"].get(str(r.get("recovery_outcome")), 0) + 1
+        d["final_safe"] += r.get("final_safe_recovery") is True
+    for d in per.values():
+        d["mixed"] = 0 < d["final_safe"] < d["n"]
+    div = {}
+    for metric in ("recovery_success", SWITCH_METRIC):
+        v = [round(float((r.get("gp_mean") or {})[metric]), 6) for r in records
+             if (r.get("gp_mean") or {}).get(metric) is not None]
+        if v:
+            mean = sum(v) / len(v)
+            div[metric] = {"n": len(v), "distinct": len(set(v)), "min": min(v), "max": max(v),
+                           "std": (sum((x - mean) ** 2 for x in v) / len(v)) ** 0.5}
+    src = _count(str((candidates.get(r["scenario_id"]) or {}).get("source")) for r in records)
+    n_a = sum(v for k, v in src.items() if k.startswith("nemotron_a"))
+    return {"band": band, "boundary_band_runs": sum(abs(x) < band for x in lrr),
+            "boundary_band_runs_0.5": sum(abs(x) < 0.5 for x in lrr), "n_lrr": len(lrr),
+            "per_fault_mode": per, "modes_with_mixed_outcome": sorted(k for k, d in per.items() if d["mixed"]),
+            "gp_prediction_diversity": div, "selection_sources": src,
+            "nemotron_a_share": (n_a / len(records)) if records else None}
 
 
 def _count(it) -> dict:
@@ -820,6 +1027,7 @@ def boundary_accuracy(loop: Loop) -> dict | None:
         test = [loop.quantize(c) for c in SC.space_filling(loop.space, loop.route_ids, loop.fault_pool, 40, rng)]
         tmp = loop.out / "_truth"
         ok = n = 0
+        pairs: list[tuple[bool, bool]] = []
         for i, c in enumerate(test):
             base, _ = loop.runner.ensure_baseline(c)
             onset = SC.onset_time(c, loop.route_events(c) or {})
@@ -828,25 +1036,45 @@ def boundary_accuracy(loop: Loop) -> dict | None:
             from engine.fixtures.synthetic_sim import write_run_folder
             d = write_run_folder(tmp / f"t{i}", route=c["route_id"], max_speed_kmh=c["environment"]["max_speed_kmh"],
                                  fault=SC.fault_dict_for_sim(loop.space, c, onset), seed=loop.runner.seed,
-                                 stop_after_fault_s=loop.runner.stop_after_fault_s, record_front=False)
-            rec = compute_run_record(load_av_stack_run(d), load_av_stack_run(base), candidate=c, metric_rules=loop.metric_rules, th=loop.th)
+                                 stop_after_fault_s=loop.runner.stop_after_fault_s, record_front=False,
+                                 tire_friction_scale=SC.friction_of(c))
+            rec = compute_run_record(load_av_stack_run(d), load_av_stack_run(base), candidate=c, metric_rules=loop.metric_rules,
+                                     th=scale_thresholds_for_friction(loop.th, SC.friction_of(c)))
             y = (rec.get("gp_targets") or {}).get(metric)
             if y is None:
                 continue
             mu = gps.predict([loop.features(c)[0]])[0][0].get(metric)
             n += 1; ok += int((mu >= 0) == (y >= 0))
+            pairs.append((mu >= 0, y >= 0))
         shutil.rmtree(tmp, ignore_errors=True)
-        return {"n": n, "accuracy": ok / n if n else None, "truth": "SYNTHETIC simulator (mock)"}
+        return {"n": n, "accuracy": ok / n if n else None, "truth": "SYNTHETIC simulator (mock)", **_sign_detail(pairs)}
     ok = 0
+    pairs = []
     for i in range(len(rows)):
         train = rows[:i] + rows[i + 1:]
-        g = MetricGPs([metric], loop.seed)
+        g = MetricGPs([metric], loop.seed, kernel_opts=loop.kernel_opts, prior_means=loop.gp_prior_means())
         g.fit([(loop.features(c)[0], r["gp_targets"]) for c, r in train])
         if metric not in g.models:
             return None
         mu = g.predict([loop.features(rows[i][0])[0]])[0][0][metric]
         ok += int((mu >= 0) == (rows[i][1]["gp_targets"][metric] >= 0))
-    return {"n": len(rows), "accuracy": ok / len(rows), "truth": "leave-one-out on observed runs"}
+        pairs.append((mu >= 0, rows[i][1]["gp_targets"][metric] >= 0))
+    return {"n": len(rows), "accuracy": ok / len(rows), "truth": "leave-one-out on observed runs", **_sign_detail(pairs)}
+
+
+def _sign_detail(pairs: list[tuple[bool, bool]]) -> dict:
+    """integration3: plain sign accuracy is meaningless when the truth is one-sided (all failures -> 'always fail'
+    scores 1.0). Report the truth balance, the majority-class baseline and balanced accuracy too."""
+    if not pairs:
+        return {}
+    pos = [p for p, t in pairs if t]
+    neg = [p for p, t in pairs if not t]
+    tpr = (sum(pos) / len(pos)) if pos else None
+    tnr = (sum(not p for p in neg) / len(neg)) if neg else None
+    return {"truth_safe_fraction": len(pos) / len(pairs),
+            "majority_baseline": max(len(pos), len(neg)) / len(pairs),
+            "balanced_accuracy": ((tpr + tnr) / 2) if tpr is not None and tnr is not None else None,
+            "predicted_safe_fraction": sum(p for p, _ in pairs) / len(pairs)}
 
 
 def write_report(out: Path, m: dict, loop: Loop) -> None:
@@ -859,7 +1087,8 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
              f"- GP 경계 부호 정확도: {m.get('gp_boundary_sign_accuracy')}",
              f"- 영상 해설: {m['explanations']}건, 검증 통과 {m['explanations_accepted']}건 (환각률 {m['hallucination_rate']})",
              f"- recovery_outcome 분포: {m['outcome_counts']}", f"- trigger_source 분포: {m['trigger_counts']}",
-             f"- SR 검사 (engine/sr_checks.py, 참고) sr_outcome 분포: {m.get('sr_outcome_counts')}; 화면: `screen/campaign.html`", "",
+             f"- SR 검사 (engine/sr_checks.py, 참고) sr_outcome 분포: {m.get('sr_outcome_counts')}; 화면: `screen/campaign.html`",
+             "", "## 경계 지표 (integration3)"] + _boundary_lines(m.get("boundary_metrics") or {}) + ["",
              "## 주의", f"- 판정 임계값({loop.th['e_settle_m']} m, {loop.th['psi_settle_rad']} rad, {loop.th['settle_hold_s']} s 유지, "
              f"{loop.th['window_s']} s 창, {loop.th['lat_acc_threshold_mps2']} m/s², {loop.th['lat_jerk_threshold_mps3']} m/s³, "
              f"충돌 {loop.th['collision_penalty']}; 09 safety_spec.yaml)은 PROVISIONAL 이다. 인증 기준이 아니다.",
@@ -867,6 +1096,20 @@ def write_report(out: Path, m: dict, loop: Loop) -> None:
              "- 영상 해설은 판정을 바꾸지 않는다. 검증을 통과한 해설만 피드백에 쓴다.",
              "- monitor_rule_candidates.yaml 은 사람 검토용 제안이다 (자동 적용 안 함)."]
     (out / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _boundary_lines(b: dict) -> list[str]:
+    if not b:
+        return ["- (없음)"]
+    lines = [f"- |lane_recovery_robustness| < {b['band']}: {b['boundary_band_runs']}개, < 0.5: {b['boundary_band_runs_0.5']}개 "
+             f"(복구 지표가 있는 런 {b['n_lrr']}개)",
+             f"- 같은 고장 안에서 안전·불안전이 둘 다 나온 고장: {b['modes_with_mixed_outcome'] or '없음 (결과가 고장 종류만으로 갈림)'}",
+             f"- Nemotron A 후보 비율 (실행된 런): {b['nemotron_a_share']}; 출처: {b['selection_sources']}"]
+    for mode, d in sorted((b.get("per_fault_mode") or {}).items()):
+        lines.append(f"  - {mode}: {d['final_safe']}/{d['n']} final_safe, {d['outcomes']}")
+    for metric, d in (b.get("gp_prediction_diversity") or {}).items():
+        lines.append(f"- GP 예측 다양성 {metric}: 런 {d['n']}개 중 서로 다른 값 {d['distinct']}개, 범위 [{d['min']}, {d['max']}]")
+    return lines
 
 
 def preflight(cfg: dict) -> int:
@@ -995,6 +1238,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="SR1 FTTI runs (same fault, --controller mpc_unprotected); default 08 paired_runs.yaml no_reaction_run")
     ap.add_argument("--conditions", nargs="*")
     ap.add_argument("--repeats", type=int)
+    ap.add_argument("--gp-history", action="append", metavar="GLOB",
+                    help="pool earlier campaigns' run_records.jsonl (glob, repeatable) into GP training (warm start)")
     args = ap.parse_args(argv)
     if args.check and not args.real:
         from engine.config_check import cmd_check
@@ -1017,7 +1262,8 @@ def main(argv: list[str] | None = None) -> int:
             ap.error("NEBIUS_API_KEY is not set")
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
-                no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on")
+                no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
+                gp_history=args.gp_history)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":

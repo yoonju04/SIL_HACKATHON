@@ -80,6 +80,32 @@ def flatten_steering_curve(vehicle, carla_module):
     vehicle.apply_physics_control(pc)
 
 
+def scale_tire_friction(vehicle, scale: float) -> dict:
+    """Multiply every wheel's WheelPhysicsControl.tire_friction by `scale` (integration3 --tire-friction-scale).
+
+    CARLA API: vehicle.get_physics_control() -> VehiclePhysicsControl.wheels[i].tire_friction (float), then
+    vehicle.apply_physics_control(pc). Returns {scale, applied, before, after[, error]} for agent_config.json /
+    the 09 monitor (P-02 limit follows the applied scale). Never raises: a failure is recorded with applied=False
+    so the run is still labelled with the tyres it really had."""
+    info = {"scale": float(scale), "applied": False, "before": None, "after": None}
+    try:
+        pc = vehicle.get_physics_control()
+        wheels = list(pc.wheels)
+        info["before"] = [float(w.tire_friction) for w in wheels]
+        for w in wheels:
+            w.tire_friction = float(w.tire_friction) * float(scale)
+        pc.wheels = wheels
+        vehicle.apply_physics_control(pc)
+        info["after"] = [float(w.tire_friction) for w in vehicle.get_physics_control().wheels]
+        info["applied"] = all(abs(a - b * float(scale)) <= 1e-3 * max(1.0, abs(b))
+                              for a, b in zip(info["after"], info["before"]))
+        if not info["applied"]:
+            info["error"] = "tire_friction read back differs from the requested scale"
+    except Exception as exc:  # keep the run; the monitor treats an unapplied scale as 1.0
+        info["error"] = f"{type(exc).__name__}: {exc}"
+    return info
+
+
 def follow_camera(spectator, vehicle, carla_module, back=8.0, up=4.0):
     tf = vehicle.get_transform()
     f = tf.get_forward_vector()

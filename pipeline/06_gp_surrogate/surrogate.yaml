@@ -13,7 +13,17 @@ surrogate:
   model: gaussian_process_regression
   backend: sklearn                              # engine/surrogate.py (GaussianProcessRegressor, normalize_y)
   min_train_points: 4                           # 지표별 학습점이 이보다 적으면 GP 없음 → 무작위 몫
+  min_train_runs_for_acquisition: 8             # integration3: 학습 런(이력 포함)이 이보다 적으면 GP 선택 대신 space filling
   kernel: "Matern 5/2 with ARD + WhiteKernel"
+  # integration3: feature는 모두 [0,1] (engine/scenarios.py numeric_features) → 학습 데이터 min/max로 다시 늘리지 않음.
+  # 예전엔 점 몇 개로 min/max 정규화 + 길이척도 [1e-2, 1e2] 라서 길이척도가 경계에 붙고 예측이 상수가 됐다
+  # (result_2 R01-0007/0008 gp_mean 8자리까지 같음).
+  kernel_bounds: {length_scale_init: 0.5, length_scale_bounds: [0.1, 10.0], constant_bounds: [0.05, 20.0],
+                  noise_init: 0.01, noise_bounds: [0.0001, 0.5], n_restarts: 3}
+  prior_mean: level                             # integration3: level_set 지표 GP의 사전 평균 = 경계값 h (데이터 없는 곳 = "모름/경계").
+                                                #   training_mean = 예전 normalize_y (실패 위주로 뽑힌 학습 평균이 미탐색 영역을 '실패'로 예측)
+  switch_model: classifier                      # integration3: switched_indicator = GP 분류 (P(switch) ∈ [0,1]). regression = 예전 ±1 회귀
+  history: "run.py --gp-history 'result/*/run_records.jsonl' : 이전 캠페인 런을 GP 학습에 합침 (라벨은 그대로)"
   per_metric: true                              # 지표 하나당 GP 하나, 같은 feature 입력
   targets_from: 02_hypotheses/vulnerability_patterns.yaml#metric_rules.*.gp
   active_metrics: metrics_of_hypotheses_with_status [proposed, testing]   # blocked 가설 지표는 학습 안 함

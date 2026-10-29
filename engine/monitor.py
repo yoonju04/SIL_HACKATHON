@@ -119,7 +119,8 @@ def _fault_config(run: RunData) -> dict[str, Any]:
     mode = cfg.get("mpc_fault", meta.get("fault_mode", "none")) or "none"
     return dict(mode=mode, start=cfg.get("fault_start", meta.get("fault_start")),
                 duration=cfg.get("fault_duration"), magnitude=cfg.get("fault_magnitude", meta.get("fault_magnitude")),
-                on_s=cfg.get("fault_on_s"), off_s=cfg.get("fault_off_s"))
+                on_s=cfg.get("fault_on_s"), off_s=cfg.get("fault_off_s"),
+                level=cfg.get("fault_level", 1.0), ramp_s=cfg.get("fault_ramp_s", 0.0))
 
 
 def _finite(x: Any) -> bool:
@@ -154,6 +155,30 @@ def thresholds_from_config(stage_cfg: dict | None) -> dict[str, float]:
     ew = ((stage_cfg or {}).get("safety_spec") or {}).get("evaluation_window") or {}
     th["eval_window_s"] = float(ew["length_s"]) if _finite(ew.get("length_s")) else 10.0
     return th
+
+
+def run_friction_scale(run: "RunData | None", candidate: dict | None = None) -> float:
+    """Tyre friction scale the run actually drove with (integration3). run_benchmark.py records what it applied in
+    agent_config.json tire_friction {scale, applied}; a scale that could not be applied counts as 1.0 (CARLA tyres).
+    Falls back to agent_config tire_friction_scale, then the candidate's environment, then 1.0."""
+    cfg = (run.config if run is not None else None) or {}
+    tf = cfg.get("tire_friction")
+    if isinstance(tf, dict) and _finite(tf.get("scale")):
+        return float(tf["scale"]) if tf.get("applied", True) else 1.0
+    if _finite(cfg.get("tire_friction_scale")):
+        return float(cfg["tire_friction_scale"])
+    v = ((candidate or {}).get("environment") or {}).get("tire_friction_scale")
+    return float(v) if _finite(v) else 1.0
+
+
+def scale_thresholds_for_friction(th: dict[str, float], scale: float) -> dict[str, float]:
+    """P-02 lateral-acc limit is 0.5 * mu * g with mu = 0.9 (safety_spec P-02 lateral_acc_formula); with a tyre
+    friction scale mu becomes 0.9 * scale, so the limit scales linearly (scale 1.0 keeps 4.41 m/s^2)."""
+    out = dict(th)
+    out["tire_friction_scale"] = float(scale)
+    out["lat_acc_threshold_nominal_mps2"] = th["lat_acc_threshold_mps2"]
+    out["lat_acc_threshold_mps2"] = th["lat_acc_threshold_mps2"] * float(scale)
+    return out
 
 
 def footprint_margin_m(r: dict) -> float:
@@ -468,7 +493,7 @@ SR_FIELDS = ("sr_outcome", "sr_failed_requirements", "sr_labels", "sr_scores", "
 
 
 def attach_sr_checks(record: dict[str, Any], run: RunData, baseline: RunData | None,
-                     no_reaction: RunData | None, spec: dict | None) -> dict[str, Any]:
+                     no_reaction: RunData | None, spec: dict | None, friction_scale: float = 1.0) -> dict[str, Any]:
     """SR monitor v3.1 grading (pipeline/09_monitor/monitor.py via engine.sr_checks) on the same run, added as
     extra run_record fields. Our recovery v2 result is recorded next to SR5 for comparison.
     SR results never change our labels, outcome_category or GP targets."""
@@ -482,6 +507,10 @@ def attach_sr_checks(record: dict[str, Any], run: RunData, baseline: RunData | N
         record.update(out)
         return record
     cfg = SR.config_from_spec(spec, dt=run.dt)
+    if abs(friction_scale - 1.0) > 1e-9:   # integration3: SR P-02 aux limit follows the tyres too (reference only)
+        cfg.mu = cfg.mu * friction_scale
+        if cfg.a_y_max_mps2 is not None:
+            cfg.a_y_max_mps2 = cfg.a_y_max_mps2 * friction_scale
     g = SR.grade(SR.trace_from_run(run), SR.trace_from_run(baseline) if baseline is not None and baseline.ticks else None,
                  float(onset), cfg, SR.trace_from_run(no_reaction) if no_reaction is not None and no_reaction.ticks else None,
                  recovery={"recovery_outcome": record.get("recovery_outcome"),
@@ -520,9 +549,14 @@ def evaluate(run_dir: str | Path, spec: str | Path | dict | None = None, *, base
     run = load_av_stack_run(run_dir)
     base = load_av_stack_run(baseline_dir) if baseline_dir else None
     nore = load_av_stack_run(no_reaction_dir) if no_reaction_dir else None
+    fscale = run_friction_scale(run, candidate)
+    th = scale_thresholds_for_friction(th, fscale)
     rec = compute_run_record(run, base, candidate=candidate, metric_rules=metric_rules, th=th, run_id=run_id,
                              round_index=round_index, selector=selector)
-    attach_sr_checks(rec, run, base, nore, spec_d)
+    if isinstance(rec.get("metrics"), dict):
+        rec["metrics"]["tire_friction_scale"] = fscale
+        rec["metrics"]["p02_lat_acc_threshold_mps2"] = th["lat_acc_threshold_mps2"]
+    attach_sr_checks(rec, run, base, nore, spec_d, fscale)
     if timeline:
         rec["_timeline"] = monitor_timeline(run, rec, th)
     return rec

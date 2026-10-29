@@ -19,7 +19,7 @@ from typing import Any
 
 from . import schema as S
 from .llm import LLMError, extract_json, json_schema_format
-from .scenarios import faults_by_id, make_candidate
+from .scenarios import faults_by_id, friction_axis, make_candidate, sampling_ranges
 
 
 # ----------------------------------------------------------------------------- A
@@ -41,29 +41,34 @@ def param_schema(spec: dict) -> dict:
 
 def candidate_schema(space: dict, routes: list[str], fault_pool: list[str], objectives: list[str],
                      evidence: list[str], n_max: int) -> dict:
-    env_lo, env_hi = space["environment"]["max_speed_kmh"]["range"]
-    olo, ohi = space["fault_timing"]["offset_s"]["range"]
+    fax = friction_axis(space)
     branches = []
     for fid in fault_pool:
         f = faults_by_id(space)[fid]
         params = {k: param_schema(s) for k, s in (f.get("params") or {}).items()}
+        rg = sampling_ranges(space, f)   # integration3 #3: control faults are proposed on their handover axes
         branches.append({
             "type": "object",
             "properties": {
                 "fault_id": {"enum": [fid]},
                 "params": {"type": "object", "properties": params, "required": list(params), "additionalProperties": False},
                 "route_id": {"enum": routes},
-                "max_speed_kmh": {"type": "number", "minimum": env_lo, "maximum": env_hi},
-                "onset_event": {"enum": space["fault_timing"]["onset_event"]["values"]},
-                "onset_offset_s": {"type": "number", "minimum": olo, "maximum": ohi},
+                "max_speed_kmh": {"type": "number", "minimum": rg["max_speed_kmh"][0], "maximum": rg["max_speed_kmh"][1]},
+                **({"tire_friction_scale": {"type": "number", "minimum": rg["tire_friction_scale"][0],
+                                            "maximum": rg["tire_friction_scale"][1]}} if fax else {}),
+                "onset_event": {"enum": rg["onset_event"]},
+                "onset_offset_s": {"type": "number", "minimum": rg["offset_s"][0], "maximum": rg["offset_s"][1]},
                 "objective_ids": {"type": "array", "items": {"enum": objectives}, "minItems": 1, "maxItems": len(objectives)},
                 "evidence_ids": {"type": "array", "items": {"enum": evidence}, "minItems": 1, "maxItems": 6},
                 "expected_mechanism": {"type": "string"},
                 "expected_side": {"enum": ["recover", "fail", "boundary"]},
+                "extreme_justification": {"type": "string"},
                 "missing_information": {"type": "string"},
             },
-            "required": ["fault_id", "params", "route_id", "max_speed_kmh", "onset_event", "onset_offset_s",
-                         "objective_ids", "evidence_ids", "expected_mechanism", "expected_side", "missing_information"],
+            "required": ["fault_id", "params", "route_id", "max_speed_kmh"] + (["tire_friction_scale"] if fax else []) +
+                        ["onset_event", "onset_offset_s",
+                         "objective_ids", "evidence_ids", "expected_mechanism", "expected_side", "extreme_justification",
+                         "missing_information"],
             "additionalProperties": False,
         })
     return {"type": "object",
@@ -74,9 +79,21 @@ def candidate_schema(space: dict, routes: list[str], fault_pool: list[str], obje
 A_SYSTEM = """You are Nemotron A, the scenario generator of a software-in-the-loop safety SEARCH for an MPC->LQR steering handover \
 (CARLA 0.9.15, PDM-Lite planner, av_stack MPC primary + LQR backup + latched supervisor; faults are injected only at the MPC output).
 Search objective S1: estimate WHERE LQR recovery after the switch stops succeeding, as a function of the error state at the \
-switch moment and of steering angle / rate saturation. Propose scenarios on BOTH sides of the boundary (expected recover, \
-expected fail, and boundary) - a boundary cannot be estimated from failures only.
+switch moment and of steering angle / rate saturation.
+Your job is NOT to find failures. Failures at the extreme corners of the space are already known (e.g. saturate at full \
+steering for the longest duration fails every time; solver_fail / stale at low speed always recovers) and teach nothing.
+Propose candidates that you expect to sit ON the success/failure boundary: conditions where the SAME fault could recover \
+or fail depending on a small change (fault magnitude/duration, speed, tyre friction, onset relative to the curve).
 Rules:
+- Use surrogate_summary every round: boundary_regions are tried conditions where the surrogate (GP) is most ambiguous \
+(predicted robustness near the boundary and/or high uncertainty, or switch probability near 0.5). Propose candidates \
+in and around those regions, varying one or two fields, and fill gaps between a recovered and a failed run of the same fault.
+- recent_outcomes_by_fault_mode shows which fault modes so far only recovered or only failed: for those, move toward \
+conditions that could flip the outcome (harder for always-recovering modes, milder for always-failing modes).
+- Avoid the ends of the allowed ranges (within 5% of a minimum or maximum). If a value at a range end is genuinely needed, \
+explain why in extreme_justification; otherwise leave extreme_justification as an empty string. Unjustified range-end \
+values are down-ranked by the orchestrator.
+- Set expected_side to "boundary" for boundary candidates; use "recover"/"fail" only for deliberate bracketing pairs.
 - You never decide safety. A deterministic monitor labels every run. Do not claim a scenario is safe or unsafe as a fact.
 - Cite only ids from the evidence enum. Unreviewed code observations are leads, not verified facts.
 - Use only values allowed by the JSON schema. Do not invent controller parameters.
@@ -91,12 +108,14 @@ def a_messages(*, schema: dict, n: int, context: dict) -> list[dict]:
 
 
 def a_context(*, profile: dict, prior: dict, space: dict, objective_cfg: dict, routes: list[dict], few_shot: list[dict],
-              mechanisms: list[dict], tried: list[dict], include_unreviewed: bool) -> dict:
+              mechanisms: list[dict], tried: list[dict], include_unreviewed: bool,
+              surrogate_summary: dict | None = None) -> dict:
     obs = (profile.get("code_evidence") or {}).get("observations", [])
     verified = [o for o in obs if o.get("verified") is True]
     unreviewed = [] if not include_unreviewed else [
         {k: o.get(k) for k in ("id", "field", "observed_value", "note")} for o in obs if o.get("verified") is not True]
-    faults = [{k: f.get(k) for k in ("id", "name", "group", "injector_mode", "description", "check", "params", "next_question")}
+    faults = [{k: f.get(k) for k in ("id", "name", "group", "injector_mode", "description", "check", "params",
+                                     "handover_axes", "next_question") if f.get(k) is not None}
               for f in space.get("faults", [])]
     return {
         "objective": objective_cfg,
@@ -109,6 +128,8 @@ def a_context(*, profile: dict, prior: dict, space: dict, objective_cfg: dict, r
         "prior_failures_top_k": few_shot,
         "verified_video_mechanisms": mechanisms,
         "already_tried": tried,
+        "surrogate_summary": surrogate_summary or {"gp": None, "boundary_regions": [], "recent_outcomes_by_fault_mode": {},
+                                                    "note": "no runs yet (cold start): spread candidates over interior values"},
     }
 
 
@@ -117,16 +138,103 @@ def a_to_candidates(obj: dict, space: dict, *, round_index: int, source: str = "
     for item in obj.get("candidates", []):
         try:
             c = make_candidate(space, route_id=item["route_id"], speed=item["max_speed_kmh"], fault_id=item["fault_id"],
+                               friction=item.get("tire_friction_scale"),
                                params=item["params"], onset_event=item["onset_event"], offset=item["onset_offset_s"],
                                source=source, objective=(item.get("objective_ids") or ["S1"])[0], round_index=round_index,
                                evidence_ids=item.get("evidence_ids", []), expected_mechanism=item.get("expected_mechanism"),
                                missing_information=item.get("missing_information"))
             c["hypothesis_ids"] = item.get("objective_ids") or ["S1"]
             c["expected_side"] = item.get("expected_side")
+            c["extreme_justification"] = (item.get("extreme_justification") or "").strip() or None
+            ext = extreme_fields(c, space)
+            c["range_extremes"] = ext
+            if ext and not c["extreme_justification"]:
+                c["tags"] = sorted(set(c.get("tags", []) + ["range_extreme_unjustified"]))
             out.append(c)
         except (KeyError, TypeError, ValueError):
             continue
     return out
+
+
+EXTREME_EDGE = 0.05   # a continuous value within 5% of its range end counts as a range extreme
+
+
+def continuous_units(c: dict, space: dict) -> dict[str, float]:
+    """Unit position (0..1) of every continuous field of a candidate in its allowed range (global ranges)."""
+    out: dict[str, float] = {}
+    lo, hi = space["environment"]["max_speed_kmh"]["range"]
+    out["max_speed_kmh"] = (float(c["environment"]["max_speed_kmh"]) - lo) / (hi - lo)
+    fax = friction_axis(space)
+    fr = (c.get("environment") or {}).get("tire_friction_scale")
+    if fax and fr is not None and abs(float(fr) - float(fax.get("default", 1.0))) > 1e-9:  # nominal tyres are not "extreme"
+        out["tire_friction_scale"] = (float(fr) - fax["range"][0]) / (fax["range"][1] - fax["range"][0])
+    olo, ohi = space["fault_timing"]["offset_s"]["range"]
+    out["onset_offset_s"] = (float(c["onset_offset_s"]) - olo) / (ohi - olo)
+    f = faults_by_id(space).get((c.get("fault") or {}).get("fault_id"), {})
+    for k, spec in (f.get("params") or {}).items():
+        v = ((c.get("fault") or {}).get("params") or {}).get(k)
+        if "range" in spec and isinstance(v, (int, float)):
+            out[f"params.{k}"] = (float(v) - spec["range"][0]) / (spec["range"][1] - spec["range"][0])
+    return out
+
+
+def extreme_fields(c: dict, space: dict, edge: float = EXTREME_EDGE) -> list[str]:
+    """Continuous fields at a range end (within `edge` of 0 or 1 in unit position)."""
+    return sorted(k for k, u in continuous_units(c, space).items() if min(u, 1.0 - u) < edge)
+
+
+def edge_distance(c: dict, space: dict) -> float | None:
+    """Smallest unit distance of any continuous field to its range end (0 = at an end, 0.5 = all mid-range)."""
+    us = continuous_units(c, space)
+    return min(min(u, 1.0 - u) for u in us.values()) if us else None
+
+
+def surrogate_summary(*, regions: list[dict], records: list[dict], candidates: dict, space: dict, metric: str,
+                      switch_metric: str | None, n_train: int | None, k: int = 6, recent: int = 30) -> dict:
+    """Compact GP view for Nemotron A every round (integration3 #4, LeGEND-style: the LLM proposes direction, the
+    GP / search refines). regions: candidate dicts with gp_mean / gp_std (already tried conditions); the k most
+    ambiguous ones (beta*std - |mean| on the recovery metric, or switch probability near 0.5) become boundary_regions
+    in the candidate item shape. recent_outcomes_by_fault_mode: recovery_outcome counts of the last `recent` runs."""
+    def ambiguity(c: dict) -> float | None:
+        gm, gs = c.get("gp_mean") or {}, c.get("gp_std") or {}
+        vals = []
+        if gm.get(metric) is not None and gs.get(metric) is not None:
+            vals.append(1.96 * gs[metric] - abs(gm[metric]))
+        if switch_metric and gm.get(switch_metric) is not None:
+            p = gm[switch_metric]
+            p = (p + 1) / 2 if p < 0 or p > 1 else p   # +/-1 regression -> rough probability
+            vals.append(1.0 - 2.0 * abs(min(1.0, max(0.0, p)) - 0.5))
+        return max(vals) if vals else None
+    scored = sorted(((ambiguity(c), c) for c in regions), key=lambda t: -1e9 if t[0] is None else t[0], reverse=True)
+    out_regions = []
+    for amb, c in scored[:k]:
+        if amb is None:
+            continue
+        gm, gs = c.get("gp_mean") or {}, c.get("gp_std") or {}
+        item = {"fault_id": c["fault"]["fault_id"], "params": c["fault"]["params"], "route_id": c["route_id"],
+                "max_speed_kmh": c["environment"]["max_speed_kmh"], "onset_event": c["onset_event"],
+                "onset_offset_s": c["onset_offset_s"],
+                "predicted_robustness_mean_z": None if gm.get(metric) is None else round(gm[metric], 3),
+                "predicted_robustness_std_z": None if gs.get(metric) is None else round(gs[metric], 3),
+                "predicted_switch": None if not switch_metric or gm.get(switch_metric) is None else round(gm[switch_metric], 3),
+                "ambiguity": round(amb, 3)}
+        if "tire_friction_scale" in c["environment"]:
+            item["tire_friction_scale"] = c["environment"]["tire_friction_scale"]
+        out_regions.append(item)
+    per: dict[str, dict] = {}
+    for r in records[-recent:]:
+        if r.get("sim_status") != "ok":
+            continue
+        mode = (((r.get("parameters") or {}).get("fault") or {}).get("mode")) or "?"
+        d = per.setdefault(mode, {"n": 0, "final_safe": 0, "outcomes": {}})
+        d["n"] += 1
+        d["final_safe"] += r.get("final_safe_recovery") is True
+        d["outcomes"][str(r.get("recovery_outcome"))] = d["outcomes"].get(str(r.get("recovery_outcome")), 0) + 1
+    for d in per.values():
+        d["only"] = "recovered" if d["final_safe"] == d["n"] else ("failed" if d["final_safe"] == 0 else "mixed")
+    return {"gp": {"metric": metric, "n_train": n_train, "z_boundary": 0.0,
+                   "meaning": "mean_z < 0 riskier; |mean_z| small + std large = boundary unknown"} if n_train else None,
+            "boundary_regions": out_regions, "recent_outcomes_by_fault_mode": per}
 
 
 def call_a(client, settings: dict, messages: list[dict], schema: dict, tag: str = "A") -> tuple[dict | None, dict]:
@@ -247,6 +355,37 @@ def b_features(answers: dict[str, dict] | None, questions: list[dict]) -> tuple[
 
 
 # ----------------------------------------------------------------------------- stubs (--mock)
+def _stub_near(region: dict, items_schema: dict, rng: random.Random) -> dict | None:
+    """SYNTHETIC: a schema-valid copy of a boundary region with numeric fields jittered by ~8% of their range."""
+    br = next((b for b in items_schema.get("anyOf", []) if b["properties"]["fault_id"]["enum"] == [region.get("fault_id")]), None)
+    if br is None:
+        return None
+    c = S.sample(br, rng)
+    props = br["properties"]
+
+    def jitter(spec: dict, v):
+        if not isinstance(v, (int, float)) or "minimum" not in spec:
+            return None
+        lo, hi = spec["minimum"], spec["maximum"]
+        return min(hi, max(lo, float(v) + rng.gauss(0, 0.08) * (hi - lo)))
+    for key in ("max_speed_kmh", "onset_offset_s", "tire_friction_scale"):
+        if key in props and key in region:
+            j = jitter(props[key], region[key])
+            if j is not None:
+                c[key] = j
+    for key in ("route_id", "onset_event"):
+        if region.get(key) in props[key].get("enum", []):
+            c[key] = region[key]
+    pprops = props["params"]["properties"]
+    for k, v in (region.get("params") or {}).items():
+        if k in pprops:
+            j = jitter(pprops[k], v)
+            c["params"][k] = j if j is not None else (v if v in pprops[k].get("enum", [v]) else c["params"][k])
+    c["expected_side"] = "boundary"
+    return c
+
+
+
 def stub_handler(seed: int = 0):
     """SYNTHETIC answers for --mock. A: random schema-valid candidates; B: fixed answers with real file names."""
     rng = random.Random(seed)
@@ -258,10 +397,21 @@ def stub_handler(seed: int = 0):
             schema = payload["json_schema"]
             n = int(re.search(r"exactly (\d+)", payload["task"]).group(1)) if "exactly" in payload["task"] else \
                 len(payload.get("candidates", [])) or 3
-            obj = {"candidates": [S.sample(schema["properties"]["candidates"]["items"], rng) for _ in range(n)]}
-            for c in obj["candidates"]:
+            items_schema = schema["properties"]["candidates"]["items"]
+            regions = ((payload.get("surrogate_summary") or {}).get("boundary_regions") or [])
+            cands = []
+            for i in range(n):
+                # integration3 stub: half the items jitter a GP boundary region (as the real prompt asks), rest random
+                if regions and i % 2 == 0:
+                    c = _stub_near(regions[(i // 2) % len(regions)], items_schema, rng)
+                    if c is not None:
+                        cands.append(c)
+                        continue
+                cands.append(S.sample(items_schema, rng))
+            for c in cands:
                 c["expected_mechanism"] = "SYNTHETIC stub: no model was called"
-            return json.dumps(obj)
+                c["extreme_justification"] = ""
+            return json.dumps({"candidates": cands})
         if tag.startswith("B"):
             m = re.search(r"JSON SCHEMA\n(.*)$", user, re.DOTALL)
             schema = json.loads(m.group(1))

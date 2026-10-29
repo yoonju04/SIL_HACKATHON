@@ -70,6 +70,31 @@ def test_saturate_holds_exactly_the_limit_and_passes_the_range_check() -> None:
         assert MPCSupervisor(0.5).inspect(faulty, 1.0, 2.0) is None
 
 
+def test_saturate_level_scales_the_limit_and_defaults_reproduce_the_old_fault() -> None:
+    # integration3: level = fraction of max steer; level 1.0 / ramp 0 is the original step to the limit
+    assert FaultConfig('saturate', 1.0, 1.0, 1.0).level == 1.0 and FaultConfig('saturate', 1.0, 1.0, 1.0).ramp_s == 0.0
+    for side in (1.0, -1.0):
+        injector = MPCFaultInjector(FaultConfig('saturate', 1.0, 1.0, side, level=0.4), max_steer=0.5)
+        faulty = injector.apply(output(), 1.0)
+        assert math.isclose(faulty.steer, 0.2 * side) and injector.effective
+    for bad in (0.0, -0.2, 1.2, math.nan):
+        try:
+            FaultConfig('saturate', 1.0, 1.0, 1.0, level=bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+
+
+def test_saturate_ramp_blends_linearly_from_the_mpc_command() -> None:
+    injector = MPCFaultInjector(FaultConfig('saturate', 1.0, 1.0, 1.0, level=1.0, ramp_s=0.2), max_steer=0.5)
+    steers = [injector.apply(output(), 1.0 + k * 0.05).steer for k in range(6)]
+    # MPC command 0.1 -> target 0.5 over 0.2 s (4 ticks), then held
+    assert [round(x, 3) for x in steers] == [0.1, 0.2, 0.3, 0.4, 0.5, 0.5]
+    first = MPCFaultInjector(FaultConfig('saturate', 1.0, 1.0, 1.0, ramp_s=0.2), max_steer=0.5)
+    first.apply(output(), 1.0)
+    assert not first.effective  # the first ramp tick still equals the MPC command
+
+
 def test_output_delay_sends_an_old_command_under_a_fresh_header() -> None:
     injector = MPCFaultInjector(FaultConfig('output_delay', 1.0, 1.0, 2))
     supervisor = MPCSupervisor(0.5)

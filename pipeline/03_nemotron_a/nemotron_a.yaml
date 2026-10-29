@@ -39,3 +39,8 @@ refine:
 video_feedback:                                 # 10 video explainer 검증 통과 해설만
   few_shot_mechanism: true                      # prior_failures_top_k[].verified_video_mechanism
   mechanism_summary: true                       # verified_video_mechanisms
+surrogate_summary:                              # integration3 #4 (ChatScene arXiv 2405.14062, LeGEND arXiv 2409.10066:
+  k: 6                                          #   LLM은 방향 제안, GP/탐색이 정밀화). 매 라운드 A 입력에 GP 요약을 넣는다:
+                                                #   boundary_regions (모호도 상위 k개: 1.96*std - |mean| 또는 P(switch)≈0.5),
+                                                #   recent_outcomes_by_fault_mode (고장별 복구/실패 분포). round_XX/03_gp_summary.json
+prompt_goal: boundary                           # "실패 찾기" → "성공/실패 경계 근처 제안". 범위 끝(5% 이내)은 extreme_justification 필요

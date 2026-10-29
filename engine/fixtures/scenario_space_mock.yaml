@@ -36,8 +36,9 @@ environment:
     range:
     - 0.3
     - 1.0
-    cli: null
-    note: run_benchmark 미지원. 추가 전까지 1.0으로 실행
+    default: 1.0
+    cli: --tire-friction-scale
+    cli_format: '%.2f'
 fault_timing:
   onset_event:
     values:
@@ -153,6 +154,20 @@ faults:
       - positive
       - negative
       note: MPC 조향 부호
+    magnitude:
+      range:
+      - 0.2
+      - 1.0
+      unit: fraction_of_max_steer
+      default: 1.0
+      cli: --saturate-level
+    ramp_s:
+      range:
+      - 0.0
+      - 0.3
+      unit: s
+      default: 0.0
+      cli: --fault-ramp
   next_question: 몇 초 고정부터 전환해도 차선 안에서 회복하지 못하는가
 - id: F-07
   name: intermittent_bias

@@ -154,7 +154,8 @@ def counterfactual_candidates(explanations: dict[str, dict], candidates: dict[st
             speed = min(env[1], max(env[0], speed + sign * amt))
         elif p in ("fault_magnitude", "fault_duration_s"):
             f = faults_by_id(space)[base["fault"]["fault_id"]]
-            key = "duration_s" if p == "fault_duration_s" else next((k for k in params if k != "duration_s"), None)
+            key = "duration_s" if p == "fault_duration_s" else ("magnitude" if "magnitude" in params else
+                                                                next((k for k in params if k != "duration_s"), None))
             if key is None or key not in (f.get("params") or {}):
                 continue
             spec = f["params"][key]
@@ -164,7 +165,8 @@ def counterfactual_candidates(explanations: dict[str, dict], candidates: dict[st
             continue
         c = make_candidate(space, route_id=base["route_id"], speed=speed, fault_id=base["fault"]["fault_id"], params=params,
                            onset_event=base["onset_event"], offset=offset, source="counterfactual", round_index=round_index,
-                           seed_scenario_id=base["seed_scenario_id"], expected_mechanism=cf.get("expected_effect"))
+                           seed_scenario_id=base["seed_scenario_id"], expected_mechanism=cf.get("expected_effect"),
+                           friction=(base.get("environment") or {}).get("tire_friction_scale"))
         c["counterfactual_of"] = e["run_id"]
         e["counterfactual_queued"] = c["scenario_id"]
         out.append(c)

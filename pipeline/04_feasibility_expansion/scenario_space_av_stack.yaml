@@ -33,7 +33,11 @@ supervisor:
 
 environment:
   max_speed_kmh:       {range: [10, 40], unit: km/h, cli: --max-speed}
-  tire_friction_scale: {range: [0.3, 1.0], cli: null, note: "run_benchmark 미지원. 추가 전까지 1.0으로 실행"}
+  # integration3: run_benchmark.py --tire-friction-scale (CARLA WheelPhysicsControl.tire_friction x scale, 4바퀴 모두,
+  # get_physics_control/apply_physics_control). 1.0 = CARLA 기본 타이어. baseline도 같은 마찰로 돈다 (08 match key).
+  # 09 P-02 한계 0.5*mu*g 는 mu = 0.9 * scale 로 같이 줄어든다 (engine/monitor.py). CARLA tire_friction 은 물리적 mu와
+  # 같지 않으므로 scale 은 상대값으로만 해석한다.
+  tire_friction_scale: {range: [0.3, 1.0], default: 1.0, cli: --tire-friction-scale, cli_format: '%.2f'}
 
 fault_timing:
   onset_event: {values: [straight, curve_entry, curve_apex, curve_exit]}
@@ -53,6 +57,15 @@ faults:
     implemented: true
     # BUG-024: no duration axis. The supervisor latches LQR on the first bad sample, so 1 s or 3 s gives the same
     # run (result_4 R00-0013 / R00-0019). Without a duration the fault stays on until the route ends (to_cli).
+    # integration3 #3: 지속시간 축이 없으니(BUG-024) 결과를 바꾸는 건 "LQR이 넘겨받는 순간의 차량 상태"다.
+    # handover_axes = 이 고장을 샘플링할 때 쓰는 좁힌 범위 (engine/scenarios.py space_filling, Nemotron A 스키마).
+    # 검증(G-02)은 위의 전체 범위 그대로. result_2~5: 25 km/h 통과, 35 km/h 커브 진입 실패가 유일한 경계 단서.
+    handover_axes:
+      onset_event:         {values: [curve_entry, curve_apex]}
+      offset_s:            {range: [-0.5, 0.5], unit: s, note: "커브 진입·정점 주변을 촘촘히 (전체 -1~1 s의 절반 폭)"}
+      max_speed_kmh:       {range: [25, 40], unit: km/h}
+      tire_friction_scale: {range: [0.3, 1.0]}
+      todo: "측풍·질량·속도 외란 노브는 run_benchmark.py 에 아직 없다 (CARLA 물리 API 확인 전). 새 물리를 만들지 않고, 생기면 여기에 추가"
     params: {}
     observations:
       - {source: route_26956, result: "0.0 s에 전환 (solver_failure), 최대 e_y 0.625 m, 차선 이탈 0%, 점수 100", runs: 1}
@@ -70,6 +83,15 @@ faults:
     implemented: true
     # BUG-024: no duration axis. The supervisor latches LQR on the first bad sample, so 1 s or 3 s gives the same
     # run (result_4 R00-0013 / R00-0019). Without a duration the fault stays on until the route ends (to_cli).
+    # integration3 #3: 지속시간 축이 없으니(BUG-024) 결과를 바꾸는 건 "LQR이 넘겨받는 순간의 차량 상태"다.
+    # handover_axes = 이 고장을 샘플링할 때 쓰는 좁힌 범위 (engine/scenarios.py space_filling, Nemotron A 스키마).
+    # 검증(G-02)은 위의 전체 범위 그대로. result_2~5: 25 km/h 통과, 35 km/h 커브 진입 실패가 유일한 경계 단서.
+    handover_axes:
+      onset_event:         {values: [curve_entry, curve_apex]}
+      offset_s:            {range: [-0.5, 0.5], unit: s, note: "커브 진입·정점 주변을 촘촘히 (전체 -1~1 s의 절반 폭)"}
+      max_speed_kmh:       {range: [25, 40], unit: km/h}
+      tire_friction_scale: {range: [0.3, 1.0]}
+      todo: "측풍·질량·속도 외란 노브는 run_benchmark.py 에 아직 없다 (CARLA 물리 API 확인 전). 새 물리를 만들지 않고, 생기면 여기에 추가"
     params: {}
     observations:
       - {source: route_26956, result: "0.0 s에 전환 (stale_sequence)", runs: 1}
@@ -133,19 +155,26 @@ faults:
     name: saturate
     group: risk
     role: 급격한 이상
-    description: "조향을 정확히 최대각에 고정 (범위 검사 통과)"
+    description: "조향을 최대각의 magnitude 배로 고정 (1.0 = 정확히 최대각, 범위 검사 통과). ramp_s 동안 MPC 명령에서 선형으로 올라감"
     check: "급격히 악화된 상태에서의 인계·회복"
     layer: mpc_output
     injector_mode: saturate
     implemented: true
+    # integration3 (DriveFI, Jha et al. 2019, arXiv 1907.01051: 고장 세기·시점을 연속값으로 두고 경계를 찾음):
+    # magnitude / ramp_s 추가. magnitude 1.0 + ramp_s 0.0 = 예전 동작 (CLI 기본값, 기존 결과와 호환).
+    # run_benchmark.py --saturate-level / --fault-ramp (engine/fault_args.py to_cli).
     params:
       duration_s: {range: [0.1, 1.0], unit: s}
       side:       {values: [positive, negative], note: "MPC 조향 부호"}
+      magnitude:  {range: [0.2, 1.0], unit: fraction_of_max_steer, default: 1.0, cli: --saturate-level,
+                   note: "최대 조향각 대비 비율. 1.0 미만이면 범위 검사는 원래도 통과하고, 추적 오차로만 감지됨"}
+      ramp_s:     {range: [0.0, 0.3], unit: s, default: 0.0, cli: --fault-ramp,
+                   note: "0 = 한 틱에 점프 (실제 액추에이터로는 불가능, SR6 위반이 구조적으로 생김). >0 = 선형 상승"}
     observations:
       - {source: check_1027, result: "A, 0.5 s (+): 0.75 s 뒤 전환, 최대 편차 7.06 m, 차선 이탈, 점수 51.1", runs: 1}
       - {source: check_1027, result: "B, 0.5 s (+): 0.85 s 뒤 전환, 최대 편차 8.26 m, 차선 이탈, 점수 74.8", runs: 1}
       - {source: check_1027, result: "C, 0.5 s (+): 0.70 s 뒤 전환, 최대 편차 8.84 m, 차선 이탈, 신호등 충돌", runs: 1}
-    next_question: "몇 초 고정부터 전환해도 차선 안에서 회복하지 못하는가"
+    next_question: "몇 초·어느 세기(magnitude)부터 전환해도 차선 안에서 회복하지 못하는가. ramp를 주면 감지가 늦어지는가"
 
   - id: F-07
     name: intermittent_bias
