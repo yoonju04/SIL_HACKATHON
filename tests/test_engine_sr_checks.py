@@ -145,7 +145,7 @@ def test_dashboard_one_page_latest_left_all_right(folders, tmp_path):
     recs.write_text("".join(json.dumps(r, default=str, ensure_ascii=False) + "\n" for r in (a, b, c)), encoding="utf-8")
     page = refresh(recs, tmp_path / "screen").read_text(encoding="utf-8")
     assert 'http-equiv="refresh"' in page and 'data-latest="r3"' in page
-    assert page.count('class="run"') == 3 and page.count("<tr data-id=") == 3
-    assert "무효" in page and "recovery v2" in page
+    assert page.count('class="run"') == 3 and page.count("<tr class=") == 3
+    assert ("Invalid" in page or "Not graded" in page) and "Driving Safety" in page
     empty = refresh(tmp_path / "none.jsonl", tmp_path / "s2").read_text(encoding="utf-8")
-    assert "아직 끝난 시나리오가 없습니다" in empty
+    assert "No finished scenarios yet" in empty
