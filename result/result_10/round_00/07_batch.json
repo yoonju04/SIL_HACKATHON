@@ -1,0 +1,86 @@
+[
+  {
+    "scenario_id": "SC-e1af58c79b",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-d545ba91e4",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-09214a29db",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-f565394782",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-7c98c3a751",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-948d5f4187",
+    "source": "space_filling",
+    "selected_by": "control_cap_for_SC-c00866e2a1",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-efb6bc5c56",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-45a568889e",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-e2f45add41",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-060fd491ba",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-6990b6c207",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-80e198d469",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  }
+]

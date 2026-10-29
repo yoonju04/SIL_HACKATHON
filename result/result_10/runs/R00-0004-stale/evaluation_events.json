@@ -1,0 +1,68 @@
+[
+  {
+    "criterion": "RouteCompletionTest",
+    "frame": 0,
+    "event_type": "ROUTE_COMPLETION",
+    "message": "Agent has completed 58.65 of the route"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422433,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 68.65% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422505,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 58.29% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422540,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 117.9% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422615,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 50.98% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422636,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 154.42% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422657,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 130.53% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422678,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 114.33% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422751,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 38.66% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422772,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 137.41% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1422793,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 113.19% of the surrounding traffic's one"
+  }
+]
