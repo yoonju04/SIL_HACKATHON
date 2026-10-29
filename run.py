@@ -59,6 +59,7 @@ ABLATIONS = {
 }
 
 
+B_STATIC_KEY = "__static__"   # integration3 #6: 05b_answers.json row of the once-per-campaign static B questions
 SWITCH_METRIC = "switched_indicator"   # +1 switched / -1 no switch; S1 boundary only exists where a switch happens
 # integration3: modelled by a GP classifier (06 surrogate.yaml switch_model: classifier) -> gp_mean = P(switch) in [0, 1]
 
@@ -183,7 +184,8 @@ class Loop:
         self.no_reaction_on = bool(nr.get("mock" if mode == "mock" else "real", False)) if no_reaction is None else no_reaction
         self.vcfg = self.cfg["video_explainer"]
         self.taxonomy = self.vcfg["mechanism_taxonomy"]
-        self.questions = self.cfg["nemotron_b"]["B_question_answering"]["question_bank"]
+        # integration3 #6: yes/no as strings, scope (per_scenario | static) and gp_feature defaults
+        self.questions = NM.normalize_questions(self.cfg["nemotron_b"]["B_question_answering"]["question_bank"])
         self.av_stack = resolve_av_stack()
         self.records: list[dict] = []
         self.candidates: dict[str, dict] = {}
@@ -323,10 +325,10 @@ class Loop:
             scen = {"speed_mps": c["environment"]["max_speed_kmh"] / 3.6, "road_curvature_per_m": None if kappa is None else abs(kappa),
                     "fault": {"delay_ms": 50.0 * c["fault"]["params"]["delay_ticks"]} if "delay_ticks" in c["fault"]["params"] else {}}
             df = J.compute_df(scen, profile).as_dict()
-            for k in ("DF-03", "DF-05"):
+            for k, scale_by in (("DF-03", 100.0), ("DF-05", 5.0)):
                 v = df.get(k)
                 names += [k, f"{k}_missing"]
-                x += [0.0 if v is None else float(v) / (100.0 if k == "DF-03" else 5.0), 1.0 if v is None else 0.0]
+                x += [0.0 if v is None else float(v) / scale_by, 1.0 if v is None else 0.0]
         if self.flags["use_b"]:
             bx, bn = NM.b_features((self.b_cache.get(self.b_key(c)) or {}).get("answers"), self.questions)
             x += bx; names += bn
@@ -337,7 +339,8 @@ class Loop:
         return x, names
 
     def b_key(self, c: dict) -> str:
-        return f"{c['fault']['mode']}|{c['onset_event']}"
+        # integration3 #6: + bins of the fault parameters a question depends on (Q-B4: saturate duration_s <= 0.25 s)
+        return f"{c['fault']['mode']}|{c['onset_event']}" + NM.param_bin_suffix(self.questions, c["fault"].get("params") or {})
 
     # ------------------------------------------------------------------ 03 Nemotron A
     def stage_03(self, n: int, round_index: int, near: list[dict] | None = None,
@@ -411,17 +414,27 @@ class Loop:
         if not sizes:
             code = "(av_stack source not available on this machine; mock stub answers)" if self.mode == "mock" else code
             sizes = {f: 10_000 for f in files} if self.mode == "mock" else sizes
-        schema = NM.b_schema(self.questions, list(sizes))
+        regions = NM.resolve_regions(self.av_stack, self.questions)
+        per_q, static_q = NM.questions_of_scope(self.questions, "per_scenario"), NM.questions_of_scope(self.questions, "static")
+        jobs = []
+        if static_q and B_STATIC_KEY not in self.b_cache:
+            # static: one fixed code fact per campaign (Q-B2 latch, Q-B3 takeover), not per scenario
+            jobs.append((B_STATIC_KEY, static_q, {"scope": "static (whole supervisor, any fault)", "planner": "pdm",
+                                                  "controller": "supervised"}))
+        seen = set()
         for c in cands:
             k = self.b_key(c)
-            if k in self.b_cache:
+            if k in self.b_cache or k in seen or not per_q:
                 continue
-            ctx = {"fault_mode": c["fault"]["mode"], "fault_params": c["fault"]["params"], "onset_event": c["onset_event"],
-                   "planner": "pdm", "controller": "supervised"}
+            seen.add(k)
+            jobs.append((k, per_q, {"fault_mode": c["fault"]["mode"], "fault_params": c["fault"]["params"],
+                                    "onset_event": c["onset_event"], "planner": "pdm", "controller": "supervised"}))
+        for k, qs, ctx in jobs:
+            schema = NM.b_schema(qs, list(sizes))
             samples = []
             for i in range(int(self.b_settings.get("repeats", 3))):
                 try:
-                    res = self.client_b.chat(self.b_settings.get("model", "stub/B"), NM.b_messages(code, self.questions, ctx, schema),
+                    res = self.client_b.chat(self.b_settings.get("model", "stub/B"), NM.b_messages(code, qs, ctx, schema),
                                              temperature=self.b_settings.get("temperature"), top_p=self.b_settings.get("top_p"),
                                              max_tokens=self.b_settings.get("max_tokens"), thinking=self.b_settings.get("thinking"),
                                              chat_template_kwargs=self.b_settings.get("chat_template_kwargs_extra"),
@@ -431,7 +444,10 @@ class Loop:
                     samples.append(extract_json(res.content))
                 except (LLMError, ValueError) as e:
                     self.stats["llm_errors"].append({"role": "B", "key": k, "error": str(e)[:200]})
-            self.b_cache[k] = {"answers": NM.aggregate_b(samples, self.questions, sizes), "n_samples": len(samples), "context": ctx}
+            self.b_cache[k] = {"answers": NM.aggregate_b(samples, qs, sizes, ctx=ctx, regions=regions),
+                               "n_samples": len(samples), "context": ctx}
+        self.stats["nemotron_b"] = NM.b_hallucination_summary([e.get("answers") for e in self.b_cache.values()])
+        self.stats["b_hallucination_rate"] = self.stats["nemotron_b"]["b_hallucination_rate"]
 
     # ------------------------------------------------------------------ 06 + 07
     def load_gp_history(self, patterns: list[str]) -> None:
@@ -927,8 +943,35 @@ def evaluate(records: list[dict], candidates: dict, explanations: dict, loop: Lo
         m["a_items_returned"] = sum(s.get("items_returned", 0) for s in loop.stats["a_calls"])
         m["rejected_candidates"] = len(loop.stats["rejected"])
         m["nemotron_a"] = nemotron_a_metrics(loop)
+        m["nemotron_b"] = nemotron_b_metrics(loop)
         m["llm_usage"] = llm_usage(loop.llm_log)
     return m
+
+
+def nemotron_b_metrics(loop: Loop) -> dict:
+    """integration3 #6: B hallucination check (majority answer vs expected_from_code) and how much the B one-hot
+    columns actually vary over the GP training runs (a column constant over all runs carries no information)."""
+    if not loop.flags["use_b"]:
+        return {"enabled": False}
+    out = NM.b_hallucination_summary([e.get("answers") for e in loop.b_cache.values()])
+    out["per_question"] = {q: {k: d[k] for k in ("asked", "checked", "hallucinated", "distinct_answers", "answers")}
+                           for q, d in out["per_question"].items()}
+    cols = None
+    rows = []
+    for r in loop.records:
+        c = loop.candidates.get(r.get("scenario_id"))
+        if r.get("sim_status") != "ok" or c is None:
+            continue
+        bx, bn = NM.b_features((loop.b_cache.get(loop.b_key(c)) or {}).get("answers"), loop.questions)
+        cols = bn; rows.append(bx)
+    if rows:
+        const = [n for j, n in enumerate(cols) if len({row[j] for row in rows}) <= 1]
+        out["gp_b_columns"] = len(cols)
+        out["gp_b_constant_columns"] = len(const)
+        out["gp_b_constant_fraction"] = len(const) / len(cols) if cols else None
+        out["gp_b_questions"] = sorted({n.split("=")[0] for n in cols})
+    out["b_keys"] = sum(1 for k in loop.b_cache if k != B_STATIC_KEY)
+    return out
 
 
 def nemotron_a_metrics(loop: Loop) -> dict:

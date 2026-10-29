@@ -459,8 +459,8 @@ def load_method(out_dir: Path) -> dict:
     rounds = sorted(camp.glob("round_*"))
     b_files, b_cands, a_props = set(), 0, {}
     for rd in rounds:
-        for row in (rj(rd / "05b_answers.json", {}) or {}).values():
-            b_cands += 1
+        for key, row in (rj(rd / "05b_answers.json", {}) or {}).items():
+            b_cands += not str(key).startswith("__")      # __static__ = once-per-campaign questions (integration3 #6)
             for ans in (row.get("answers") or {}).values():
                 for ev in ans.get("evidence") or []:
                     if ev.get("file"):

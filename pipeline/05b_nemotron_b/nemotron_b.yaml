@@ -16,27 +16,110 @@ B_question_answering:
   inputs: [safety_profile.verified_observations, scenario_candidate]
   forbidden_inputs: [prior_failure_examples, carla_results, gp_predictions]
   scope: "코드를 읽어야만 답할 수 있는 질문만. 계산 가능한 것은 결정론적 feature로."
+  # integration3 #6 (Nemotron B 재설계):
+  #   scope: per_scenario = 후보마다 묻는다 (b_key 단위 캐시) / static = 캠페인마다 한 번 묻는다 (코드 고정 사실)
+  #   gp_feature: true 인 질문만 GP 입력 one-hot 이 된다. static 질문은 항상 false (상수 feature는 GP에 정보가 없다)
+  #   expected_from_code: 코드가 답을 정하는 경우의 정답. 문자열 / 허용 답 목록 / by_fault_mode 매핑
+  #     (모드별 값은 문자열, 목록, 또는 {cases: [{when: {param, le|lt|ge|gt}, expect}], default})
+  #     null = 코드가 정하지 않음 → 비교하지 않음. B 다수결 답과 비교해 matches_code / b_hallucination_rate 기록
+  #   evidence_regions: 답을 정하는 코드 위치 (파일 + 함수 이름 또는 줄 범위). 인용 줄이 하나라도 여기 들어가야
+  #     citations_relevant true
+  #   param_bins: 답이 파라미터 구간에 따라 바뀌는 경우의 경계. b_key 에 구간 번호가 붙는다 (캐시 크기는 유한)
+  #   줄번호는 2026-10-28 integration3 av_stack 기준 (pipeline/08_carla_paired_run/av_stack)
+  #   주의: yes/no 는 반드시 따옴표. 따옴표가 없으면 YAML 이 true/false 로 읽는다 (예전 Q-B2/Q-B3 버그)
   question_bank:
     - id: Q-B1
-      question: "이 고장 동안 감지 지연 구간에 어떤 조향 명령이 나가는가?"
-      question_en: "During the detection-delay interval of this fault, which steering command reaches the vehicle?"
-      answer: [hold_last, zero, stale_mpc, lqr_early, unknown]
-      refs: [S2]                                 # 2026-10-27: H-02 → S2
-      expected_from_code: null                   # 고장 모드마다 다름 (fault_injection.py) → B 답과 비교하지 않음
+      scope: per_scenario
+      gp_feature: true                           # 고장 모드를 '차량에 무엇이 나가는가'로 묶어 준다 (fault one-hot 은 모두 같은 거리)
+      question: "이 고장이 시작된 뒤 감독기가 전환하기 전까지 어떤 조향 명령이 차량에 나가는가?"
+      question_en: "From the fault onset until the supervisor switches, which steering command reaches the vehicle?"
+      answer: ['hold_last', 'zero', 'stale_mpc', 'corrupted_mpc', 'lqr_early', 'unknown']
+      answer_notes:
+        corrupted_mpc: "고장이 바꾼 MPC 조향값이 감지 전까지 그대로 나간다"
+        stale_mpc: "몇 틱 전에 계산한 MPC 조향값이 나간다"
+        lqr_early: "첫 고장 틱에 바로 감지되어 그 틱부터 LQR 조향이 나간다 (고장 값은 차량에 가지 않음)"
+      refs: [S2]
+      expected_from_code:
+        by_fault_mode:
+          solver_fail: 'lqr_early'               # fault_injection.py:111 ok=False → supervised_lateral.py:29-30 같은 틱 → :116-123 LQR
+          stale: 'lqr_early'                     # fault_injection.py:107-108,112 직전 정상 출력(같은 seq) → supervised_lateral.py:42-43 stale_sequence
+          bias: 'corrupted_mpc'                  # fault_injection.py:79-82,113 steer 만 바뀜 → supervised_lateral.py:108-111 그대로 적용
+          drift: 'corrupted_mpc'                 # fault_injection.py:114
+          intermittent_bias: 'corrupted_mpc'     # fault_injection.py:84-88,115
+          saturate: 'corrupted_mpc'              # fault_injection.py:90-97,116 (ramp_s 동안 MPC 명령과 섞임)
+          output_delay: 'stale_mpc'              # fault_injection.py:99-102,117 k틱 전 steer, 새 seq/stamp
+      evidence_regions:
+        - {file: integration/fault_injection.py, function: MPCFaultInjector}
+        - {file: integration/supervised_lateral.py, function: MPCSupervisor.inspect}
+        - {file: integration/supervised_lateral.py, function: SupervisedLateral.step}
+    - id: Q-B4
+      scope: per_scenario
+      gp_feature: true                           # 유일하게 파라미터(saturate duration_s)에 따라 정답이 바뀌는 질문
+      question: "이 고장 모드와 파라미터에서, 고장이 켜져 있는 동안 감독기의 어느 검사가 가장 먼저 걸리는가? (고장과 무관한 계산 시간 초과는 제외)"
+      question_en: "For this fault mode and these parameters, which supervisor check fires first WHILE the fault is active? Ignore deadline misses caused by wall-clock compute time unrelated to the fault. Answer none_during_fault if no check can fire before the fault window ends."
+      answer: ['solver_failure', 'missing_steer', 'nonfinite_output', 'steer_out_of_range', 'deadline_miss',
+               'stale_output', 'stale_sequence', 'tracking_divergence', 'controller_exception', 'none_during_fault', 'unknown']
+      refs: [S1, S2]
+      param_bins: {duration_s: [0.25]}           # tracking_divergence 지속 조건 0.25 s (supervised_lateral.py:50)
+      expected_from_code:
+        by_fault_mode:
+          solver_fail: 'solver_failure'          # supervised_lateral.py:29-30 (첫 검사)
+          stale: 'stale_sequence'                # :40-43 stamp 차 0.05 s ≤ 0.1 이라 stale_output 아님, seq 같음 → stale_sequence
+          # 아래는 코드가 '불가능한 답'만 정한다 → 허용 답 목록 (어느 쪽이 먼저인지는 차량 동역학이 정함)
+          bias: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']         # :36 (|MPC+bias| > 최대각일 때만), :45-51
+          drift: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']
+          intermittent_bias: ['steer_out_of_range', 'tracking_divergence', 'none_during_fault']
+          output_delay: ['tracking_divergence', 'none_during_fault']    # fault_injection.py:101 옛 steer(mpc.py:246 에서 이미 최대각 안)·옛 state, 새 seq/stamp
+          saturate:                              # fault_injection.py:93 target = level×최대각, level ≤ 1 (:51-52) → :36 의 '초과' 검사 통과
+            cases:
+              - {when: {param: duration_s, le: 0.25}, expect: 'none_during_fault'}   # 지속 0.25 s 이하면 :50 조건을 고장 중에 못 채움
+            default: ['tracking_divergence', 'none_during_fault']
+      evidence_regions:
+        - {file: integration/supervised_lateral.py, function: MPCSupervisor.inspect}
+        - {file: integration/fault_injection.py, function: MPCFaultInjector}
+        - {file: integration/fault_injection.py, function: FaultConfig}
+        - {file: mpc_controller/mpc.py, function: MPCLateralController.compute}
+    - id: Q-B5
+      scope: per_scenario
+      gp_feature: false                          # 고장 모드만의 함수이고 Q-B1 과 거의 같은 분할 → 환각 검사용
+      question: "이 고장은 감독기가 보는 MPC 출력의 어느 필드를 바꾸는가?"
+      question_en: "Which fields of the MPC output that the supervisor inspects does this fault change?"
+      answer: ['ok_flag', 'sequence_or_stamp', 'steer_value_only', 'steer_and_reported_state', 'none', 'unknown']
+      refs: [S2]
+      expected_from_code:
+        by_fault_mode:
+          solver_fail: 'ok_flag'                 # fault_injection.py:111
+          stale: 'sequence_or_stamp'             # :112 직전 출력 전체 (seq·stamp 가 옛 값)
+          bias: 'steer_value_only'               # :79-82
+          drift: 'steer_value_only'
+          intermittent_bias: 'steer_value_only'
+          saturate: 'steer_value_only'           # :97
+          output_delay: 'steer_and_reported_state'   # :101 state 도 옛 값 → 추적 오차 검사(supervised_lateral.py:45)도 k틱 늦게 봄
+      evidence_regions:
+        - {file: integration/fault_injection.py, function: MPCFaultInjector}
     - id: Q-B2
-      question: "복귀 로직이 이 고장 패턴에서 반복 전환을 허용하는가?"
-      question_en: "Does the switch-back logic allow repeated MPC<->LQR switching for this fault pattern?"
-      answer: [yes, no, unknown]
-      refs: [S3]                                 # H-03 → R(재설계)/S3
-      expected_from_code: 'no'                   # supervised_lateral.py 래치(한 번 전환하면 복귀 없음). B 답이 다르면 환각 신호
+      scope: static
+      gp_feature: false
+      question: "복귀 로직이 반복 전환(MPC→LQR→MPC)을 허용하는가?"
+      question_en: "Does the supervisor ever switch back from LQR to MPC, allowing repeated MPC<->LQR switching?"
+      answer: ['yes', 'no', 'unknown']
+      refs: [S3]
+      expected_from_code: 'no'                   # supervised_lateral.py:99,116-117 active 는 mpc→lqr→safe_stop 만 (복귀 코드 없음)
+      evidence_regions:
+        - {file: integration/supervised_lateral.py, function: SupervisedLateral.step}
     - id: Q-B3
+      scope: static                              # 고장·파라미터와 무관한 코드 사실 (전 결과 194/224 'no')
+      gp_feature: false
       question: "전환 순간 LQR 상태 초기화가 조향 불연속을 만들 수 있는가?"
-      question_en: "Can the LQR state initialisation at the switch instant create a steering discontinuity?"
-      answer: [yes, no, unknown]
-      refs: [S1]                                 # H-02/H-03/H-05 → S1
-      expected_from_code: null
-  call_once_per: seed_scenario               # 섭동 후보는 시드의 답변 재사용
-  unknown_is_not_false: true
+      question_en: "Can the LQR takeover at the switch instant create a steering discontinuity (a jump larger than the post-takeover rate limit)?"
+      answer: ['yes', 'no', 'unknown']
+      refs: [S1]
+      expected_from_code: 'no'                   # lqr.py:158-174 내부 적분 상태 없음, supervised_lateral.py:134-136 직전 적용 조향 기준 60°/s 제한
+      evidence_regions:
+        - {file: integration/supervised_lateral.py, function: SupervisedLateral.step}
+        - {file: lqr_controller/lqr.py, function: LQRLateralController.compute}
+  call_once_per: b_key                       # per_scenario: fault_mode|onset_event(+param_bins 구간). static: 캠페인당 한 번
+  unknown_is_not_false: true                 # 'unknown' 은 환각으로 세지 않는다 (matches_code false, hallucinated false)
   logprobs_are_not_failure_probabilities: true
 
 feedback_in: none                            # 결과 피드백을 받지 않는다
@@ -48,5 +131,7 @@ code_context:                                   # B가 읽는 파일 (av_stack �
     - integration/fault_injection.py
     - integration/pdm_agent.py
     - lqr_controller/lqr.py
+    - mpc_controller/mpc.py                     # integration3 #6: seq 증가(:205)·조향 clamp(:246) 근거
   citation_check: file_and_line_in_range        # 인용 줄이 파일 범위 밖이면 citations_valid false
+  citation_relevance: evidence_regions          # integration3 #6: 인용 줄 하나 이상이 질문의 evidence_regions 안 → citations_relevant
 repeats: 3                                      # llm_models.yaml roles.B.repeats

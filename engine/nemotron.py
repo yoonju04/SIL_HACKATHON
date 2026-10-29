@@ -5,8 +5,11 @@ A: Nemotron-3.5-Lightning, thinking OFF, response_format json_schema built from 
    Optional refine pass (thinking ON, large max_tokens) for boundary-near candidates.
    A is the only role that sees failures (09 failure_table + accepted 10 explanations).
 B: Nemotron-3-Ultra, thinking ON + medium_effort, whole av_stack source files (with line numbers)
-   in context, answers yes/no/unknown(+Q-B1 options) with file:line evidence, repeated 2-3x for a
+   in context, answers each question from its option list with file:line evidence, repeated 2-3x for a
    consistency score. B never sees results, failures or GP predictions.
+   integration3 #6: per_scenario questions (cached per b_key) vs static questions (once per campaign); only
+   per_scenario + gp_feature questions become GP one-hot; majority answers are checked against expected_from_code
+   (b_hallucination_rate) and citations against each question's evidence_regions (citations_relevant).
 """
 from __future__ import annotations
 
@@ -298,12 +301,142 @@ def code_context(av_stack: Path | None, files: list[str]) -> tuple[str, dict[str
     return "\n\n".join(parts), sizes
 
 
+def _yaml_answer(v: Any) -> str:
+    """YAML 1.1 reads unquoted yes/no/on/off as booleans (the old Q-B2/Q-B3 bank). Map them back to strings."""
+    if v is True:
+        return "yes"
+    if v is False:
+        return "no"
+    return str(v)
+
+
+def normalize_questions(questions: list[dict]) -> list[dict]:
+    """integration3 #6: copy of the question bank with answer options / expected answers as strings and the
+    scope / gp_feature defaults filled in (per_scenario + gp_feature true = the pre-integration3 behaviour)."""
+    def norm_exp(e: Any) -> Any:
+        if e is None:
+            return None
+        if isinstance(e, list):
+            return [_yaml_answer(x) for x in e]
+        if isinstance(e, dict):
+            out = {}
+            for k, v in e.items():
+                if k == "cases":
+                    out[k] = [dict(c, expect=norm_exp(c.get("expect"))) for c in (v or [])]
+                elif k in ("by_fault_mode",):
+                    out[k] = {m: norm_exp(x) for m, x in (v or {}).items()}
+                elif k == "default":
+                    out[k] = norm_exp(v)
+                else:
+                    out[k] = v
+            return out
+        return _yaml_answer(e)
+    out = []
+    for q in questions:
+        q = dict(q)
+        q["answer"] = [_yaml_answer(x) for x in q["answer"]]
+        q["expected_from_code"] = norm_exp(q.get("expected_from_code"))
+        q["scope"] = str(q.get("scope", "per_scenario"))
+        if q["scope"] not in ("per_scenario", "static"):
+            raise ValueError(f"{q['id']}: scope must be per_scenario or static")
+        q["gp_feature"] = bool(q.get("gp_feature", q["scope"] == "per_scenario")) and q["scope"] == "per_scenario"
+        out.append(q)
+    return out
+
+
+def questions_of_scope(questions: list[dict], scope: str) -> list[dict]:
+    return [q for q in questions if q.get("scope", "per_scenario") == scope]
+
+
+def param_bin_suffix(questions: list[dict], params: dict) -> str:
+    """b_key suffix: bin index of every fault parameter a per_scenario question declares in param_bins
+    ({duration_s: [0.25]} -> duration_s#0 for <= 0.25, #1 above). A fault without that parameter adds nothing
+    (bias / drift / ... run until the route ends), so the cache stays bounded (mode x onset x bins)."""
+    bins: dict[str, list[float]] = {}
+    for q in questions_of_scope(questions, "per_scenario"):
+        for name, edges in (q.get("param_bins") or {}).items():
+            bins.setdefault(name, sorted(float(e) for e in edges))
+    parts = []
+    for name, edges in sorted(bins.items()):
+        v = (params or {}).get(name)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            parts.append(f"{name}#{sum(float(v) > e for e in edges)}")
+    return ("|" + "|".join(parts)) if parts else ""
+
+
+def _case_holds(when: dict, params: dict) -> bool:
+    v = (params or {}).get(when.get("param"))
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return False
+    ops = {"le": lambda a, b: a <= b, "lt": lambda a, b: a < b, "ge": lambda a, b: a >= b, "gt": lambda a, b: a > b}
+    checks = [(op, float(when[op])) for op in ops if op in when]
+    return bool(checks) and all(ops[op](float(v), t) for op, t in checks)
+
+
+def expected_answers(q: dict, ctx: dict | None) -> list[str] | None:
+    """Acceptable answers the code decides for this question in this scenario context, or None (not decided).
+    expected_from_code: 'x' | ['x', 'y'] | {by_fault_mode: {mode: spec}} with spec 'x' | [..] | {cases, default}."""
+    e = q.get("expected_from_code")
+    if isinstance(e, dict) and "by_fault_mode" in e:
+        e = e["by_fault_mode"].get((ctx or {}).get("fault_mode"))
+    if isinstance(e, dict):
+        params = (ctx or {}).get("fault_params") or {}
+        hit = next((c for c in e.get("cases") or [] if _case_holds(c.get("when") or {}, params)), None)
+        e = hit.get("expect") if hit is not None else e.get("default")
+    if e is None:
+        return None
+    return [_yaml_answer(x) for x in (e if isinstance(e, list) else [e])]
+
+
+def _function_ranges(path: Path) -> dict[str, tuple[int, int]]:
+    """{'Class': (a, b), 'Class.method': (a, b), 'func': (a, b)} with 1-based inclusive lines (ast)."""
+    import ast
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, ValueError):
+        return {}
+    out: dict[str, tuple[int, int]] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            out[node.name] = (node.lineno, node.end_lineno or node.lineno)
+            if isinstance(node, ast.ClassDef):
+                for sub in node.body:
+                    if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        out[f"{node.name}.{sub.name}"] = (sub.lineno, sub.end_lineno or sub.lineno)
+    return out
+
+
+def resolve_regions(av_stack: Path | None, questions: list[dict]) -> dict[str, list[tuple[str, int, int]]]:
+    """{question id: [(file, first, last), ...]} from evidence_regions ({file, function} or {file, lines: [a, b]}).
+    A function that cannot be found (no av_stack, renamed) is skipped; a question with no resolvable region gets
+    an empty list and citations_relevant None."""
+    cache: dict[str, dict] = {}
+    out: dict[str, list[tuple[str, int, int]]] = {}
+    for q in questions:
+        regs = []
+        for r in q.get("evidence_regions") or []:
+            f = r.get("file")
+            if not f:
+                continue
+            if r.get("lines"):
+                a, b = r["lines"]
+                regs.append((f, int(a), int(b)))
+            elif r.get("function") and av_stack is not None:
+                if f not in cache:
+                    cache[f] = _function_ranges(Path(av_stack) / f)
+                rng = cache[f].get(r["function"])
+                if rng:
+                    regs.append((f, rng[0], rng[1]))
+        out[q["id"]] = regs
+    return out
+
+
 def b_schema(questions: list[dict], files: list[str]) -> dict:
     items = []
     for q in questions:
         items.append({"type": "object", "properties": {
             "id": {"enum": [q["id"]]},
-            "answer": {"enum": q["answer"]},
+            "answer": {"enum": [_yaml_answer(x) for x in q["answer"]]},
             "evidence": {"type": "array", "minItems": 0, "maxItems": 6, "items": {
                 "type": "object", "properties": {"file": {"enum": files or ["none"]}, "line": {"type": "integer", "minimum": 1, "maximum": 100000}},
                 "required": ["file", "line"], "additionalProperties": False}},
@@ -321,7 +454,13 @@ answer cite the lines that decide it as {file, line}. Answer 'unknown' when the 
 
 
 def b_messages(code: str, questions: list[dict], scenario_ctx: dict, schema: dict) -> list[dict]:
-    qs = [{"id": q["id"], "question": q.get("question_en") or q["question"], "allowed_answers": q["answer"]} for q in questions]
+    qs = []
+    for q in questions:
+        item = {"id": q["id"], "question": q.get("question_en") or q["question"], "allowed_answers": [_yaml_answer(x) for x in q["answer"]]}
+        if q.get("answer_notes"):
+            item["answer_meanings"] = q["answer_notes"]
+        qs.append(item)
+    # expected_from_code / evidence_regions are never sent: they are the answer key of the hallucination check
     user = f"SOURCE FILES\n{code}\n\nSCENARIO CONTEXT (inputs only, no results)\n{json.dumps(scenario_ctx)}\n\n" \
            f"QUESTIONS\n{json.dumps(qs, ensure_ascii=False)}\n\nJSON SCHEMA\n{json.dumps(schema)}"
     return [{"role": "system", "content": B_SYSTEM}, {"role": "user", "content": user}]
@@ -332,26 +471,88 @@ def check_citations(answer: dict, sizes: dict[str, int]) -> bool:
     return bool(ev) and all(e.get("file") in sizes and 1 <= int(e.get("line", 0)) <= sizes[e["file"]] for e in ev)
 
 
-def aggregate_b(samples: list[dict], questions: list[dict], sizes: dict[str, int]) -> dict[str, dict]:
+def citations_relevant(answer: dict, sizes: dict[str, int], regions: list[tuple[str, int, int]] | None) -> bool | None:
+    """integration3 #6: valid (every line inside its file) AND at least one cited line inside the question's
+    evidence_regions. None when the question has no resolvable region (cannot be judged)."""
+    if not regions:
+        return None
+    if not check_citations(answer, sizes):
+        return False
+    return any(e.get("file") == f and a <= int(e.get("line", 0)) <= b for e in answer.get("evidence") or [] for f, a, b in regions)
+
+
+def aggregate_b(samples: list[dict], questions: list[dict], sizes: dict[str, int], ctx: dict | None = None,
+                regions: dict[str, list] | None = None) -> dict[str, dict]:
+    """Majority answer per question + the hallucination check (integration3 #6):
+    matches_code = majority answer is one the code allows (expected_answers), None when the code does not decide;
+    hallucinated = matches_code False and the answer is not 'unknown' (unknown_is_not_false)."""
     out = {}
     for q in questions:
-        answers = [a for s in samples for a in s.get("answers", []) if a.get("id") == q["id"]]
-        votes = Counter(a.get("answer", "unknown") for a in answers)
+        answers = [dict(a, answer=_yaml_answer(a.get("answer", "unknown"))) for s in samples for a in s.get("answers", [])
+                   if a.get("id") == q["id"]]
+        votes = Counter(a["answer"] for a in answers)
         maj, cnt = votes.most_common(1)[0] if votes else ("unknown", 0)
+        exp = expected_answers(q, ctx)
+        matches = None if exp is None or not answers else maj in exp
+        rel = [citations_relevant(a, sizes, (regions or {}).get(q["id"])) for a in answers]
         out[q["id"]] = {"answer": maj, "agreement": cnt / max(1, len(samples)), "votes": dict(votes),
                         "citations_valid": [check_citations(a, sizes) for a in answers],
+                        "citations_relevant": rel,
                         "evidence": next((a.get("evidence") for a in answers if a.get("answer") == maj), []),
-                        "expected_from_code": q.get("expected_from_code")}
+                        "scope": q.get("scope", "per_scenario"),
+                        "expected_from_code": exp,
+                        "matches_code": matches,
+                        "hallucinated": bool(matches is False and maj != "unknown")}
     return out
 
 
 def b_features(answers: dict[str, dict] | None, questions: list[dict]) -> tuple[list[float], list[str]]:
+    """One-hot of the per_scenario questions with gp_feature true. Static questions (one fixed code fact per
+    campaign) and gp_feature false questions are recorded for the hallucination check only: a constant column
+    carries no information for the GP."""
     x, names = [], []
     for q in questions:
-        a = (answers or {}).get(q["id"], {}).get("answer", "unknown")
-        for opt in q["answer"]:
+        if q.get("scope", "per_scenario") != "per_scenario" or not q.get("gp_feature", True):
+            continue
+        a = _yaml_answer((answers or {}).get(q["id"], {}).get("answer", "unknown"))
+        for opt in (_yaml_answer(o) for o in q["answer"]):
             names.append(f"{q['id']}={opt}"); x.append(1.0 if a == opt else 0.0)
     return x, names
+
+
+def b_hallucination_summary(entries: list[dict]) -> dict:
+    """Campaign-level B check over aggregated answer dicts ({qid: aggregate_b row}, one per b_key + static)."""
+    per_q: dict[str, dict] = {}
+    for ent in entries:
+        for qid, row in (ent or {}).items():
+            d = per_q.setdefault(qid, {"asked": 0, "checked": 0, "matched": 0, "hallucinated": 0, "unknown_when_decided": 0,
+                                       "answers": Counter(), "citations": 0, "citations_valid": 0, "citations_judged": 0,
+                                       "citations_relevant": 0})
+            d["asked"] += 1
+            d["answers"][str(row.get("answer"))] += 1
+            if row.get("matches_code") is not None:
+                d["checked"] += 1
+                d["matched"] += bool(row["matches_code"])
+                d["hallucinated"] += bool(row.get("hallucinated"))
+                d["unknown_when_decided"] += row.get("answer") == "unknown" and not row["matches_code"]
+            cv = row.get("citations_valid") or []
+            d["citations"] += len(cv); d["citations_valid"] += sum(bool(v) for v in cv)
+            cr = [v for v in row.get("citations_relevant") or [] if v is not None]
+            d["citations_judged"] += len(cr); d["citations_relevant"] += sum(bool(v) for v in cr)
+    tot = {k: sum(d[k] for d in per_q.values()) for k in ("checked", "matched", "hallucinated", "unknown_when_decided",
+                                                         "citations", "citations_valid", "citations_judged", "citations_relevant")}
+    for d in per_q.values():
+        d["answers"] = dict(d["answers"])
+        d["distinct_answers"] = len(d["answers"])
+        d["hallucination_rate"] = d["hallucinated"] / d["checked"] if d["checked"] else None
+    return {"b_hallucination_rate": tot["hallucinated"] / tot["checked"] if tot["checked"] else None,
+            "b_code_agreement_rate": tot["matched"] / tot["checked"] if tot["checked"] else None,
+            "b_checked_answers": tot["checked"], "b_hallucinated_answers": tot["hallucinated"],
+            "b_unknown_when_code_decides": tot["unknown_when_decided"],
+            "citation_valid_rate": tot["citations_valid"] / tot["citations"] if tot["citations"] else None,
+            "citation_relevant_rate": tot["citations_relevant"] / tot["citations_judged"] if tot["citations_judged"] else None,
+            "per_question": per_q,
+            "note": "hallucinated = majority answer outside expected_from_code (not 'unknown'); one row per b_key + static"}
 
 
 # ----------------------------------------------------------------------------- stubs (--mock)
@@ -386,9 +587,31 @@ def _stub_near(region: dict, items_schema: dict, rng: random.Random) -> dict | N
 
 
 
+# SYNTHETIC: what the --mock B "reads" from the code. Mostly the real answer, with one deliberate mistake (stale ->
+# stale_mpc for Q-B1, what the real Nemotron answered in result_1..5) so the hallucination metric has something to count.
+_STUB_B_TABLE = {
+    "Q-B1": {"solver_fail": "lqr_early", "stale": "stale_mpc", "output_delay": "stale_mpc"},
+    "Q-B4": {"solver_fail": "solver_failure", "stale": "stale_sequence", "output_delay": "tracking_divergence"},
+    "Q-B5": {"solver_fail": "ok_flag", "stale": "sequence_or_stamp", "output_delay": "steer_and_reported_state"},
+    "Q-B2": {}, "Q-B3": {},
+}
+_STUB_B_DEFAULT = {"Q-B1": "corrupted_mpc", "Q-B4": "tracking_divergence", "Q-B5": "steer_value_only", "Q-B2": "no", "Q-B3": "no"}
+_STUB_B_CITE = {"Q-B1": ("integration/fault_injection.py", 112), "Q-B4": ("integration/supervised_lateral.py", 42),
+                "Q-B5": ("integration/fault_injection.py", 101), "Q-B2": ("integration/supervised_lateral.py", 117),
+                "Q-B3": ("integration/supervised_lateral.py", 135)}
+
+
+def _stub_b_answer(qid: str, mode: str | None, params: dict, opts: list[str]) -> str:
+    ans = _STUB_B_TABLE.get(qid, {}).get(mode, _STUB_B_DEFAULT.get(qid, opts[-1]))
+    if qid == "Q-B4" and mode == "saturate" and float(params.get("duration_s", 1.0)) <= 0.25:
+        ans = "none_during_fault"
+    return ans if ans in opts else opts[-1]
+
+
 def stub_handler(seed: int = 0):
     """SYNTHETIC answers for --mock. A: random schema-valid candidates; B: fixed answers with real file names."""
     rng = random.Random(seed)
+    b_rng = random.Random(seed + 7919)   # B has its own stream: changing the B bank does not shift Nemotron A's
 
     def handler(tag: str, model: str, messages: list[dict], kw: dict) -> str:
         user = messages[-1]["content"]
@@ -415,16 +638,21 @@ def stub_handler(seed: int = 0):
         if tag.startswith("B"):
             m = re.search(r"JSON SCHEMA\n(.*)$", user, re.DOTALL)
             schema = json.loads(m.group(1))
+            cm = re.search(r"SCENARIO CONTEXT \(inputs only, no results\)\n(.*?)\n\nQUESTIONS", user, re.DOTALL)
+            ctx = json.loads(cm.group(1)) if cm else {}
+            mode = ctx.get("fault_mode")
             files = schema["properties"]["answers"]["items"]["anyOf"][0]["properties"]["evidence"]["items"]["properties"]["file"]["enum"]
-            f0 = "integration/supervised_lateral.py" if "integration/supervised_lateral.py" in files else files[0]
-            canned = {"Q-B1": "stale_mpc", "Q-B2": "no", "Q-B3": "yes"}
             answers = []
             for br in schema["properties"]["answers"]["items"]["anyOf"]:
                 qid = br["properties"]["id"]["enum"][0]
-                ans = canned.get(qid, br["properties"]["answer"]["enum"][-1])
-                if rng.random() < 0.15:
-                    ans = rng.choice(br["properties"]["answer"]["enum"])
-                answers.append({"id": qid, "answer": ans, "evidence": [{"file": f0, "line": 113}],
+                opts = br["properties"]["answer"]["enum"]
+                ans = _stub_b_answer(qid, mode, ctx.get("fault_params") or {}, opts)
+                if b_rng.random() < 0.15:
+                    ans = b_rng.choice(opts)
+                f, line = _STUB_B_CITE.get(qid, ("integration/supervised_lateral.py", 113))
+                if f not in files or b_rng.random() < 0.15:       # SYNTHETIC: some citations point at an unrelated line
+                    f, line = files[-1], 1
+                answers.append({"id": qid, "answer": ans, "evidence": [{"file": f, "line": line}],
                                 "rationale": "SYNTHETIC stub answer"})
             return json.dumps({"answers": answers})
         raise ValueError(f"no stub for {tag}")
