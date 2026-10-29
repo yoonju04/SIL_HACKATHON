@@ -90,6 +90,25 @@ def cover_times(timeline: dict) -> list[float]:
     return [float(t) for t in ts if isinstance(t, (int, float)) and not isinstance(t, bool)]
 
 
+SELECT_CHUNK = 40
+
+
+def _select_chunks(idx: list[int], size: int = SELECT_CHUNK) -> list[list[str]]:
+    """ffmpeg select terms for sorted frame indices: runs of consecutive indices -> between(n,a,b), else eq(n,i);
+    at most `size` terms per chunk."""
+    terms, run = [], []
+    for i in idx:
+        if run and i == run[-1] + 1:
+            run.append(i)
+            continue
+        if run:
+            terms.append(f"eq(n\\,{run[0]})" if len(run) == 1 else f"between(n\\,{run[0]}\\,{run[-1]})")
+        run = [i]
+    if run:
+        terms.append(f"eq(n\\,{run[0]})" if len(run) == 1 else f"between(n\\,{run[0]}\\,{run[-1]})")
+    return [terms[k:k + size] for k in range(0, len(terms), size)]
+
+
 def pick_indices(times: list[float], start: float, end: float, fps: float) -> list[int]:
     out, t = [], start
     step = 1.0 / fps
@@ -199,9 +218,12 @@ def extract_clip(run_dir: Path, out_dir: Path, *, anchor_s: float, front_frames:
         return None
     out_dir.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(dir=out_dir))
-    expr = "+".join(f"eq(n\\,{i})" for i in idx)
-    subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(src), "-vf", f"select='{expr}'", "-vsync", "0",
-                    str(tmp / "f_%04d.png")], check=True)
+    # integration3: ffmpeg's expression parser fails ("Cannot allocate memory") on a select sum of ~100 eq() terms
+    # (10 fps dense windows around several events). Consecutive indices become one between(), and the terms are
+    # split into chunks of SELECT_CHUNK, one ffmpeg call each; chunk files sort in index order (g000_0001, ...).
+    for gi, terms in enumerate(_select_chunks(idx, SELECT_CHUNK)):
+        subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(src), "-vf", f"select='{'+'.join(terms)}'", "-vsync", "0",
+                        str(tmp / f"f_g{gi:03d}_%04d.png")], check=True)
     frames = sorted(tmp.glob("f_*.png"))
     ftimes = [round(times[i], 3) for i in idx][: len(frames)]
     overlay = _overlay(frames, ftimes, max_height)
