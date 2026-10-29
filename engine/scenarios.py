@@ -151,8 +151,9 @@ def validate_against_space(space: dict, c: dict, routes: list[str]) -> list[str]
     return problems
 
 
-def gate(space: dict, c: dict, routes: list[str], route_events: dict | None, lat_acc_threshold: float | None) -> tuple[bool, list[str], list[str]]:
-    """G-01..G-03 (04 feasibility_expansion.yaml). Returns (ok, tags, problems)."""
+def gate(space: dict, c: dict, routes: list[str], route_events: dict | None, lat_acc_threshold: float | None,
+         min_window_s: float | None = None) -> tuple[bool, list[str], list[str]]:
+    """G-01..G-03 (04 feasibility_expansion.yaml), plus V-03 once the route's baseline is known. Returns (ok, tags, problems)."""
     problems = validate_against_space(space, c, routes)
     events = None
     if route_events is not None:
@@ -168,6 +169,14 @@ def gate(space: dict, c: dict, routes: list[str], route_events: dict | None, lat
                                   lat_acc_threshold, carla_mapping_ok=not problems)
     if events is None and ok:
         tags.append("G-01_pending_baseline")
+    # BUG-028: an onset closer to the route end than the minimum evaluation window can never be graded (09 V-03);
+    # e.g. 28035 has one curve at 46.5-49 s and ends at 52 s, so its curve_apex / curve_exit onsets are dead
+    t_end = (route_events or {}).get("t_end")
+    onset = onset_time(c, route_events) if ok and route_events and t_end is not None and min_window_s else None
+    if onset is not None and t_end - onset < min_window_s:
+        ok = False
+        tags.append("V-03_reject")
+        problems.append(f"onset {onset:.1f} s leaves {t_end - onset:.1f} s before the route ends ({min_window_s:.0f} s needed)")
     return ok, tags, problems
 
 
@@ -291,7 +300,7 @@ def detect_route_events(ticks: list[dict], dt: float = 0.05, *, kappa_on: float 
                           "kappa_at": {}, "speed_at": {}, "n_curves": len(curves),
                           "method": "yaw_rate/vx, moving ticks only, PROVISIONAL thresholds", "kappa_on": kappa_on,
                           "v_ref_mps": v_ref, "min_straight_speed_mps": v_s, "min_curve_speed_mps": v_c,
-                          "t_launch": t_launch}
+                          "t_launch": t_launch, "t_end": t[-1] if t else None}
     if len(curves) > event_index:
         a, b = curves[event_index]
         apex = max(range(a, b + 1), key=lambda m: abs(k[m]))

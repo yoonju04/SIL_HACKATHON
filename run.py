@@ -345,9 +345,10 @@ class Loop:
     # ------------------------------------------------------------------ 04 feasibility + expansion
     def stage_04(self, cands: list[dict], round_index: int) -> list[dict]:
         lat = self.th["lat_acc_threshold_mps2"]
+        mw = float(self.cfg["safety_spec"]["evaluation_window"]["min_length_s"])   # BUG-028
         ok_list = []
         for c in cands:
-            ok, tags, problems = SC.gate(self.space, c, self.route_ids, self.route_events(c), lat)
+            ok, tags, problems = SC.gate(self.space, c, self.route_ids, self.route_events(c), lat, mw)
             c["tags"] = sorted(set(c.get("tags", []) + tags))
             if ok:
                 ok_list.append(c)
@@ -359,7 +360,7 @@ class Loop:
             for c in [c for c in ok_list if c["source"].startswith("nemotron_a")]:
                 for p in SC.perturb(self.space, c, int(fe["local_perturbation"]["per_seed"]), self.rng):
                     p = self.quantize(p)
-                    ok, tags, _ = SC.gate(self.space, p, self.route_ids, self.route_events(p), lat)
+                    ok, tags, _ = SC.gate(self.space, p, self.route_ids, self.route_events(p), lat, mw)
                     if ok:
                         p["tags"] = tags; expanded.append(p)
         seen = set(self.candidates) | {r["scenario_id"] for r in self.records}
@@ -452,6 +453,17 @@ class Loop:
         for c in forced:
             c["selected_by"] = "counterfactual_check"
         return forced + batch
+
+    def reserve_order(self, pool: list[dict], batch: list[dict], round_index: int) -> list[dict]:
+        """BUG-029: replacements for rejected batch candidates (08 baseline gate) in the same acquisition order stage 07
+        used, not pool order (pool order puts Nemotron A first, so GP picks were swapped for unranked A candidates)."""
+        reserve = [c for c in pool if c not in batch]
+        if round_index == 0 or not self.flags["use_gp"]:
+            return reserve
+        beta = J.beta_schedule(round_index, self.rounds + 1)
+        obj = self.obj_cfg[self.objectives[0]]
+        scored = [(switch_aware_score(c, obj, beta), c) for c in reserve]
+        return [c for s, c in sorted(scored, key=lambda p: -math.inf if p[0] is None else p[0], reverse=True)]
 
     # ------------------------------------------------------------------ 08 + 09
     def is_control(self, c: dict) -> bool:
@@ -705,7 +717,7 @@ class Loop:
             dump(rdir / "07_batch.json", [{k: c.get(k) for k in ("scenario_id", "source", "selected_by", "gp_mean", "gp_std")} for c in batch])
             self.say(f"[round {rnd}] pool {len(pool)} -> batch {len(batch)} ({self.ablation}, video {'on' if self.video_on else 'off'})")
             self.screen(f"라운드 {rnd}: 시뮬레이션 {len(batch)}개 시작")
-            new = self.stage_08_09(batch, rnd, reserve=[c for c in pool if c not in batch])
+            new = self.stage_08_09(batch, rnd, reserve=self.reserve_order(pool, batch, rnd))
             if self.video_on and new:
                 self.screen(f"라운드 {rnd}: 영상 해설 중")
             self.stage_10(new, rnd)

@@ -444,5 +444,50 @@
   전환 없이 지나가고, 명령 조향 속도만 90 °/s 한계를 넘는다.
 - **의미:** "전환 실패" 시나리오의 실제 사례. 감독기에 조향 속도 검사(예: |Δδ/Δt| > 90 °/s 연속 n틱)를 넣으면 막을 수 있음
   — 감독기 설계 변경이라 이번 수정 범위에서는 하지 않고 결과로 기록.
-- **재판정 요약 (old → new):** result_2 F1→F3 2 / result_3 F1→F3 2, F1→pass 1, F2→pass 1, F3→pass 1, invalid→F3 1 /
+- **재판정 요약 (old → new):** result_2 F1→F3 2 / result_3 F1→F3 2, F1→pass 1, F2→pass 2 (BUG-027 포함), F3→pass 1, invalid→F3 1 /
   result_4 F1→F3 4, F1→pass 3, F2→pass 2. 새 판정은 각 폴더 `run_records_regraded.jsonl` (커밋 안 함).
+
+## 2026-10-28 중간 규모 실제 캠페인 (`outputs/real_bughunt_1028`, CARLA, Cosmos 끔)
+
+`run.py --real --cold-start 4 --rounds 1 --batch-size 3 --no-reaction-runs on --video-explainer off`: 실행 7, 건너뜀 6 (모두 V-03).
+결과: F1 4 (saturate 3, 간헐 bias 1), F3 2 (SR6), pass 1 (solver_fail 대조군). 여기서 찾은 버그 3개(027~029)와 발견 1개.
+
+## BUG-027: SR2도 BUG-026과 같은 반올림 오차, 코드 기본값은 아직 60 °/s
+
+- **증상:** R00-0000 saturate: 전환 후 LQR 제한기가 만든 90 °/s가 SR2 `max_rate_dps = 90.00005`로 읽혀 SR2 실패
+  (`robustness -5e-7`, `switch_transient: true`). 이 런은 F1이라 판정은 그대로지만, F1이 아닌 런이면 F2가 된다.
+- **원인:** (1) BUG-026은 SR6만 고쳤다. SR2도 같은 rad↔deg 변환을 한다. (2) `MonitorConfig.sr2_limit_dps` 기본값이 아직 60
+  (BUG-023은 yaml만 90으로 바꿈). spec 없이 만든 설정(테스트 등)은 옛 한계를 썼다.
+- **수정:** `pipeline/09_monitor/monitor.py` SR2 통과 기준 `max_rate <= limit * (1 + 1e-6)`, 기본값 90. 테스트: BUG-026 테스트에
+  SR2 확인 추가, `test_gp_targets_measure_how_much_each_sr_broke`는 한계 90에서도 점수가 잘리도록 계단을 20°로.
+- **재판정:** result_3 F2→pass가 1 → 2. 이제 result_2~4 어디에도 F2 없음.
+
+## BUG-028: 경로 끝에 너무 가까운 시작 시점이 계속 뽑혀 실행 슬롯을 날림
+
+- **증상:** 13번 고른 후보 중 6번이 08단계에서 `baseline: V-03 window shorter than minimum`으로 건너뜀. 2라운드는 GP가 고른 3개가 **모두** 건너뜀.
+- **원인:** 28035는 커브가 하나(46.5~49 s)이고 52 s에 끝난다. 28048은 `straight`이 42 s이고 45.6 s에 끝난다. 이런 시작 시점은 평가창이
+  5 s(`evaluation_window.min_length_s`)가 안 되어 채점할 수 없다. 04 gate는 경로 이벤트가 있는지만 보고 남은 시간은 보지 않았다.
+  straddle은 데이터에서 먼 후보를 고르는데, 이런 죽은 영역이 그런 곳이라 계속 뽑혔다.
+- **수정:** `engine/scenarios.py detect_route_events`가 `t_end`(기준 실행 끝 시각)를 돌려주고, `gate(..., min_window_s)`가 시작 시점부터
+  경로 끝까지 5 s가 안 되면 `V-03_reject`. `run.py stage_04`가 spec의 최소 창을 넘긴다. 기준 실행이 아직 없는 경로·속도는 예전처럼
+  08 게이트(BUG-003/004)가 막는다. 이 캠페인 2라운드에 적용하면 기준 실행이 있던 후보 52개 중 20개가 04에서 걸러진다.
+  테스트 `test_gate_rejects_onset_too_close_to_route_end`.
+
+## BUG-029: 건너뛴 GP 후보를 GP 순위가 아니라 풀 순서로 교체
+
+- **증상:** 2라운드에서 GP가 고른 3개가 건너뛰어지자, 교체된 3개가 모두 Nemotron A 후보 앞쪽 3개(SC-70f4…, SC-7d93…, SC-f6ba…,
+  모두 saturate)였다. `selected_by = replacement_for_…`인데 GP 점수와 상관없이 정해짐.
+- **원인:** `run.py`가 `reserve=[c for c in pool if c not in batch]`를 넘겼다. 풀은 Nemotron A → 섭동 → space-filling 순서다.
+- **수정:** `Loop.reserve_order` — 1라운드부터는 stage 07과 같은 `switch_aware_score` 순서로 예비 후보를 정렬(점수 없음은 맨 뒤).
+  cold start(라운드 0)는 예전처럼 풀 순서. 테스트 `test_reserve_follows_acquisition_order_not_pool_order`.
+
+## 발견 (버그 아님): 짧은 saturate 펄스는 감독기를 완전히 피함
+
+- R01-0004 (28035, 20 km/h, 0.2 s), R01-0005 (town10, 35 km/h, 0.2 s), R01-0006 (24206, 25 km/h): 최대각에 0.2 s 붙였다가 놓으면
+  차선을 0.02~0.67 m 벗어나는데 전환이 없다. `tracking_divergence`(1 m, 0.25 s 유지)가 걸리기 전에 고장이 끝나기 때문이다.
+- 0.5 s 펄스(R00-0000, 30 km/h)는 0.8 s 뒤에 감지되었지만 FTTI 0.4 s보다 늦어 정적 물체와 충돌했다.
+- saturate는 FTTI가 0.3~0.4 s라 SR1 한계가 0.15~0.2 s다. 지금 감독기 구조(추종 오차 + 유지 시간)로는 감지하더라도 항상 F1이다.
+  위의 "조향 속도 검사 없음"과 같은 빈틈: 조향 속도 검사가 있으면 첫 틱(1500~1800 °/s)에서 잡힌다.
+- 참고: Nemotron A 1라운드 15개는 모두 `onset_offset_s = 0`, 고장 종류를 차례로 하나씩 고름(saturate 5, bias 3, …). 경로 시간 정보를 받지 않아
+  28048 `straight`(경로 끝 3 s 전) 같은 후보도 냄. PDM-Lite `kinematic_bicycle_model.py:47` NaN cast 경고는 기준 실행에서도 나오는
+  외부 코드 경고라 무시.

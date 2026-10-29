@@ -33,3 +33,16 @@ def test_mock_cli_video_off(tmp_path):
     assert not (tmp_path / "o" / "explanations.jsonl").exists()
     cfg = json.loads((tmp_path / "o" / "run_config.json").read_text())
     assert cfg["video_explainer"] is False and cfg["synthetic"] is True
+
+
+def test_reserve_follows_acquisition_order_not_pool_order(tmp_path):
+    # BUG-029: a rejected GP pick was replaced by the first Nemotron A candidate of the pool, not the next-best one
+    loop = Loop(mode="mock", out=tmp_path / "o", ablation="X-5", video_on=False, seed=1, cold_start=4, batch_size=2,
+                rounds=1, quiet=True)
+    sw = lambda mu, sd: {"gp_mean": {"switched_indicator": mu}, "gp_std": {"switched_indicator": sd}}
+    pool = [dict(scenario_id="A", source="nemotron_a", **sw(-1.0, 0.1)),
+            dict(scenario_id="B", source="space_filling", **sw(0.0, 0.9)),
+            dict(scenario_id="C", source="space_filling", **sw(0.0, 0.5)),
+            dict(scenario_id="P", source="space_filling", **sw(0.0, 1.0))]
+    assert [c["scenario_id"] for c in loop.reserve_order(pool, [pool[3]], 1)] == ["B", "C", "A"]
+    assert [c["scenario_id"] for c in loop.reserve_order(pool, [pool[3]], 0)] == ["A", "B", "C"]   # cold start: pool order

@@ -31,6 +31,19 @@ def test_gate_rejects_missing_event(space):
     assert not ok
 
 
+def test_gate_rejects_onset_too_close_to_route_end(space):
+    # BUG-028: 28035 has one curve at 46.5-49 s and its baseline ends at 52 s
+    c = SC.space_filling(space, ROUTES, POOL, 1, random.Random(1))[0]
+    ev = {"straight": None, "curve_entry": 46.5, "curve_apex": 47.9, "curve_exit": 49.0, "kappa_at": {}, "t_end": 52.0}
+    c.update(onset_event="curve_exit", onset_offset_s=0.3)
+    ok, tags, problems = SC.gate(space, c, ROUTES, ev, 3.0, 5.0)
+    assert not ok and "V-03_reject" in tags and problems
+    c.update(onset_event="curve_entry", onset_offset_s=-0.5)
+    assert SC.gate(space, c, ROUTES, ev, 3.0, 5.0)[0]
+    c.update(onset_event="curve_exit", onset_offset_s=0.3)
+    assert SC.gate(space, c, ROUTES, ev, 3.0)[0]                      # no minimum given: old behaviour
+
+
 def test_cli_mapping(space):
     c = SC.make_candidate(space, route_id="town10_long", speed=30, fault_id="F-04", params={"magnitude_rad": 0.05, "duration_s": 2.0},
                           onset_event="straight", offset=0.5, source="t")
@@ -47,6 +60,7 @@ def test_detect_route_events():
         ticks.append({"t": t, "vx": 8.0, "yaw_rate": 8.0 * k})
     ev = SC.detect_route_events(ticks, 0.05)
     assert 29.5 <= ev["curve_entry"] <= 31 and 35 <= ev["curve_exit"] <= 37 and ev["straight"] is not None
+    assert ev["t_end"] == ticks[-1]["t"]
 
 
 def test_detect_route_events_ignores_stopped_and_launch():

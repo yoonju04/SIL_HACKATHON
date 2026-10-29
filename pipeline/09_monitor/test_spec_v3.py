@@ -142,6 +142,7 @@ class SpecV3Tests(unittest.TestCase):
         steer = lambda t: 0.0 if t < 10.2 else min(0.3, lim * round((t - 10.2) / 0.05))
         r = self.grade(trace(drift(.3, .2), fault_at=ONSET, switch_at=10.2, steer_fn=steer))
         self.assertTrue(r['sr']['SR6']['pass'], r['sr']['SR6'])
+        self.assertTrue(r['sr']['SR2']['pass'], r['sr']['SR2'])   # BUG-027: SR2 has the same 90 deg/s bound
 
     def test_recovery_cannot_look_past_evaluation_window(self):
         cfg=replace(CFG,window_s=1,min_window_s=.5)

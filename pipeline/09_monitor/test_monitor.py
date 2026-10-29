@@ -177,12 +177,12 @@ def test_baseline_switch_is_only_recorded():
 
 
 def test_gp_targets_measure_how_much_each_sr_broke():
-    steer = lambda x: 0.0 if x < 10.6 else math.radians(10)  # 200 deg/s at switch
+    steer = lambda x: 0.0 if x < 10.6 else math.radians(20)  # 400 deg/s at switch
     fault = trace(drift(1.0, 1.2), fault_at=ONSET, switch_at=10.6, steer_fn=steer)  # late + jump + off lane
     rec = evaluate_pair(fault, trace(), ONSET, CFG, dangerous_no_reaction())
     g, m = rec["sr_scores"], rec["sr_measures"]
     assert g["SR1"] < 0 and abs(m["SR1_latency_s"] - 0.6) < 1e-9          # late by 0.2 s on a 0.4 s limit
-    assert g["SR2"] == -2.0 and m["SR2_max_rate_dps"] > 190                # (60-200)/60 = -2.33, clipped
+    assert g["SR2"] == -2.0 and m["SR2_max_rate_dps"] > 390                # (90-400)/90 = -3.44, clipped
     assert g["SR4"] < 0 and m["SR4_margin_m"] < 0
     assert g["overall"] == min(g["SR1"], g["SR2"], g["SR4"])
     assert set(rec["failed_requirements"]) >= {"SR1", "SR2", "SR4"}

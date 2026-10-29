@@ -46,7 +46,7 @@ class MonitorConfig:
     sr1_ftti_fraction: float = 0.5
     sr1_fixed_limit_s: float = 0.5
     # SR2
-    sr2_limit_dps: float = 60.0
+    sr2_limit_dps: float = 90.0   # BUG-023/027: same as safety_spec.yaml SR2
     sr2_window_s: float = 0.5
     # SR4 geometry fallbacks (used only when the probe did not log them)
     lane_width_default_m: float | None = None
@@ -441,7 +441,8 @@ def grade_pair(fault: Trace, baseline: Trace, onset: float, cfg: MonitorConfig |
         rates = np.abs(np.diff(st)) / np.diff(t)
         rate_mask = m[1:] & m[:-1]
         max_rate = float(np.degrees(rates[rate_mask].max())) if rate_mask.any() else 0.0
-        sr["SR2"] = {"applies": True, "pass": max_rate <= cfg.sr2_limit_dps,
+        # BUG-027: same rad<->deg round trip as SR6 (BUG-026) - the LQR limiter's own 90 deg/s reads 90.00005
+        sr["SR2"] = {"applies": True, "pass": max_rate <= cfg.sr2_limit_dps * (1 + 1e-6),
                      "robustness": (cfg.sr2_limit_dps - max_rate) / cfg.sr2_limit_dps,
                      "max_rate_dps": max_rate, "limit_dps": cfg.sr2_limit_dps,
                      "coverage_complete": switch_time + cfg.sr2_window_s <= fc.window[1] + 1e-9}
