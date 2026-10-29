@@ -129,37 +129,68 @@ def unit_dims(space: dict, fault_pool: list[str]) -> int:
 
 
 def space_filling(space: dict, routes: list[str], fault_pool: list[str], n: int, rng: random.Random,
-                  objective: str = "S1", round_index: int = 0, source: str = "space_filling") -> list[dict]:
-    """Latin-hypercube style: every continuous dim is stratified into n bins; categoricals cycle."""
-    if n <= 0:
+                  objective: str = "S1", round_index: int = 0, source: str = "space_filling",
+                  max_controls: int | None = None, speed_step: float = 0.0) -> list[dict]:
+    """Latin-hypercube style: every continuous dim is stratified into n bins; categoricals cycle.
+
+    integration3 #8c: fault types really cycle (random start; before, each sample drew a random fault, so a 4-run cold
+    start covered 2-4 of 7 types), and each fault cycles through its onset_events (fault x onset stratified), routes
+    cycle too. max_controls: at most this many control-fault samples (the round's BUG-025 cap, so the cycle does not
+    produce control faults cap_controls would drop); the cycle then moves on to the next risk fault.
+    integration3 #8b: only onset_events the route can grade at that speed (route_onset_exclusions); a route with none
+    left for the fault is swapped for the next route that has one. speed_step: the runner's speed_step_kmh, so the
+    exclusion is checked at the speed quantize() will round to (else 28 km/h passes and is rejected at 30)."""
+    if n <= 0 or not fault_pool or not routes:
         return []
     fax = friction_axis(space)
+    faults = faults_by_id(space)
     strata = [rng.sample(range(n), n) for _ in range(4 if fax else 3)]
+    f0, r0 = rng.randrange(len(fault_pool)), rng.randrange(len(routes))
+    ev_start = {fid: rng.randrange(8) for fid in fault_pool}
+    used: dict[str, int] = {}
+    n_ctrl = 0
     out = []
+    k = 0          # position in the fault cycle
     for i in range(n):
         u_speed, u_par, u_off = ((strata[d][i] + rng.random()) / n for d in range(3))
         u_fr = (strata[3][i] + rng.random()) / n if fax else None
-        fid = fault_pool[(i + rng.randrange(len(fault_pool))) % len(fault_pool)]
-        f = faults_by_id(space)[fid]
+        fid = None
+        for _ in range(len(fault_pool)):
+            cand = fault_pool[(f0 + k) % len(fault_pool)]
+            k += 1
+            if max_controls is not None and faults[cand].get("group") == "control" and n_ctrl >= max_controls:
+                continue
+            fid = cand
+            break
+        if fid is None:
+            break
+        f = faults[fid]
         rg = sampling_ranges(space, f)   # integration3 #3: control faults sample their handover_axes
         env, off = rg["max_speed_kmh"], rg["offset_s"]
         friction = None
         if fax:
             flo, fhi = rg["tire_friction_scale"]
             friction = flo + u_fr * (fhi - flo)
-        params = {k: _param_from_unit(spec, u_par if j == 0 else rng.random()) for j, (k, spec) in enumerate((f.get("params") or {}).items())}
+        params = {k_: _param_from_unit(spec, u_par if j == 0 else rng.random()) for j, (k_, spec) in enumerate((f.get("params") or {}).items())}
         speed = env[0] + u_speed * (env[1] - env[0])
-        route = routes[i % len(routes)] if i < len(routes) else rng.choice(routes)
-        # integration3 #8b: only onset_events this route can grade at this speed (route_onset_exclusions); a route
-        # with none left for this fault is swapped for the next route that has one
-        order = [route] + [r for r in routes[routes.index(route) + 1:] + routes[:routes.index(route)]]
-        route, events = next(((r, ev) for r in order for ev in [allowed_onset_events(space, r, f, speed)] if ev),
-                             (route, []))
-        if not events:
+        q_speed = round(speed / speed_step) * speed_step if speed_step > 0 else speed
+        route = routes[(r0 + i) % len(routes)]
+        order = routes[routes.index(route):] + routes[:routes.index(route)]
+        # onset_event: this fault's next one in its own cycle; the route cycle moves on to the first route that can
+        # grade it (route_onset_exclusions), else to any route with an allowed onset
+        base = rg["onset_event"]
+        j = used.get(fid, 0)
+        want = [base[(ev_start[fid] + j + t) % len(base)] for t in range(len(base))]
+        allowed = {r: allowed_onset_events(space, r, f, q_speed) for r in order}
+        pick = next(((r, ev) for ev in want for r in order if ev in allowed[r]), None)
+        if pick is None:
             continue
+        route, onset = pick
+        used[fid] = j + 1 + want.index(onset)
+        n_ctrl += f.get("group") == "control"
         out.append(make_candidate(space, route_id=route,
                                   speed=speed, fault_id=fid, params=params,
-                                  onset_event=rng.choice(events), offset=off[0] + u_off * (off[1] - off[0]),
+                                  onset_event=onset, offset=off[0] + u_off * (off[1] - off[0]),
                                   source=source, objective=objective, round_index=round_index, friction=friction))
     return out
 

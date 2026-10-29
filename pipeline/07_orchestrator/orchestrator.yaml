@@ -9,7 +9,20 @@ meta:
 
 cold_start:
   gp_enabled: false
-  total_runs: 24                                # 예시
+  # integration3 #8c: 고정값 24(근거 없는 예시) 대신 규칙. null 이면 rule, 숫자면 그 값 (run.py --cold-start 가 둘 다 덮어씀).
+  #   rule: max(min_train_runs_for_acquisition (06 surrogate.yaml, 8 = GP 획득이 켜지는 런 수),
+  #             per_fault_type x 라운드 0 에 돌 수 있는 고장 종류 수) 를 max_runs 로 자름.
+  #   라운드 0 고장 종류 = 위험 고장 + min(대조군 고장, control_faults_per_round_max) = 5 + 1 = 6 → max(8, 2x6) = 12.
+  #   근거 (mock 전용, SYNTHETIC 시뮬레이터 + stub LLM 이라 경향만): /workspace/coldstart_sens (results.csv = #8 이전,
+  #   results_after.csv = #8 이후). #8 이전, 예산 48 고정, cold 4/8/12/24 x seed 10개: balanced GP 정확도 평균
+  #   0.84/0.83/0.83/0.81 (seed 간 범위 ~0.1 이 크기 간 차이 0.02 보다 큼), 전체 캠페인 경계 양쪽 관측 10/10 모두.
+  #   라운드 0 이 경계 양쪽을 본 seed 5/7/9/8, GP 획득 시작 라운드 2/1~2/1/1, 24 는 실제로 20 런만 돌고(G-02/V-03 탈락)
+  #   예산 절반을 GP 없이 씀. 12 = 8 (GP 시작) 이상이면서 라운드 0 에 고장 종류를 2번씩 볼 수 있는 가장 작은 값.
+  # integration3 #8c: rule instead of the unfounded fixed 24 (null = rule, a number = that number, --cold-start overrides):
+  #   max(min_train_runs_for_acquisition, per_fault_type x fault types round 0 can run) capped at max_runs.
+  #   Evidence is mock-only (synthetic simulator, tendencies only): /workspace/coldstart_sens.
+  total_runs: null
+  rule: {per_fault_type: 2, max_runs: 12}
   mix: {nemotron_a: 0.5, space_filling: 0.5}
 
 acquisition:
@@ -33,7 +46,8 @@ acquisition:
 
 budget:
   sim_seconds_per_run_measured: null            # 1~3일 차에 측정
-  max_simulations: 72                           # PROVISIONAL: cold start 24 + 4 라운드 x 12. 런 시간 측정 후 조정
+  max_simulations: 72                           # PROVISIONAL: cold start 12 (cold_start.rule) + 5 라운드 x 12. 런 시간 측정 후 조정
+                                                # (integration3 #8c: 예전 주석 "24 + 4 x 12" 는 고정 24 기준)
   wall_time_budget_s: null
   stop_if:
     - budget_exhausted

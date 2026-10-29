@@ -151,10 +151,6 @@ class Loop:
         self.quiet = quiet
         self.rng = random.Random(seed)
         orch = self.cfg["orchestrator"]
-        self.cold = cold_start if cold_start is not None else int(orch["cold_start"]["total_runs"])
-        self.batch = batch_size if batch_size is not None else int(orch["acquisition"]["batch_size"])
-        max_sims = (orch.get("budget") or {}).get("max_simulations") or (self.cold + 4 * self.batch)
-        self.rounds = rounds if rounds is not None else max(0, math.ceil((max_sims - self.cold) / self.batch))
         space_path, self.space_synthetic = resolve_scenario_space(allow_fixture=(mode == "mock"))
         self.space = load_yaml(space_path)
         self.space_path = space_path
@@ -179,6 +175,11 @@ class Loop:
         self.prior_mean_mode = str(sur.get("prior_mean", "level"))   # level (integration3) | training_mean (legacy)
         self.min_train_points = int(sur.get("min_train_points", 4))
         self.min_train_for_acq = int(sur.get("min_train_runs_for_acquisition", 8))
+        # integration3 #8c: cold start size from the orchestrator.yaml rule (total_runs: null) unless given
+        self.cold = cold_start if cold_start is not None else self.cold_start_rule()
+        self.batch = batch_size if batch_size is not None else int(orch["acquisition"]["batch_size"])
+        max_sims = (orch.get("budget") or {}).get("max_simulations") or (self.cold + 4 * self.batch)
+        self.rounds = rounds if rounds is not None else max(0, math.ceil((max_sims - self.cold) / self.batch))
         self.gps: MetricGPs | None = None
         self.gp_ready = False
         self.history_rows: list[tuple[dict, dict]] = []
@@ -207,6 +208,21 @@ class Loop:
         self._setup_runner()
 
     # ------------------------------------------------------------------ setup
+    def cold_start_rule(self) -> int:
+        """integration3 #8c (orchestrator.yaml cold_start): total_runs if set, else
+        max(min_train_runs_for_acquisition, per_fault_type x fault types round 0 can run), capped at max_runs.
+        Fault types round 0 can run = risk faults + min(control faults, control_faults_per_round_max) (BUG-025 cap)."""
+        cs = self.cfg["orchestrator"]["cold_start"]
+        if cs.get("total_runs") is not None:
+            return int(cs["total_runs"])
+        rule = cs.get("rule") or {}
+        n_ctrl = sum(f in self.control_ids for f in self.fault_pool)
+        eligible = len(self.fault_pool) - n_ctrl + min(n_ctrl, self.control_cap)
+        n = max(self.min_train_for_acq, int(rule.get("per_fault_type", 2)) * eligible)
+        if rule.get("max_runs") is not None:
+            n = min(n, int(rule["max_runs"]))
+        return max(n, self.min_train_for_acq)
+
     def say(self, msg: str) -> None:
         if not self.quiet:
             log(msg)
@@ -782,6 +798,24 @@ class Loop:
         return [c for s, c in sorted(scored, key=lambda p: -math.inf if p[0] is None else p[0], reverse=True)]
 
     # ------------------------------------------------------------------ 08 + 09
+    def speed_step(self) -> float:
+        return float(self.runner_cfg.get("speed_step_kmh") or 0)
+
+    def refill_cold_pool(self, pool: list[dict], want: int, round_index: int, attempts: int = 3) -> list[dict]:
+        """integration3 #8c: stage 04 rejects (route_onset_exclusions, dedup, G-01..03) left the cold start short of
+        its size + reserve (mock probe before #8c: cold start 24 ran 21). Top it up with risk-fault space filling (no new control
+        faults: the round's cap is already spent by the pool)."""
+        risk = [f for f in self.fault_pool if f not in self.control_ids] or self.fault_pool
+        for _ in range(attempts):
+            if len(pool) >= want:
+                break
+            more = self.stage_04([self.quantize(c) for c in SC.space_filling(
+                self.space, self.route_ids, risk, 2 * (want - len(pool)), self.rng, round_index=round_index,
+                speed_step=self.speed_step())], round_index)
+            ids = {c["scenario_id"] for c in pool}
+            pool = pool + [c for c in more if c["scenario_id"] not in ids][: want - len(pool)]
+        return pool
+
     def is_control(self, c: dict) -> bool:
         return (c.get("fault") or {}).get("fault_id") in self.control_ids
 
@@ -992,9 +1026,16 @@ class Loop:
                     n_a = self.cold
                 self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
                 a_c = self.stage_03(n_a, rnd)
-                sf = SC.space_filling(self.space, self.route_ids, self.fault_pool, self.cold - len(a_c) + 6, self.rng, round_index=rnd)
-                pool = self.stage_04([self.quantize(c) for c in a_c + sf], rnd)
+                a_pool = self.stage_04([self.quantize(c) for c in a_c], rnd)
+                # integration3 #8c: fault types cycle; control faults only up to what the round's cap (BUG-025) leaves
+                # after Nemotron A's accepted candidates (cap_controls would drop the rest)
+                ctrl_left = max(0, self.control_cap - sum(self.is_control(c) for c in a_pool))
+                sf = SC.space_filling(self.space, self.route_ids, self.fault_pool, self.cold - len(a_pool) + 6, self.rng,
+                                      round_index=rnd, max_controls=ctrl_left, speed_step=self.speed_step())
+                ids = {c["scenario_id"] for c in a_pool}
+                pool = a_pool + [c for c in self.stage_04([self.quantize(c) for c in sf], rnd) if c["scenario_id"] not in ids]
                 target = self.cold
+                pool = self.refill_cold_pool(pool, target + 6, rnd)
                 gps = None
             else:
                 gps = self.fit_gp(rnd)
@@ -1032,7 +1073,8 @@ class Loop:
                 self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
                 a_c = self.stage_03(n_a, rnd, near=near if self.flags["use_gp"] else None, gp_summary=gp_summary)
                 sf = SC.space_filling(self.space, self.route_ids, self.fault_pool,
-                                      int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd)
+                                      int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd,
+                                      speed_step=self.speed_step())
                 cf, self.cf_queue = self.cf_queue, []
                 pool = self.stage_04([self.quantize(c) for c in a_c + sf] + cf, rnd)
                 target = self.batch
