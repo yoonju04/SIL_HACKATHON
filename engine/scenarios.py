@@ -239,8 +239,24 @@ def dedup(cands: list[dict], space: dict, routes: list[str], fault_pool: list[st
     return kept
 
 
+def param_names(space: dict, fault_pool: list[str]) -> list[str]:
+    """Every fault parameter name used by the pool, in first-seen order (shared names such as magnitude_rad of
+    bias / intermittent_bias share a feature column)."""
+    out: list[str] = []
+    for fid in fault_pool:
+        for k in (faults_by_id(space).get(fid, {}).get("params") or {}):
+            if k not in out:
+                out.append(k)
+    return out
+
+
 def numeric_features(c: dict, space: dict, routes: list[str], fault_pool: list[str]) -> tuple[list[float], list[str]]:
-    """X-3 'numeric only' block: route one-hot, speed, fault one-hot, fault params (unit), onset one-hot, offset."""
+    """X-3 'numeric only' block, every value on [0, 1]: route one-hot, speed, tyre friction, fault one-hot,
+    one column per fault parameter NAME (unit position in its range; spec default when the plan omits it; 0.5 when
+    the fault has no such parameter), onset one-hot, offset.
+
+    integration3: the old encoding had two shared slots param_u0/param_u1 (only the first two parameters of a fault
+    reached the GP, so F-06's new magnitude/ramp would have been invisible, and different meanings shared a column)."""
     names, x = [], []
     for r in routes:
         names.append(f"route={r}"); x.append(1.0 if c.get("route_id") == r else 0.0)
@@ -253,9 +269,13 @@ def numeric_features(c: dict, space: dict, routes: list[str], fault_pool: list[s
     for fid in fault_pool:
         names.append(f"fault={fid}"); x.append(1.0 if c["fault"]["fault_id"] == fid else 0.0)
     f = faults_by_id(space)[c["fault"]["fault_id"]]
-    pu = [_param_unit(spec, c["fault"]["params"].get(k)) for k, spec in (f.get("params") or {}).items()]
-    pu = [u for u in pu if u is not None]
-    names += ["param_u0", "param_u1"]; x += [pu[0] if pu else 0.5, pu[1] if len(pu) > 1 else 0.5]
+    fparams = f.get("params") or {}
+    given = c["fault"].get("params") or {}
+    for k in param_names(space, fault_pool):
+        u = None
+        if k in fparams:
+            u = _param_unit(fparams[k], given.get(k, fparams[k].get("default")))
+        names.append(f"param:{k}"); x.append(0.5 if u is None else min(1.0, max(0.0, u)))
     for ev in space["fault_timing"]["onset_event"]["values"]:
         names.append(f"onset={ev}"); x.append(1.0 if c.get("onset_event") == ev else 0.0)
     olo, ohi = space["fault_timing"]["offset_s"]["range"]

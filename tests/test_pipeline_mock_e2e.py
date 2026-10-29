@@ -39,7 +39,10 @@ def test_reserve_follows_acquisition_order_not_pool_order(tmp_path):
     # BUG-029: a rejected GP pick was replaced by the first Nemotron A candidate of the pool, not the next-best one
     loop = Loop(mode="mock", out=tmp_path / "o", ablation="X-5", video_on=False, seed=1, cold_start=4, batch_size=2,
                 rounds=1, quiet=True)
-    sw = lambda mu, sd: {"gp_mean": {"switched_indicator": mu}, "gp_std": {"switched_indicator": sd}}
+    loop.gp_ready = True   # integration3: acquisition only after min_train_runs_for_acquisition
+    # integration3: switch classifier -> P(switch) and its latent f; level_set scores beta*sd_f - |mu_f|
+    sw = lambda mu, sd: {"gp_mean": {"switched_indicator": 0.5, "switched_indicator__latent": mu},
+                         "gp_std": {"switched_indicator": 0.5, "switched_indicator__latent": sd}}
     pool = [dict(scenario_id="A", source="nemotron_a", **sw(-1.0, 0.1)),
             dict(scenario_id="B", source="space_filling", **sw(0.0, 0.9)),
             dict(scenario_id="C", source="space_filling", **sw(0.0, 0.5)),
