@@ -45,6 +45,18 @@ lane, and why. Every frame shows simulation time at the bottom ("t=.. s"); use t
 VISIBLE_TIMELINE_KEYS = ("fault_mode", "fault_magnitude", "planned_fault_onset_s", "actual_fault_onset_s",
                          "trigger_time_s", "trigger_source", "switch_time_s")
 
+# integration4: log_grounded mode (default in video_explainer.yaml prompt.mode). In result_8, 23 of 24 explanations were
+# rejected on departure_time_s: the monitor logged no departure in any of the 24 runs, yet the model claimed one in 23
+# (12 times at the given switch time). A front camera does not show the wheels against the lane line. The monitor's
+# departure / collision / offset values are now GIVEN as facts; the model explains how the clip shows them and why,
+# and verify() checks that the explanation agrees with the log (tags, evidence frames at the given events).
+GROUNDED_TIMELINE_KEYS = VISIBLE_TIMELINE_KEYS + ("lane_departure_intervals_s", "first_departure_after_switch_s",
+                                                  "collision_times_s", "max_abs_lane_offset_m", "max_abs_lane_offset_t_s",
+                                                  "angle_saturation_ratio_1s", "rate_saturation_ratio_1s", "safe_stop_time_s")
+GROUNDED_FIELDS = ("mechanism", "mechanism_tags", "novel_tags", "evidence_frames_s", "counterfactual", "uncertainty")
+
+SYSTEM_GROUNDED = """You are a vehicle-dynamics incident analyst for a CARLA simulation of an MPC->LQR steering handover. A deterministic monitor already measured this run; its events (switch, lane departures, collisions, offsets, saturation) are given below as facts. Do not re-measure, judge or restate them as your own conclusion, and do not assume that anything went wrong. Explain what the clip shows around those events and why they happened (road geometry, steering, timing). Every frame shows simulation time at the bottom ("t=.. s"); use those times."""
+
 THINK_FORMAT = "Answer the question in the following format: <think>\nyour reasoning\n</think>\n\n<answer>\nyour answer\n</answer>."
 
 
@@ -68,7 +80,10 @@ def answer_spec(taxonomy: list[str]) -> dict:
 
 
 def build_messages(clip: Clip, timeline: dict, taxonomy: list[str], media: str, prompt_format: str,
-                   visible_keys: tuple[str, ...] | list[str] | None = VISIBLE_TIMELINE_KEYS) -> list[dict]:
+                   visible_keys: tuple[str, ...] | list[str] | None = VISIBLE_TIMELINE_KEYS,
+                   mode: str = "pixel_check") -> list[dict]:
+    if mode == "log_grounded" and visible_keys == VISIBLE_TIMELINE_KEYS:
+        visible_keys = GROUNDED_TIMELINE_KEYS
     shown = timeline if visible_keys is None else {k: timeline.get(k) for k in visible_keys}
     content: list[dict] = []
     if media == "video" and clip.video_path:
@@ -93,26 +108,34 @@ def build_messages(clip: Clip, timeline: dict, taxonomy: list[str], media: str, 
             "report must be one of these frame times; times in the context below may lie before the clip and are not "
             "frames.\n"
             f"Known context from the logs (deterministic):\n{json.dumps(shown, default=str)}\n"
-            "Lane departure, collision and offsets are NOT given: read them from the frames.\n"
-            "Allowed mechanism_tags (use only these exact strings; anything else goes to novel_tags):\n"
+            + ("These logged events are facts (an empty list means it did not happen). Do not re-measure them.\n"
+               if mode == "log_grounded" else "Lane departure, collision and offsets are NOT given: read them from the frames.\n")
+            + "Allowed mechanism_tags (use only these exact strings; anything else goes to novel_tags):\n"
             + "\n".join(f"- {t}: {TAG_HELP.get(t, '')}".rstrip(": ") for t in taxonomy) + "\n\n"
-            "Questions: Did the steering owner switch, and when? Was the car already displaced at the switch? "
-            "Did any part of the car leave the lane, and when? Was the car in a curve? Did steering look saturated or "
-            "rate-limited? Return in <answer> ONLY a JSON object with these keys:\n"
-            f"{json.dumps(answer_spec(taxonomy), indent=1)}")
+            + ("Questions: What happened in this clip and why? Which frames show the logged events? Was the car in a "
+               "curve? How did the steering behave before and after the switch? If nothing went wrong, say so "
+               "(stable_recovery). Return in <answer> ONLY a JSON object with these keys:\n"
+               if mode == "log_grounded" else
+               "Questions: Did the steering owner switch, and when? Was the car already displaced at the switch? "
+               "Did any part of the car leave the lane, and when? Was the car in a curve? Did steering look saturated or "
+               "rate-limited? Return in <answer> ONLY a JSON object with these keys:\n")
+            + json.dumps({k: v for k, v in answer_spec(taxonomy).items() if mode != "log_grounded" or k in GROUNDED_FIELDS},
+                         indent=1))
     if prompt_format == "think_answer":
         text += "\n" + THINK_FORMAT
     content.append({"type": "text", "text": text})   # media before text (Cosmos training format)
-    return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": content}]
+    return [{"role": "system", "content": SYSTEM_GROUNDED if mode == "log_grounded" else SYSTEM},
+            {"role": "user", "content": content}]
 
 
 def explain(client, settings: dict, clip: Clip, timeline: dict, taxonomy: list[str], tag: str = "C",
-            visible_keys=VISIBLE_TIMELINE_KEYS) -> dict:
+            visible_keys=VISIBLE_TIMELINE_KEYS, mode: str = "pixel_check") -> dict:
     """Try media in the configured order; returns {explanation|None, media_used, model, errors}."""
     errors = []
     for media in settings.get("media", ["video", "contact_sheet"]):
         try:
-            msgs = build_messages(clip, timeline, taxonomy, media, settings.get("prompt_format", "think_answer"), visible_keys)
+            msgs = build_messages(clip, timeline, taxonomy, media, settings.get("prompt_format", "think_answer"), visible_keys,
+                                  mode=mode)
         except ValueError as e:
             errors.append(str(e)); continue
         try:
@@ -127,7 +150,7 @@ def explain(client, settings: dict, clip: Clip, timeline: dict, taxonomy: list[s
             errors.append(f"{media}: parse {e}"); continue
         if not isinstance(obj, dict):
             errors.append(f"{media}: answer is not an object"); continue
-        obj = {k: obj.get(k) for k in ANSWER_FIELDS}
+        obj = {k: obj.get(k) for k in (GROUNDED_FIELDS if mode == "log_grounded" else ANSWER_FIELDS)}
         return {"explanation": obj, "media_used": media, "model": settings["model"], "errors": errors,
                 "usage": res.usage}
     return {"explanation": None, "media_used": None, "model": settings.get("model"), "errors": errors}
@@ -166,9 +189,59 @@ def visible_departure(timeline: dict, frame_times: list[float], eps: float = 1e-
     return None, over
 
 
+def tag_conflicts(tags: list, timeline: dict) -> list[str]:
+    """Mechanism tags that contradict the monitor log (log_grounded mode)."""
+    dep = timeline.get("lane_departure_intervals_s") or []
+    sw = timeline.get("switch_time_s")
+    col = timeline.get("collision_times_s") or []
+    bad = []
+    for t in tags:
+        if t == "departed_before_switch" and not (sw is not None and any(a <= sw + 1e-6 for a, _ in dep)):
+            bad.append(t)
+        elif t == "collision_after_departure" and not col:
+            bad.append(t)
+        elif t == "stable_recovery" and (col or timeline.get("first_departure_after_switch_s") is not None):
+            bad.append(t)
+        elif t == "steering_angle_saturation" and not (timeline.get("angle_saturation_ratio_1s") or 0) > 0:
+            bad.append(t)
+        elif t == "steering_rate_limit" and not (timeline.get("rate_saturation_ratio_1s") or 0) > 0:
+            bad.append(t)
+    return bad
+
+
+def verify_grounded(expl: dict | None, timeline: dict, clip: Clip, taxonomy: list[str], tol: float = 0.5) -> dict:
+    """log_grounded: the events were given, so check that the explanation agrees with them instead of re-measuring.
+    accepted = tags exist and do not contradict the log, evidence frames are in the clip and at least one sits at a
+    given event (switch, lane-departure interval, collision) when the clip has one, and a mechanism is written."""
+    if expl is None:
+        return {"accepted": False, "checks": {}, "reason": "no_parseable_explanation", "mode": "log_grounded"}
+    checks: dict[str, Any] = {}
+    tags = expl.get("mechanism_tags") or []
+    ok_list = isinstance(tags, list)
+    checks["tags_in_taxonomy"] = {"pass": ok_list and all(t in taxonomy for t in tags),
+                                  "unknown": [t for t in tags if t not in taxonomy] if ok_list else tags}
+    conflicts = tag_conflicts(tags, timeline) if ok_list else []
+    checks["tags_consistent_with_log"] = {"pass": not conflicts, "conflicting": conflicts}
+    ev = [_num(x) for x in (expl.get("evidence_frames_s") or [])]
+    checks["evidence_frames_s_in_clip"] = {"pass": all(x is not None and clip.start_s - tol <= x <= clip.end_s + tol for x in ev)}
+    lo, hi = clip.start_s - tol, clip.end_s + tol
+    points = [t for t in [timeline.get("switch_time_s"), *(timeline.get("collision_times_s") or [])]
+              if t is not None and lo <= t <= hi]
+    spans = [(a, b) for a, b in (timeline.get("lane_departure_intervals_s") or []) if b >= lo and a <= hi]
+    if points or spans:
+        near = [x for x in ev if x is not None and (any(abs(x - p) <= tol for p in points)
+                                                   or any(a - tol <= x <= b + tol for a, b in spans))]
+        checks["evidence_at_given_events"] = {"pass": bool(near), "events_s": points, "departure_intervals_s": spans}
+    mech = expl.get("mechanism")
+    checks["mechanism_written"] = {"pass": isinstance(mech, str) and len(mech.strip()) >= 20}
+    return {"accepted": all(c["pass"] for c in checks.values()), "checks": checks, "tolerance_s": tol, "mode": "log_grounded"}
+
+
 def verify(expl: dict | None, timeline: dict, clip: Clip, taxonomy: list[str], tol: float = 0.5,
-           visible_margin_m: float = 0.0) -> dict:
+           visible_margin_m: float = 0.0, mode: str = "pixel_check") -> dict:
     """Compare claimed times with the monitor log. accepted = every checkable claim passes."""
+    if mode == "log_grounded":
+        return verify_grounded(expl, timeline, clip, taxonomy, tol)
     if expl is None:
         return {"accepted": False, "checks": {}, "reason": "no_parseable_explanation"}
     checks: dict[str, Any] = {}
@@ -224,10 +297,15 @@ def stub_explanation(timeline: dict, clip: Clip, rng: random.Random, hallucinate
     if sw is not None and timeline.get("planned_fault_onset_s") is not None and sw - timeline["planned_fault_onset_s"] > 2.0:
         tags.append("late_detection")
     if not tags:
-        tags.append("stable_recovery" if dep is None else "pre_switch_lateral_drift")
+        clean = timeline.get("first_departure_after_switch_s") is None and not timeline.get("collision_times_s")
+        tags.append("stable_recovery" if dep is None and clean else "pre_switch_lateral_drift")
     bad = rng.random() < hallucinate_p
     shift = 1.2 if bad else rng.uniform(-0.2, 0.2)
+    if bad and not timeline.get("collision_times_s"):
+        tags = tags + ["collision_after_departure"]       # SYNTHETIC log contradiction (log_grounded catches it)
     novel = ["post_switch_weave"] if rng.random() < 0.3 else []
+    keys = [t for t in [sw, dep, *(timeline.get("collision_times_s") or [])] if t is not None]
+    near = sorted({min(clip.frame_times, key=lambda f: abs(f - k)) for k in keys}) if clip.frame_times and keys else []
     cf = None
     if sw is not None and rng.random() < 0.5:
         cf = {"parameter": "onset_offset_s", "direction": "decrease", "amount": 0.5,
@@ -237,5 +315,5 @@ def stub_explanation(timeline: dict, clip: Clip, rng: random.Random, hallucinate
             "collision_seen": bool(timeline.get("collision_times_s")),
             "mechanism": "SYNTHETIC stub explanation (no model called): " + ", ".join(tags),
             "mechanism_tags": tags, "novel_tags": novel,
-            "evidence_frames_s": [round(x, 2) for x in clip.frame_times[:: max(1, len(clip.frame_times) // 3)]][:3],
+            "evidence_frames_s": [round(x, 2) for x in (near or clip.frame_times[:: max(1, len(clip.frame_times) // 3)])][:3],
             "counterfactual": cf, "uncertainty": "high" if bad else "medium"}

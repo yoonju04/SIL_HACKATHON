@@ -37,8 +37,9 @@ from engine import scenarios as SC
 from engine.carla_runner import CarlaRunner, MockRunner, carla_reachable
 from engine.config import (REPO_ROOT, load_stage_configs, load_yaml, resolve_av_stack,
                                     resolve_scenario_space)
-from engine.explainer import explain, stub_explanation, verify
+from engine.explainer import GROUNDED_TIMELINE_KEYS, explain, stub_explanation, verify
 from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure, outcome_examples, tried_view,
+                             visible_failure,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
 from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
 from engine.monitor import (compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline,
@@ -1010,12 +1011,17 @@ class Loop:
         if not self.video_on:
             return
         sel = self.vcfg["select_runs"]
+        # integration4: failed_rule visible (default) = lane departure / collision / late switch only; any = old is_failure
+        failed = visible_failure if sel.get("failed_rule", "visible") == "visible" else is_failure
+        mode = (self.vcfg.get("prompt") or {}).get("mode", "log_grounded")
         picks = []
         for r in new:
             y = recovery_target_value(r, self.target_name())     # #9: the GP target (safety_margin by default)
             near = y is not None and abs(y) < float(sel["boundary_near_abs_robustness"])
-            if (sel["failed"] and is_failure(r)) or near:
-                picks.append((0 if is_failure(r) else 1, r))
+            if near and failed is visible_failure and (r.get("metrics") or {}).get("safety_margin_binding") in ("lat_jerk", "lat_acc"):
+                near = False                                     # boundary set by jerk / lateral accel.: nothing to see
+            if (sel["failed"] and failed(r)) or near:
+                picks.append((0 if failed(r) else 1, r))
         picks = [r for _, r in sorted(picks, key=lambda p: p[0])][: int(sel["max_per_round"])]
         clip_cfg = self.vcfg["clip"]
         tol = float(self.vcfg["verification"]["time_tolerance_s"])
@@ -1053,15 +1059,20 @@ class Loop:
                         result = {"explanation": expl, "media_used": "video", "model": "stub/explainer (SYNTHETIC)", "errors": []}
                     else:
                         vis = tuple((self.vcfg.get("prompt") or {}).get("visible_timeline_keys") or ())
-                        result = explain(self.client_c, self.c_settings, clip, timeline, self.taxonomy, tag="C", visible_keys=vis or None) \
+                        if mode == "log_grounded":    # the monitor's events are given (prompt.grounded_timeline_keys overrides)
+                            vis = tuple((self.vcfg.get("prompt") or {}).get("grounded_timeline_keys") or GROUNDED_TIMELINE_KEYS)
+                        result = explain(self.client_c, self.c_settings, clip, timeline, self.taxonomy, tag="C", visible_keys=vis or None,
+                                         mode=mode) \
                             if cosmos_ok else {"explanation": None, "errors": ["cosmos endpoint not ready (--cosmos-power auto)"]}
                         if result["explanation"] is None and self.c_settings is not self.c_fallback:
                             fb = TokenFactoryClient.from_config(self.cfg["llm"], self.llm_log)
-                            result = {**explain(fb, self.c_fallback, clip, timeline, self.taxonomy, tag="C_fallback", visible_keys=vis or None),
+                            result = {**explain(fb, self.c_fallback, clip, timeline, self.taxonomy, tag="C_fallback", visible_keys=vis or None,
+                                                mode=mode),
                                       "primary_errors": result["errors"]}
                     entry.update(result)
                     entry["verification"] = verify(entry.get("explanation"), timeline, clip, self.taxonomy, tol,
-                                                   float(self.vcfg["verification"].get("visible_departure_margin_m", 0.0)))
+                                                   float(self.vcfg["verification"].get("visible_departure_margin_m", 0.0)),
+                                                   mode=mode)
                 assert entry["monitor_labels_snapshot"]["recovery_outcome"] == r["recovery_outcome"]  # explainer never edits labels
                 self.explanations[r["run_id"]] = entry
                 append_jsonl(self.out / "explanations.jsonl", entry)

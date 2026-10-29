@@ -26,6 +26,15 @@ def is_failure(rec: dict) -> bool:
     return False
 
 
+def visible_failure(rec: dict) -> bool:
+    """integration4: a failure a camera can show - lane departure or collision (SR4), late / no switch (SR1 F1), or a
+    recovery that left the lane. Excludes runs that fail only on lateral acceleration / jerk (most of result_8's
+    'failures' with the tight supervisor), which kept the lane and gave the video explainer nothing to explain."""
+    s4 = ((rec.get("sr_checks") or {}).get("sr") or {}).get("SR4") or {}
+    return (s4.get("pass") is False or bool(s4.get("collision")) or rec.get("sr_outcome") == "F1_no_or_late_switch"
+            or rec.get("recovery_outcome") in ("recovered_after_departure", "unrecovered"))
+
+
 def failure_table(records: list[dict], candidates: dict[str, dict]) -> list[dict]:
     rows = []
     seen: Counter = Counter()

@@ -1,40 +1,45 @@
-# integration4 — integration3 + tighter supervisor
+# integration4
 
-`integration4` = `integration3` (merged as is, see `docs/INTEGRATION3.md`) + one change: the av_stack supervisor.
-The GP rework tried here before (`bf7f590`) was reverted (`f860b38`); integration3 covers its items 2-5.
+`integration4` = `integration3` @ `c03dd95` (everything except `result/`) + PR #4 (dashboard redesign, English UI)
++ log-grounded video explanation (below). `result/` keeps integration4's own campaigns (result_1..5, result_7,
+result_8; result_6 lives on integration3). The tight supervisor, route onset exclusions and the safety-margin GP
+target come from integration3 (#8, #9; see `docs/INTEGRATION3.md`).
 
-## Why
+## Merge note (PR #4)
 
-In result_2..5 all 15 risk-fault runs that switched (bias, drift, saturate, intermittent bias) had already left
-the lane before the switch. The old divergence rule (|e_y| > 1.0 m or |e_psi| > 0.6 rad, held 0.25 s) is wider
-than the in-lane margin (0.83-1.08 m from the car side to the lane edge), and there was no steering-rate check,
-so saturate steps (1000+ deg/s) and intermittent-bias edges (107-161 deg/s) passed the instant checks.
+PR #4 is based on integration3 `78f0169`; integration3 #9 later edited `engine/dashboard.py`. The PR #4 version was
+kept and #9's additions ported in English: a "GP margin (safety_margin)" row with the tightest criterion
+(`SM_EN`), and the "Actual (margin)" column of the hypothesis table.
 
-## Change (`pipeline/08_carla_paired_run/av_stack/integration/supervised_lateral.py`)
+## Video explanation: log_grounded (stage 10)
 
-`SupervisorConfig` / `SUPERVISOR_PROFILES`, chosen with `run_benchmark.py --supervisor tight|legacy` (default tight;
-written to `agent_config.json`; the PDM agent uses it, TF++ uses the default):
+**Problem (result_8, 84 runs, tight supervisor):** 23 of 24 explanations were rejected, all on
+`departure_time_s`. The monitor logged no lane departure in any of the 24 runs; the model claimed one in 23
+(12 times at the switch time it was given, often "every frame after the switch is outside the lane").
+1. A front camera does not show the wheels against the lane line, yet the model had to find departures in it.
+2. The questions and most tags presume a failure.
+3. The selected "failed" runs were mostly lateral-jerk-only failures that kept the lane: nothing to see.
 
-| | tight (default) | legacy |
-|---|---|---|
-| tracking_divergence | 0.6 m or 0.35 rad, held 0.15 s | 1.0 m or 0.6 rad, held 0.25 s |
-| steer_rate_exceeded (new) | MPC command rate > 90 deg/s | none |
+**Change**
+* `pipeline/10_video_explainer/video_explainer.yaml prompt.mode: log_grounded` (default; `pixel_check` = before).
+  `engine/explainer.py`: the monitor's lane-departure intervals, first departure after the switch, collisions,
+  max offset, angle / rate saturation and safe stop are given as facts (`GROUNDED_TIMELINE_KEYS`; the final label
+  stays hidden). The model is asked what the clip shows around those events and why (`SYSTEM_GROUNDED`, neutral
+  questions, "say so (stable_recovery)" if nothing went wrong), and answers only mechanism, tags, novel tags,
+  evidence frames, counterfactual and uncertainty (`GROUNDED_FIELDS`).
+* `verify_grounded`: tags exist and do not contradict the log (`tag_conflicts`: departed_before_switch needs a
+  departure before the switch, collision_after_departure a collision, stable_recovery no departure after the switch
+  and no collision, saturation tags a saturation ratio > 0), evidence frames are in the clip and at least one sits
+  at a given event (switch, departure interval, collision), and a mechanism of at least 20 characters is written.
+  Whether the mechanism text is right is not machine-checked: spot-check the first explanations by hand.
+* Run selection `select_runs.failed_rule: visible` (default; `any` = before): `engine.feedback.visible_failure` =
+  lane departure or collision (SR4), late / no switch (F1), recovered after departure or not recovered.
+  Boundary-near runs whose tightest criterion is lateral jerk / acceleration are skipped too.
+* Cosmos stays the model (Dedicated Endpoint, `--cosmos-power auto`); the Super-VL fallback uses the same mode.
+  Fewer, more relevant runs also keep the endpoint on for less time.
 
-Thresholds from 61 fault-free CARLA baselines (result_2..5, 48k MPC ticks): |e_y| max 0.46 m (p99.9 0.31),
-|e_psi| max 0.23 rad, command rate max 61 deg/s; the MPC itself limits its rate to 60 deg/s (`mpc.py`), so a
-healthy MPC cannot trip the rate check.
+Tests: `tests/test_engine_video.py` (grounded prompt, grounded verify), `tests/test_engine_feedback_visible.py`.
+Mock check (`run.py --mock --ablation X-6`, SYNTHETIC stub): the two rejections were the stub's deliberate
+contradictions (`collision_after_departure` without a collision).
 
-## Offline estimate (logged runs, no CARLA)
-
-Replaying the tight rules on the MPC rows of the result_2..5 risk-fault runs (valid up to the real switch):
-of 22 runs with a lane departure, tight detects 19 before the departure (saturate / intermittent bias by the rate
-check, 0.25-0.65 s earlier; drift / bias by divergence) and 3 after it (2 drift, 1 bias); none missed. Legacy:
-0 of 22 before. Detecting before the departure does not by itself mean the LQR recovers; that needs CARLA runs.
-
-## Not changed
-
-* `pipeline/01_safety_profile/safety_profile.yaml` and `02_hypotheses/.../S1_*.yaml` (team files) still describe
-  the 1.0 m / 0.6 rad / 0.25 s rule, and Nemotron A reads the safety profile.
-* The mock simulator (`engine/fixtures/synthetic_sim.py`) still uses the legacy rule.
-* Low friction (integration3 #2) was not in the baselines used for the thresholds: check the baseline gate
-  (baseline switches) on the first low-friction runs.
+Not measured yet: how Cosmos does with the new prompt on real clips (needs a real run with the endpoint on).
