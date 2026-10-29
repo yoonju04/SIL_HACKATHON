@@ -1,0 +1,1239 @@
+{
+  "a_calls": [
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 1362,
+        "prompt_tokens": 7166,
+        "total_tokens": 8528,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 7166
+      },
+      "schema_error_examples": [],
+      "items_returned": 6,
+      "items_valid": 6,
+      "round": 0,
+      "requested": 6,
+      "boundary_regions_given": 0,
+      "range_extreme_unjustified": 2
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2468,
+        "prompt_tokens": 16200,
+        "total_tokens": 18668,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 16200
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 1,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 2
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 10721,
+        "prompt_tokens": 10799,
+        "total_tokens": 21520,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 10195,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 10799
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 1,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 3393,
+        "prompt_tokens": 17798,
+        "total_tokens": 21191,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 17798
+      },
+      "schema_error_examples": [],
+      "items_returned": 11,
+      "items_valid": 11,
+      "round": 2,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 1
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 11156,
+        "prompt_tokens": 12598,
+        "total_tokens": 23754,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 10624,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 10480
+        },
+        "prompt_cache_hit_tokens": 10480,
+        "prompt_cache_miss_tokens": 2118
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 2,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 3439,
+        "prompt_tokens": 19511,
+        "total_tokens": 22950,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 4192
+        },
+        "prompt_cache_hit_tokens": 4192,
+        "prompt_cache_miss_tokens": 15319
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 3,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 4
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 11927,
+        "prompt_tokens": 14167,
+        "total_tokens": 26094,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 11382,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 14167
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 3,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2416,
+        "prompt_tokens": 20285,
+        "total_tokens": 22701,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 6288
+        },
+        "prompt_cache_hit_tokens": 6288,
+        "prompt_cache_miss_tokens": 13997
+      },
+      "schema_error_examples": [],
+      "items_returned": 12,
+      "items_valid": 12,
+      "round": 4,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 4
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 14015,
+        "prompt_tokens": 14945,
+        "total_tokens": 28960,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 13438,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 14945
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 4,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 3901,
+        "prompt_tokens": 21326,
+        "total_tokens": 25227,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 4192
+        },
+        "prompt_cache_hit_tokens": 4192,
+        "prompt_cache_miss_tokens": 17134
+      },
+      "schema_error_examples": [],
+      "items_returned": 12,
+      "items_valid": 12,
+      "round": 5,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 3
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 12652,
+        "prompt_tokens": 15948,
+        "total_tokens": 28600,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 12032,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 15948
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 5,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 3114,
+        "prompt_tokens": 22169,
+        "total_tokens": 25283,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 4192
+        },
+        "prompt_cache_hit_tokens": 4192,
+        "prompt_cache_miss_tokens": 17977
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 6,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 3
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": "nvidia/Nemotron-3_5-Lightning: finish_reason=length (raise max_tokens or disable thinking)",
+      "truncated": true,
+      "response_format": "json_schema",
+      "round": 6,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2306,
+        "prompt_tokens": 21947,
+        "total_tokens": 24253,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 6288
+        },
+        "prompt_cache_hit_tokens": 6288,
+        "prompt_cache_miss_tokens": 15659
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 7,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 0
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": "nvidia/Nemotron-3_5-Lightning: finish_reason=length (raise max_tokens or disable thinking)",
+      "truncated": true,
+      "response_format": "json_schema",
+      "round": 7,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2710,
+        "prompt_tokens": 21956,
+        "total_tokens": 24666,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 6288
+        },
+        "prompt_cache_hit_tokens": 6288,
+        "prompt_cache_miss_tokens": 15668
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 8,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 4
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": "nvidia/Nemotron-3_5-Lightning: finish_reason=length (raise max_tokens or disable thinking)",
+      "truncated": true,
+      "response_format": "json_schema",
+      "round": 8,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2446,
+        "prompt_tokens": 21591,
+        "total_tokens": 24037,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 6288
+        },
+        "prompt_cache_hit_tokens": 6288,
+        "prompt_cache_miss_tokens": 15303
+      },
+      "schema_error_examples": [],
+      "items_returned": 14,
+      "items_valid": 14,
+      "round": 9,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 3
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": "nvidia/Nemotron-3_5-Lightning: finish_reason=length (raise max_tokens or disable thinking)",
+      "truncated": true,
+      "response_format": "json_schema",
+      "round": 9,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2588,
+        "prompt_tokens": 21477,
+        "total_tokens": 24065,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 4192
+        },
+        "prompt_cache_hit_tokens": 4192,
+        "prompt_cache_miss_tokens": 17285
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 10,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 4
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 10021,
+        "prompt_tokens": 16166,
+        "total_tokens": 26187,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 9818,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 16166
+      },
+      "schema_error_examples": [],
+      "items_returned": 1,
+      "items_valid": 1,
+      "round": 10,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2723,
+        "prompt_tokens": 21222,
+        "total_tokens": 23945,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 4192
+        },
+        "prompt_cache_hit_tokens": 4192,
+        "prompt_cache_miss_tokens": 17030
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 11,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 3
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 14937,
+        "prompt_tokens": 15891,
+        "total_tokens": 30828,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 14377,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 15891
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 11,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2713,
+        "prompt_tokens": 20936,
+        "total_tokens": 23649,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 4192
+        },
+        "prompt_cache_hit_tokens": 4192,
+        "prompt_cache_miss_tokens": 16744
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 12,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 3
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": "nvidia/Nemotron-3_5-Lightning: finish_reason=length (raise max_tokens or disable thinking)",
+      "truncated": true,
+      "response_format": "json_schema",
+      "round": 12,
+      "requested": 3,
+      "refine": true
+    }
+  ],
+  "rejected": [
+    {
+      "scenario_id": "SC-13a0df3b0c",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 35.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-fd74372012",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28035 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-c4d62875ba",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 35.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-b1dffbf6b2",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-562ae53487",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 35.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-cb44cac344",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-d5bae974a6",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-9b9e600197",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-ae84f307eb",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28035 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-33f039bc31",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_exit excluded on bench2drive:28048 at 20.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-e78289a1b4",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_exit excluded on bench2drive:28154 at 15.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-979d80a580",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 25.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-60f13c8fe1",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28035 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-c10e054117",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-d4a8d9bb9e",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-1fbe63e43f",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-4e4cb00f88",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-02a320da01",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-4348171858",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-2894985832",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-546835f5b0",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-63cb34be23",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-ee75434ad5",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-5297e3f642",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-2aa8963f9b",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-c6fef1d550",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 25.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-08dc92d6e2",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-2714f7d88e",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_exit excluded on bench2drive:28048 at 20.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-5ecbdd5d70",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_exit excluded on bench2drive:28048 at 20.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-9436495862",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 25.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-f9f67c18c6",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-0aa2f05e2a",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_exit excluded on bench2drive:28048 at 20.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-46fb9a3146",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-e429170700",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-fd02fa6433",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-7c90be398c",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_apex excluded on bench2drive:28154 at 40.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-829dbac376",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 25.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-e80f875ae8",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-52f780bc0f",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    }
+  ],
+  "llm_errors": [
+    {
+      "role": "B",
+      "key": "intermittent_bias|curve_entry",
+      "error": "nvidia/Nemotron-3-Ultra-550b-a55b: finish_reason=length (raise max_tokens or disable thinking)"
+    },
+    {
+      "role": "B",
+      "key": "output_delay|curve_exit",
+      "error": "nvidia/Nemotron-3-Ultra-550b-a55b: finish_reason=length (raise max_tokens or disable thinking)"
+    },
+    {
+      "role": "B",
+      "key": "stale|curve_apex",
+      "error": "nvidia/Nemotron-3-Ultra-550b-a55b: finish_reason=length (raise max_tokens or disable thinking)"
+    },
+    {
+      "role": "B",
+      "key": "saturate|curve_exit|duration_s#0|ramp_s#0",
+      "error": "nvidia/Nemotron-3-Ultra-550b-a55b: finish_reason=length (raise max_tokens or disable thinking)"
+    }
+  ],
+  "gp_history": {
+    "files": [
+      "result/result_2/run_records.jsonl",
+      "result/result_3/run_records.jsonl",
+      "result/result_4/run_records.jsonl",
+      "result/result_5/run_records.jsonl",
+      "result/result_6/run_records.jsonl",
+      "results/real_int3c_1028/run_records.jsonl"
+    ],
+    "loaded": 0,
+    "skipped": {
+      "supervisor legacy != tight": 64,
+      "route not in this campaign": 4
+    }
+  },
+  "nemotron_b": {
+    "b_hallucination_rate": 0.12631578947368421,
+    "b_code_agreement_rate": 0.8,
+    "b_checked_answers": 95,
+    "b_hallucinated_answers": 12,
+    "b_unknown_when_code_decides": 7,
+    "citation_valid_rate": 0.9963369963369964,
+    "citation_relevant_rate": 0.9963369963369964,
+    "per_question": {
+      "Q-B2": {
+        "asked": 1,
+        "checked": 1,
+        "matched": 1,
+        "hallucinated": 0,
+        "unknown_when_decided": 0,
+        "answers": {
+          "no": 1
+        },
+        "citations": 3,
+        "citations_valid": 3,
+        "citations_judged": 3,
+        "citations_relevant": 3,
+        "distinct_answers": 1,
+        "hallucination_rate": 0.0
+      },
+      "Q-B3": {
+        "asked": 1,
+        "checked": 1,
+        "matched": 1,
+        "hallucinated": 0,
+        "unknown_when_decided": 0,
+        "answers": {
+          "no": 1
+        },
+        "citations": 3,
+        "citations_valid": 3,
+        "citations_judged": 3,
+        "citations_relevant": 3,
+        "distinct_answers": 1,
+        "hallucination_rate": 0.0
+      },
+      "Q-B1": {
+        "asked": 31,
+        "checked": 31,
+        "matched": 16,
+        "hallucinated": 12,
+        "unknown_when_decided": 3,
+        "answers": {
+          "lqr_early": 16,
+          "stale_mpc": 3,
+          "corrupted_mpc": 9,
+          "unknown": 3
+        },
+        "citations": 89,
+        "citations_valid": 88,
+        "citations_judged": 89,
+        "citations_relevant": 88,
+        "distinct_answers": 4,
+        "hallucination_rate": 0.3870967741935484
+      },
+      "Q-B4": {
+        "asked": 31,
+        "checked": 31,
+        "matched": 27,
+        "hallucinated": 0,
+        "unknown_when_decided": 4,
+        "answers": {
+          "steer_rate_exceeded": 15,
+          "solver_failure": 2,
+          "none_during_fault": 7,
+          "unknown": 4,
+          "stale_sequence": 2,
+          "tracking_divergence": 1
+        },
+        "citations": 89,
+        "citations_valid": 89,
+        "citations_judged": 89,
+        "citations_relevant": 89,
+        "distinct_answers": 6,
+        "hallucination_rate": 0.0
+      },
+      "Q-B5": {
+        "asked": 31,
+        "checked": 31,
+        "matched": 31,
+        "hallucinated": 0,
+        "unknown_when_decided": 0,
+        "answers": {
+          "steer_value_only": 23,
+          "ok_flag": 2,
+          "steer_and_reported_state": 4,
+          "sequence_or_stamp": 2
+        },
+        "citations": 89,
+        "citations_valid": 89,
+        "citations_judged": 89,
+        "citations_relevant": 89,
+        "distinct_answers": 4,
+        "hallucination_rate": 0.0
+      }
+    },
+    "note": "hallucinated = majority answer outside expected_from_code (not 'unknown'); one row per b_key + static"
+  },
+  "b_hallucination_rate": 0.12631578947368421,
+  "gp_train_counts": [
+    {
+      "round": 1,
+      "recovery_success": 8,
+      "switched_indicator": 12,
+      "rows": 12,
+      "own_runs": 12,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 2,
+      "recovery_success": 10,
+      "switched_indicator": 17,
+      "rows": 17,
+      "own_runs": 17,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 3,
+      "recovery_success": 16,
+      "switched_indicator": 23,
+      "rows": 23,
+      "own_runs": 23,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 4,
+      "recovery_success": 21,
+      "switched_indicator": 29,
+      "rows": 29,
+      "own_runs": 29,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 5,
+      "recovery_success": 26,
+      "switched_indicator": 35,
+      "rows": 35,
+      "own_runs": 35,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 6,
+      "recovery_success": 30,
+      "switched_indicator": 41,
+      "rows": 41,
+      "own_runs": 41,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 7,
+      "recovery_success": 32,
+      "switched_indicator": 46,
+      "rows": 46,
+      "own_runs": 46,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 8,
+      "recovery_success": 33,
+      "switched_indicator": 52,
+      "rows": 52,
+      "own_runs": 52,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 9,
+      "recovery_success": 35,
+      "switched_indicator": 58,
+      "rows": 58,
+      "own_runs": 58,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 10,
+      "recovery_success": 37,
+      "switched_indicator": 64,
+      "rows": 64,
+      "own_runs": 64,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 11,
+      "recovery_success": 42,
+      "switched_indicator": 70,
+      "rows": 70,
+      "own_runs": 70,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 12,
+      "recovery_success": 47,
+      "switched_indicator": 76,
+      "rows": 76,
+      "own_runs": 76,
+      "history_runs": 0,
+      "gp_acquisition_active": true
+    }
+  ]
+}

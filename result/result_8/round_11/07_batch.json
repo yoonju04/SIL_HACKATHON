@@ -1,0 +1,92 @@
+[
+  {
+    "scenario_id": "SC-c6c7258c78",
+    "source": "nemotron_a",
+    "selected_by": "nemotron_a_share",
+    "gp_mean": {
+      "recovery_success": 6.0080087379666685,
+      "switched_indicator": 0.3239133577274629,
+      "switched_indicator__latent": -1.7030999258777426
+    },
+    "gp_std": {
+      "recovery_success": 3.2352950058921177,
+      "switched_indicator": 0.4679674074261834,
+      "switched_indicator__latent": 3.2848308680048075
+    }
+  },
+  {
+    "scenario_id": "SC-46fb9a3146",
+    "source": "nemotron_a",
+    "selected_by": "nemotron_a_share",
+    "gp_mean": {
+      "recovery_success": 1.610029124012343,
+      "switched_indicator": 0.7923749019125808,
+      "switched_indicator__latent": 3.2926412267584384
+    },
+    "gp_std": {
+      "recovery_success": 3.287258750194783,
+      "switched_indicator": 0.40560684995646806,
+      "switched_indicator__latent": 3.6295846721383973
+    }
+  },
+  {
+    "scenario_id": "SC-73f5a3a171",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 5.768166076816478,
+      "switched_indicator": 0.5098019416035307,
+      "switched_indicator__latent": 0.09348766032522438
+    },
+    "gp_std": {
+      "recovery_success": 3.2905185634429426,
+      "switched_indicator": 0.4999039127080333,
+      "switched_indicator__latent": 3.371776371973369
+    }
+  },
+  {
+    "scenario_id": "SC-e429170700",
+    "source": "space_filling",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 0.9396202065245131,
+      "switched_indicator": 0.5435601261368674,
+      "switched_indicator__latent": 0.41623281277007074
+    },
+    "gp_std": {
+      "recovery_success": 3.266685196059856,
+      "switched_indicator": 0.49809890123442374,
+      "switched_indicator__latent": 3.371516173521297
+    }
+  },
+  {
+    "scenario_id": "SC-54319d8264",
+    "source": "perturbation",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 6.342692234447766,
+      "switched_indicator": 0.5224014868723899,
+      "switched_indicator__latent": 0.20707568646362162
+    },
+    "gp_std": {
+      "recovery_success": 3.233149176884223,
+      "switched_indicator": 0.49949792130288806,
+      "switched_indicator__latent": 3.238842443920456
+    }
+  },
+  {
+    "scenario_id": "SC-6287e32abd",
+    "source": "perturbation",
+    "selected_by": "random_space_filling",
+    "gp_mean": {
+      "recovery_success": 5.030859622619832,
+      "switched_indicator": 0.8119208179907673,
+      "switched_indicator__latent": 3.53480811437794
+    },
+    "gp_std": {
+      "recovery_success": 3.2201052262415963,
+      "switched_indicator": 0.3907753872801748,
+      "switched_indicator__latent": 3.576191362481925
+    }
+  }
+]

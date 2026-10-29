@@ -1,0 +1,134 @@
+[
+  {
+    "criterion": "RouteCompletionTest",
+    "frame": 0,
+    "event_type": "ROUTE_COMPLETION",
+    "message": "Agent has completed 100 of the route"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1826185,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 301.15% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1826319,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 243.93% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1826398,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 244.14% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1826639,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 49.36% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1826731,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 187.28% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1826810,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 237.14% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1826889,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 530.32% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1826969,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 252.52% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1827047,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 194.77% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1827126,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 219.27% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1827206,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 115.08% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1827285,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 116.78% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1827550,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 47.59% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1827654,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 85.85% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1827917,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 99.02% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1827997,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 158.0% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1828291,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 165.65% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1828369,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 268.31% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1828447,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 194.9% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1828481,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 128.08% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1828481,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 128.08% of the surrounding traffic's one"
+  }
+]
