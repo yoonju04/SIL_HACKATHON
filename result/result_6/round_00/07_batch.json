@@ -1,0 +1,30 @@
+[
+  {
+    "scenario_id": "SC-69d0a487f5",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-a7a4982e2b",
+    "source": "nemotron_a",
+    "selected_by": "cold_start_nemotron_a",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-6f5a8146eb",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  },
+  {
+    "scenario_id": "SC-e227161e71",
+    "source": "space_filling",
+    "selected_by": "cold_start_space_filling",
+    "gp_mean": null,
+    "gp_std": null
+  }
+]

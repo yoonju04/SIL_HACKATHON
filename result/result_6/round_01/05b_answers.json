@@ -1,0 +1,2810 @@
+{
+  "saturate|curve_entry": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 108
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 109
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 90
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 96
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 130
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 131
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 73
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 89
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 90
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 91
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "saturate",
+      "fault_params": {
+        "duration_s": 0.5,
+        "side": "positive",
+        "magnitude": 0.5,
+        "ramp_s": 0.0
+      },
+      "onset_event": "curve_entry",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "drift|curve_apex": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/fault_injection.py",
+            "line": 114
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 115
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 109
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "drift",
+      "fault_params": {
+        "rate_rad_s": 0.025
+      },
+      "onset_event": "curve_apex",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "bias|curve_exit": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "unknown": 2,
+          "stale_mpc": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 122
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 130
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "bias",
+      "fault_params": {
+        "magnitude_rad": 0.0292
+      },
+      "onset_event": "curve_exit",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "bias|straight": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "unknown": 2,
+          "stale_mpc": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 132
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": true,
+        "agreement": 1.0,
+        "votes": {
+          "true": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 158
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 159
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 160
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "bias",
+      "fault_params": {
+        "magnitude_rad": 0.0858
+      },
+      "onset_event": "straight",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "stale|curve_apex": {
+    "answers": {
+      "Q-B1": {
+        "answer": "hold_last",
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "stale_mpc": 1,
+          "hold_last": 2
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/fault_injection.py",
+            "line": 108
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 112
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 115
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 116
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "false": 2,
+          "true": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "stale",
+      "fault_params": {},
+      "onset_event": "curve_apex",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "intermittent_bias|straight": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 130
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": true,
+        "agreement": 1.0,
+        "votes": {
+          "true": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 109
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 110
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 111
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "intermittent_bias",
+      "fault_params": {
+        "magnitude_rad": 0.0854,
+        "on_s": 0.6258,
+        "off_s": 0.909
+      },
+      "onset_event": "straight",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "bias|curve_apex": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 107
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 108
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 104
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 163
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "bias",
+      "fault_params": {
+        "magnitude_rad": 0.0399
+      },
+      "onset_event": "curve_apex",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "intermittent_bias|curve_apex": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 114
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 122
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 132
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 73
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 91
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 92
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "intermittent_bias",
+      "fault_params": {
+        "magnitude_rad": 0.1488,
+        "on_s": 0.6697,
+        "off_s": 0.9887
+      },
+      "onset_event": "curve_apex",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "solver_fail|curve_entry": {
+    "answers": {
+      "Q-B1": {
+        "answer": "lqr_early",
+        "agreement": 1.0,
+        "votes": {
+          "lqr_early": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/fault_injection.py",
+            "line": 111
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 108
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 131
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "true": 1,
+          "false": 2
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 138
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "solver_fail",
+      "fault_params": {},
+      "onset_event": "curve_entry",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "bias|curve_entry": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 107
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 108
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 113
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 72
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 73
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 89
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 90
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 91
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "bias",
+      "fault_params": {
+        "magnitude_rad": 0.055
+      },
+      "onset_event": "curve_entry",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "drift|curve_entry": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 122
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 130
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "true": 1,
+          "false": 2
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 123
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "drift",
+      "fault_params": {
+        "rate_rad_s": 0.025
+      },
+      "onset_event": "curve_entry",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "saturate|curve_apex": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "unknown": 2,
+          "stale_mpc": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 131
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "true": 1,
+          "false": 2
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 160
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 161
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 162
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "saturate",
+      "fault_params": {
+        "duration_s": 0.3,
+        "side": "negative",
+        "magnitude": 0.6,
+        "ramp_s": 0.0
+      },
+      "onset_event": "curve_apex",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "solver_fail|curve_apex": {
+    "answers": {
+      "Q-B1": {
+        "answer": "lqr_early",
+        "agreement": 1.0,
+        "votes": {
+          "lqr_early": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 116
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 116
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": true,
+        "agreement": 0.3333333333333333,
+        "votes": {
+          "true": 1,
+          "unknown": 1,
+          "false": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 73
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 123
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 109
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 110
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 111
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "solver_fail",
+      "fault_params": {},
+      "onset_event": "curve_apex",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "stale|curve_entry": {
+    "answers": {
+      "Q-B1": {
+        "answer": "hold_last",
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "lqr_early": 1,
+          "hold_last": 2
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/fault_injection.py",
+            "line": 108
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 109
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 112
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 113
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 131
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "false": 2,
+          "true": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 140
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 141
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 142
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 143
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 144
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "stale",
+      "fault_params": {},
+      "onset_event": "curve_entry",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "output_delay|curve_entry": {
+    "answers": {
+      "Q-B1": {
+        "answer": "stale_mpc",
+        "agreement": 1.0,
+        "votes": {
+          "stale_mpc": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/fault_injection.py",
+            "line": 99
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 100
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 101
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 102
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 117
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 116
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 132
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 78
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 79
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 80
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 91
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 92
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "output_delay",
+      "fault_params": {
+        "delay_ticks": 3
+      },
+      "onset_event": "curve_entry",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "output_delay|straight": {
+    "answers": {
+      "Q-B1": {
+        "answer": "stale_mpc",
+        "agreement": 1.0,
+        "votes": {
+          "stale_mpc": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/fault_injection.py",
+            "line": 99
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 100
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 101
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 116
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "false": 2,
+          "true": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 158
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 163
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 172
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "output_delay",
+      "fault_params": {
+        "delay_ticks": 3
+      },
+      "onset_event": "straight",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "drift|curve_exit": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 105
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 106
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 107
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 138
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 73
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 122
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 123
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "drift",
+      "fault_params": {
+        "rate_rad_s": 0.0348
+      },
+      "onset_event": "curve_exit",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "saturate|straight": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 105
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 106
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "false": 2,
+          "true": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 73
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 122
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 123
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "saturate",
+      "fault_params": {
+        "duration_s": 0.5571,
+        "side": "positive",
+        "magnitude": 0.4119,
+        "ramp_s": 0.2964
+      },
+      "onset_event": "straight",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "intermittent_bias|curve_exit": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "true": 1,
+          "false": 2
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 72
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 73
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 123
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 159
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 160
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 161
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "intermittent_bias",
+      "fault_params": {
+        "magnitude_rad": 0.1425,
+        "on_s": 0.2607,
+        "off_s": 0.4046
+      },
+      "onset_event": "curve_exit",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "intermittent_bias|curve_entry": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 106
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 107
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 84
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 88
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 132
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "false": 2,
+          "true": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 126
+          },
+          {
+            "file": "lqr_controller/lqr.py",
+            "line": 133
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "intermittent_bias",
+      "fault_params": {
+        "magnitude_rad": 0.1317,
+        "on_s": 0.3694,
+        "off_s": 0.1343
+      },
+      "onset_event": "curve_entry",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "output_delay|curve_exit": {
+    "answers": {
+      "Q-B1": {
+        "answer": "stale_mpc",
+        "agreement": 1.0,
+        "votes": {
+          "stale_mpc": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/fault_injection.py",
+            "line": 99
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 100
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 101
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 116
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": true,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "true": 2,
+          "unknown": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 73
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "output_delay",
+      "fault_params": {
+        "delay_ticks": 2
+      },
+      "onset_event": "curve_exit",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "output_delay|curve_apex": {
+    "answers": {
+      "Q-B1": {
+        "answer": "stale_mpc",
+        "agreement": 1.0,
+        "votes": {
+          "stale_mpc": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/fault_injection.py",
+            "line": 100
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 101
+          },
+          {
+            "file": "integration/fault_injection.py",
+            "line": 117
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 121
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "false": 2,
+          "true": 1
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 123
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "output_delay",
+      "fault_params": {
+        "delay_ticks": 2
+      },
+      "onset_event": "curve_apex",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  },
+  "saturate|curve_exit": {
+    "answers": {
+      "Q-B1": {
+        "answer": "unknown",
+        "agreement": 1.0,
+        "votes": {
+          "unknown": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 99
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 100
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 101
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 102
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 103
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 104
+          }
+        ],
+        "expected_from_code": null
+      },
+      "Q-B2": {
+        "answer": false,
+        "agreement": 1.0,
+        "votes": {
+          "false": 3
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 116
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 117
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 118
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 119
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 120
+          }
+        ],
+        "expected_from_code": "no"
+      },
+      "Q-B3": {
+        "answer": false,
+        "agreement": 0.6666666666666666,
+        "votes": {
+          "true": 1,
+          "false": 2
+        },
+        "citations_valid": [
+          true,
+          true,
+          true
+        ],
+        "evidence": [
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 134
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 135
+          },
+          {
+            "file": "integration/supervised_lateral.py",
+            "line": 136
+          }
+        ],
+        "expected_from_code": null
+      }
+    },
+    "n_samples": 3,
+    "context": {
+      "fault_mode": "saturate",
+      "fault_params": {
+        "duration_s": 0.7858,
+        "side": "positive",
+        "magnitude": 0.5861,
+        "ramp_s": 0.2591
+      },
+      "onset_event": "curve_exit",
+      "planner": "pdm",
+      "controller": "supervised"
+    }
+  }
+}

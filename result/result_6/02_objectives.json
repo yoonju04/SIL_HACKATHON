@@ -1,0 +1,33 @@
+{
+  "active": [
+    "S1"
+  ],
+  "acquisition": {
+    "S1": {
+      "metric": "recovery_success",
+      "gp_target": "lane_recovery_robustness",
+      "acquisition": "level_set",
+      "level": 0.0,
+      "switch_penalty": 1.0,
+      "beta": 1.96
+    }
+  },
+  "S1_objective": {
+    "description": "Estimate where LQR recovery remains successful as a function of (a) the error state at the moment of the MPC->LQR switch, which tests LQR's small-error linear-model assumption, and (b) how strongly the first LQR commands are clipped by the steering angle and steering-rate limits.\n",
+    "question_ko": "전환 순간 차가 경로에서 얼마나 벗어나 있으면(오차 상태), 그리고 LQR 명령이 조향각·조향속도 한계에 얼마나 걸리면, LQR이 차선 안에서 복구하지 못하는가?\n",
+    "not_a_hypothesis_test": true
+  },
+  "recovery_judgment_thresholds_PROVISIONAL": {
+    "e_settle_m": 0.3,
+    "psi_settle_rad": 0.1,
+    "settle_hold_s": 1.0,
+    "window_s": 3.0,
+    "lat_acc_threshold_mps2": 4.41,
+    "lat_jerk_threshold_mps3": 5.0,
+    "filter_s": 0.5,
+    "collision_penalty": -2.0,
+    "robustness_clip_min": -2.0,
+    "robustness_clip_max": 1.0,
+    "eval_window_s": 10.0
+  }
+}

@@ -1,0 +1,193 @@
+{
+  "a_calls": [
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 417,
+        "prompt_tokens": 10516,
+        "total_tokens": 10933,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 10516
+      },
+      "schema_error_examples": [],
+      "items_returned": 2,
+      "items_valid": 2,
+      "round": 0,
+      "requested": 2,
+      "boundary_regions_given": 0,
+      "range_extreme_unjustified": 1
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2765,
+        "prompt_tokens": 12470,
+        "total_tokens": 15235,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 12470
+      },
+      "schema_error_examples": [],
+      "items_returned": 14,
+      "items_valid": 14,
+      "round": 1,
+      "requested": 15,
+      "boundary_regions_given": 4,
+      "range_extreme_unjustified": 3
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 14446,
+        "prompt_tokens": 7529,
+        "total_tokens": 21975,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 13935,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 7529
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 1,
+      "requested": 3,
+      "refine": true
+    }
+  ],
+  "rejected": [
+    {
+      "scenario_id": "SC-a7a4982e2b",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-6f5a8146eb",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-8a9187bb83",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-cde2d79f95",
+      "source": "nemotron_a",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "onset 36.1 s leaves 0.0 s before the route ends (5 s needed)"
+      ]
+    },
+    {
+      "scenario_id": "SC-420340291f",
+      "source": "space_filling",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "onset 48.6 s leaves 3.4 s before the route ends (5 s needed)"
+      ]
+    },
+    {
+      "scenario_id": "SC-71b8745c80",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-aa7ca7a622",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-abe19bdef2",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum"
+      ]
+    },
+    {
+      "scenario_id": "SC-35c746ae52",
+      "tags": [
+        "V-03_reject"
+      ],
+      "problems": [
+        "baseline: V-03 window shorter than minimum; baseline: V-03 no samples in window"
+      ]
+    }
+  ],
+  "llm_errors": [],
+  "gp_history": {
+    "files": [
+      "result/result_2/run_records.jsonl",
+      "result/result_3/run_records.jsonl",
+      "result/result_4/run_records.jsonl",
+      "result/result_5/run_records.jsonl"
+    ],
+    "loaded": 48,
+    "skipped": {
+      "route not in this campaign": 4
+    }
+  },
+  "gp_train_counts": [
+    {
+      "round": 1,
+      "recovery_success": 32,
+      "switched_indicator": 52,
+      "rows": 52,
+      "own_runs": 4,
+      "history_runs": 48,
+      "gp_acquisition_active": true
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+[
+  {
+    "scenario_id": "SC-69d0a487f5",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5,
+        "side": "positive",
+        "magnitude": 0.5,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [
+      "G-01_pending_baseline",
+      "range_extreme_unjustified"
+    ],
+    "evidence_ids": [
+      "PK-001",
+      "PK-002",
+      "F-06"
+    ],
+    "expected_mechanism": "LQR switches after tracking_divergence trigger, but the saturated steering command + high forward speed increase lateral acceleration demand beyond LQR rate limits, preventing convergence.",
+    "expected_side": "boundary",
+    "range_extremes": [
+      "params.ramp_s"
+    ],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-a7a4982e2b",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.025
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.3,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "PK-001",
+      "PK-002",
+      "F-05"
+    ],
+    "expected_mechanism": "LQR sees slow error drift at curve apex with moderate speed and near-typical friction; drift rate is comparable to LQR's effective bandwidth, so recovery depends on whether accumulated |e_psi| stays below the tracking_divergence threshold before the supervisor forces a stop.",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6f5a8146eb",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0292
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.597,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e227161e71",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0858
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.491,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-26497656ed",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.343,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-8a9187bb83",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0854,
+        "on_s": 0.6258,
+        "off_s": 0.909
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.894,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-d1906d64c9",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0399
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.168,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-14c34d3ccd",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1488,
+        "on_s": 0.6697,
+        "off_s": 0.9887
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.358,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-4dc503dfd4",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.045,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-5e1ba267cf",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.447,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  }
+]

@@ -1,0 +1,98 @@
+{
+  "gp": {
+    "metric": "recovery_success",
+    "n_train": 4,
+    "z_boundary": 0.0,
+    "meaning": "mean_z < 0 riskier; |mean_z| small + std large = boundary unknown"
+  },
+  "boundary_regions": [
+    {
+      "fault_id": "F-04",
+      "params": {
+        "magnitude_rad": 0.0399
+      },
+      "route_id": "bench2drive:28154",
+      "max_speed_kmh": 20.0,
+      "onset_event": "curve_apex",
+      "onset_offset_s": 0.168,
+      "predicted_robustness_mean_z": -0.183,
+      "predicted_robustness_std_z": 6.753,
+      "predicted_switch": 0.287,
+      "ambiguity": 13.053,
+      "tire_friction_scale": 0.5
+    },
+    {
+      "fault_id": "F-04",
+      "params": {
+        "magnitude_rad": 0.0858
+      },
+      "route_id": "town10_long",
+      "max_speed_kmh": 30.0,
+      "onset_event": "straight",
+      "onset_offset_s": 0.491,
+      "predicted_robustness_mean_z": -2.585,
+      "predicted_robustness_std_z": 0.172,
+      "predicted_switch": 0.699,
+      "ambiguity": 0.603,
+      "tire_friction_scale": 0.9
+    },
+    {
+      "fault_id": "F-06",
+      "params": {
+        "duration_s": 0.5,
+        "side": "positive",
+        "magnitude": 0.5,
+        "ramp_s": 0.0
+      },
+      "route_id": "bench2drive:28035",
+      "max_speed_kmh": 30.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.0,
+      "predicted_robustness_mean_z": -19.997,
+      "predicted_robustness_std_z": 0.172,
+      "predicted_switch": 0.905,
+      "ambiguity": 0.19,
+      "tire_friction_scale": 0.6
+    },
+    {
+      "fault_id": "F-02",
+      "params": {},
+      "route_id": "bench2drive:24206",
+      "max_speed_kmh": 35.0,
+      "onset_event": "curve_apex",
+      "onset_offset_s": -0.343,
+      "predicted_robustness_mean_z": 9.203,
+      "predicted_robustness_std_z": 0.172,
+      "predicted_switch": 0.925,
+      "ambiguity": 0.15,
+      "tire_friction_scale": 0.7
+    }
+  ],
+  "recent_outcomes_by_fault_mode": {
+    "saturate": {
+      "n": 1,
+      "final_safe": 0,
+      "outcomes": {
+        "unrecovered": 1
+      },
+      "only": "failed"
+    },
+    "bias": {
+      "n": 2,
+      "final_safe": 0,
+      "outcomes": {
+        "recovered_after_departure": 1,
+        "no_switch": 1
+      },
+      "only": "failed"
+    },
+    "stale": {
+      "n": 1,
+      "final_safe": 1,
+      "outcomes": {
+        "safe_recovery": 1
+      },
+      "only": "recovered"
+    }
+  }
+}

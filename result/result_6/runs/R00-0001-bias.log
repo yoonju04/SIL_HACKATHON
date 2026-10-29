@@ -1,0 +1,63 @@
+
+[1m========= Preparing RouteScenario_0 (repetition 0) =========[0m
+[1m> Loading the world[0m
+[tire-friction] scale 0.90 applied: {'scale': 0.9, 'applied': True, 'before': [3.5, 3.5, 3.5, 3.5], 'after': [3.1500000953674316, 3.1500000953674316, 3.1500000953674316, 3.1500000953674316]}
+[1m> Setting up the agent[0m
+[av_stack] PDM-Lite + supervised steering | max speed 30 km/h | comfort pedals on | traffic lights green for the ego
+[1m> Running the route[0m
+Sparse Waypoints: 18
+Dense Waypoints: 556
+[supervisor] t=20.15s MPC -> LQR reason=tracking_divergence
+
+============================================================================
+  [SUPERVISOR] fault detected -> steering switched MPC -> LQR   (t=20.15 s)
+    detected : vehicle diverging from the path (|e_y| > 1.0 m or |e_psi| > 0.6 rad for 0.25 s)
+    when     : no fault injected
+    state    : e_y=+1.04 m, e_psi=+1.1 deg, v=29.7 km/h
+============================================================================
+
+C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack\third_party\carla_garage\team_code\kinematic_bicycle_model.py:47: RuntimeWarning: invalid value encountered in cast
+  steers, throttles, brakes = actions[:, 0], actions[:, 1], actions[:, 2].astype(np.uint8)
+[1m> Stopping the route[0m
+
+[1m========= Results of RouteScenario_0 (repetition 0) ------ [91mFAILURE[0m [1m=========[0m
+
+╒═══════════════════════╤═════════════════════╕
+│ Start Time            │ 2026-10-28 21:13:10 │
+├───────────────────────┼─────────────────────┤
+│ End Time              │ 2026-10-28 21:13:41 │
+├───────────────────────┼─────────────────────┤
+│ System Time           │ 30.25s              │
+├───────────────────────┼─────────────────────┤
+│ Game Time             │ 32.95s              │
+├───────────────────────┼─────────────────────┤
+│ Ratio (Game / System) │ 1.089               │
+╘═══════════════════════╧═════════════════════╛
+
+╒═══════════════════════╤═════════╤══════════╕
+│ Criterion             │ Result  │ Value    │
+├───────────────────────┼─────────┼──────────┤
+│ RouteCompletionTest   │ [91mFAILURE[0m │ 20.34 %  │
+├───────────────────────┼─────────┼──────────┤
+│ OutsideRouteLanesTest │ [92mSUCCESS[0m │ 0 %      │
+├───────────────────────┼─────────┼──────────┤
+│ CollisionTest         │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ RunningRedLightTest   │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ RunningStopTest       │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ MinSpeedTest          │ [91mFAILURE[0m │ 290.84 % │
+├───────────────────────┼─────────┼──────────┤
+│ InRouteTest           │ [92mSUCCESS[0m │          │
+├───────────────────────┼─────────┼──────────┤
+│ AgentBlockedTest      │ [92mSUCCESS[0m │          │
+├───────────────────────┼─────────┼──────────┤
+│ ScenarioTimeoutTest   │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ Timeout               │ [92mSUCCESS[0m │          │
+╘═══════════════════════╧═════════╧══════════╛
+
+[1m> Registering the route statistics[0m
+INFO:  Found the required file in cache!  Carla/Maps/Nav/Town10HD_Opt.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town10HD_Opt.bin 

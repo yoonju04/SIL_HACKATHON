@@ -1,0 +1,44 @@
+[06] --gp-history: 48 earlier runs from 4 file(s) pooled into GP training, skipped {'route not in this campaign': 4}
+[cosmos-power] auto: endpoint dedicated/nvidia/Cosmos3-Super-Reasoner-sFWgCq is started only for stage 10 / insights
+live screen opened: C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\results\real_int3_1028\screen\campaign.html
+[00-02] prior payload (25 unverified obs omitted), objectives ['S1'], scenario space C:\Users\dongh\Desktop\junwoo\SIL_HACKATHON\pipeline\04_feasibility_expansion\scenario_space_av_stack.yaml
+[round 0] pool 10 -> batch 4 (X-5, video on)
+  [08/09] R00-0000-saturate bench2drive:28035 30km/h saturate @curve_entry+0.00s -> unrecovered (lrr=-2.00, trigger=46.50s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=cold_start_nemotron_a)
+  [08] skip SC-a7a4982e2b bench2drive:28035 30km/h drift: baseline: V-03 window shorter than minimum
+  [08] skip SC-6f5a8146eb bench2drive:28035 25km/h bias: baseline: V-03 window shorter than minimum
+  [08/09] R00-0001-bias town10_long 30km/h bias @straight+0.49s -> recovered_after_departure (lrr=-0.26, trigger=17.90s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=cold_start_space_filling)
+  [08/09] R00-0002-stale bench2drive:24206 35km/h stale @curve_apex-0.34s -> safe_recovery (lrr=0.92, trigger=8.65s, detected=stale_sequence, sr=pass, sel=replacement_for_SC-a7a4982e2b)
+  [08] skip SC-8a9187bb83 bench2drive:28048 15km/h intermittent_bias: baseline: V-03 window shorter than minimum
+  [08/09] R00-0003-bias bench2drive:28154 20km/h bias @curve_apex+0.17s -> no_switch (lrr=None, trigger=30.70s, detected=None, sr=pass, sel=replacement_for_SC-8a9187bb83)
+[cosmos-power] starting Cosmos endpoint (stage_10 round 0); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 166s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (166s); waiting
+[cosmos-power] data plane answers after 187s (probe HTTP 200)
+  [10] R00-0000-saturate explained via video -> rejected ['departure_time_s']
+  [10] R00-0001-bias explained via video -> rejected ['departure_time_s']
+[cosmos-power] stop requested (stage_10 round 0); was enabled=True status=running readiness=ready ready_replicas=1
+[round 1] pool 211 -> batch 4 (X-5, video on)
+  [08] skip SC-71b8745c80 bench2drive:28035 35km/h output_delay: baseline: V-03 window shorter than minimum
+  [08] skip SC-aa7ca7a622 bench2drive:28154 30km/h bias: baseline: V-03 window shorter than minimum
+  [08] skip SC-abe19bdef2 bench2drive:28154 20km/h output_delay: baseline: V-03 window shorter than minimum
+  [08/09] R01-0004-output_delay bench2drive:28154 30km/h output_delay @straight-0.22s -> no_switch (lrr=None, trigger=6.50s, detected=None, sr=pass, sel=acquisition)
+  [08] skip SC-35c746ae52 bench2drive:28154 10km/h intermittent_bias: baseline: V-03 window shorter than minimum; baseline: V-03 no samples in window
+  [08/09] R01-0005-intermittent_bias bench2drive:28154 20km/h intermittent_bias @curve_entry-0.71s -> no_switch (lrr=None, trigger=28.05s, detected=None, sr=F1_no_or_late_switch, sel=replacement_for_SC-aa7ca7a622)
+  [08/09] R01-0006-saturate town10_long 35km/h saturate @straight+0.33s -> unrecovered (lrr=-2.00, trigger=16.75s, detected=tracking_divergence, sr=F1_no_or_late_switch, sel=replacement_for_SC-abe19bdef2)
+  [08/09] R01-0007-bias bench2drive:28154 25km/h bias @straight+0.25s -> no_switch (lrr=None, trigger=7.40s, detected=None, sr=F1_no_or_late_switch, sel=replacement_for_SC-35c746ae52)
+[cosmos-power] starting Cosmos endpoint (stage_10 round 1); billing starts when ready
+[cosmos-power]   waiting (1s): enabled=False status=stopped readiness=not_ready ready_replicas=0
+[cosmos-power]   waiting (12s): enabled=True status=starting readiness=not_ready ready_replicas=0
+[cosmos-power] Cosmos ready after 166s (enabled=True status=updating readiness=ready ready_replicas=1)
+[cosmos-power]   control plane ready but chat/completions -> HTTP 404 (166s); waiting
+[cosmos-power] data plane answers after 177s (probe HTTP 200)
+  [10] R01-0005-intermittent_bias explained via video -> rejected ['departure_time_s']
+  [10] R01-0006-saturate explained via video -> rejected ['collision_seen']
+  [10] R01-0007-bias explained via video -> rejected ['switch_time_s', 'departure_time_s']
+[cosmos-power] already on (campaign insights): enabled=True status=running readiness=ready ready_replicas=1
+campaign insights (C_cosmos): complete, 3 insights, 4 model calls -> results\real_int3_1028\insights\insights.json
+[cosmos-power] stop requested (campaign insights); was enabled=True status=running readiness=ready ready_replicas=1
+{"n_runs": 8, "n_switched": 4, "n_final_safe_recovery": 1, "n_failures": 5, "both_sides_observed": true, "boundary_band_runs": 0, "explanations": 5, "explanations_accepted": 0}
+outputs: results\real_int3_1028  (report.md, run_records.jsonl, screen/campaign.html, explanations.jsonl, monitor_rule_candidates.yaml, insights/insights.json, insights/campaign.html)

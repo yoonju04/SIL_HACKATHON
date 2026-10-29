@@ -1,0 +1,5614 @@
+[
+  {
+    "scenario_id": "SC-7e0fba2674",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.055
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [],
+    "evidence_ids": [
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "lqr_linear_model_degrades_away_from_design_point",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-680ac5f359",
+    "source": "nemotron_a",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.07
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.491,
+    "tags": [],
+    "evidence_ids": [
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "lqr_linear_model_degrades_away_from_design_point",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-d33d46c3b8",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.045
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.168,
+    "tags": [],
+    "evidence_ids": [
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "lqr_linear_model_degrades_away_from_design_point",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-02bda292ea",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.025
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [],
+    "evidence_ids": [
+      "PK-002",
+      "PK-003",
+      "S1"
+    ],
+    "expected_mechanism": "lqr_degrades_with_error_accumulation",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b18acdc562",
+    "source": "nemotron_a",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.015
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.3,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "PK-002",
+      "PK-003",
+      "S1"
+    ],
+    "expected_mechanism": "lqr_degrades_with_error_accumulation",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-867ccc4b00",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3,
+        "side": "positive",
+        "magnitude": 0.7,
+        "ramp_s": 0.1
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [],
+    "evidence_ids": [
+      "PK-001",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "saturate_recovery_degrades_with_ramp_and_magnitude",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e32ad441d8",
+    "source": "nemotron_a",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.7,
+        "side": "positive",
+        "magnitude": 0.5,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [
+      "G-01_pending_baseline",
+      "range_extreme_unjustified"
+    ],
+    "evidence_ids": [
+      "PK-001",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "saturate_duration_and_speed_interaction",
+    "expected_side": "boundary",
+    "range_extremes": [
+      "params.ramp_s"
+    ],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-5dbcbf8417",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3,
+        "side": "negative",
+        "magnitude": 0.6,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.343,
+    "tags": [
+      "range_extreme_unjustified"
+    ],
+    "evidence_ids": [
+      "PK-001",
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "saturate_recovery_degrades_with_ramp_and_magnitude",
+    "expected_side": "boundary",
+    "range_extremes": [
+      "params.ramp_s"
+    ],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-67602268db",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "PK-002",
+      "PK-003",
+      "S1"
+    ],
+    "expected_mechanism": "solver_failure_recovery_degrades_with_speed_and_friction",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-0a26919439",
+    "source": "nemotron_a",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.5,
+    "tags": [
+      "G-01_pending_baseline",
+      "range_extreme_unjustified"
+    ],
+    "evidence_ids": [
+      "PK-002",
+      "PK-003",
+      "S1"
+    ],
+    "expected_mechanism": "solver_failure_recovery_degrades_with_speed_and_friction",
+    "expected_side": "boundary",
+    "range_extremes": [
+      "tire_friction_scale"
+    ],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-14bf7e5492",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.1,
+    "tags": [],
+    "evidence_ids": [
+      "PK-002",
+      "PK-003",
+      "S1"
+    ],
+    "expected_mechanism": "stale_detection_vs_error_accumulation",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-71b8745c80",
+    "source": "nemotron_a",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "PK-002",
+      "PK-003",
+      "S1"
+    ],
+    "expected_mechanism": "output_delay_recovery_degrades_with_speed_and_ticks",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-493bdc3815",
+    "source": "nemotron_a",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1,
+        "on_s": 0.5,
+        "off_s": 0.5
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.491,
+    "tags": [],
+    "evidence_ids": [
+      "PK-002",
+      "S1"
+    ],
+    "expected_mechanism": "intermittent_bias_average_recovery",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-aa7ca7a622",
+    "source": "nemotron_a_refine",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.05
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.168,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "F-04",
+      "O-001"
+    ],
+    "expected_mechanism": "LQR recovery after MPC bias fault at curve apex with adjusted speed and magnitude",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-0428ba3e5e",
+    "source": "nemotron_a_refine",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.05
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.491,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [
+      "F-04",
+      "O-002"
+    ],
+    "expected_mechanism": "LQR recovery after MPC bias fault at straight with increased speed and reduced magnitude",
+    "expected_side": "boundary",
+    "range_extremes": [],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-1ebf8f0215",
+    "source": "nemotron_a_refine",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3,
+        "side": "positive",
+        "magnitude": 0.3,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.0,
+    "tags": [
+      "range_extreme_unjustified"
+    ],
+    "evidence_ids": [
+      "F-06",
+      "O-003"
+    ],
+    "expected_mechanism": "Milder F-06 saturation at curve entry with reduced magnitude and duration aiming for LQR recovery boundary",
+    "expected_side": "boundary",
+    "range_extremes": [
+      "params.ramp_s"
+    ],
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-f2e307773b",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0756
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.176,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-f007fb2c04",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0919,
+        "on_s": 0.1179,
+        "off_s": 0.5601
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.909,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3b8d8fa1bf",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.091,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-f76b270ad1",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.039,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e30dcd370b",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0916
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.246,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-f1c2115b9c",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1039,
+        "on_s": 0.3417,
+        "off_s": 0.5509
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.68,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-54efabe6eb",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.475,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-0bf2d6d2f5",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 10.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0348
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.598,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b23a054e01",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5571,
+        "side": "positive",
+        "magnitude": 0.4119,
+        "ramp_s": 0.2964
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.818,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-35c746ae52",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 10.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1425,
+        "on_s": 0.2607,
+        "off_s": 0.4046
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.886,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-c05854f848",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.303,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-c642f5c07c",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.012,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-c9facfbbde",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.128,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3f16abf083",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.813,
+        "side": "negative",
+        "magnitude": 0.834,
+        "ramp_s": 0.2003
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.647,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e1ac6b0565",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 10.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0294
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.474,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-fcc5b4d0ad",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0233
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.481,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3d3b9fefa0",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1317,
+        "on_s": 0.3694,
+        "off_s": 0.1343
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.708,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-35c6314f65",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6344,
+        "side": "negative",
+        "magnitude": 0.3443,
+        "ramp_s": 0.0232
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.097,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-15cf7990c0",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.151,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-7f58a8e2ab",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.209,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-12e11ae09a",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": -0.816,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3353f2194d",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.7334,
+        "side": "negative",
+        "magnitude": 0.5544,
+        "ramp_s": 0.2157
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.555,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-abe19bdef2",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.779,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-77818ebea0",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0228
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.12,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-4bbe903ca2",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.7858,
+        "side": "positive",
+        "magnitude": 0.5861,
+        "ramp_s": 0.2591
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.369,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-195f0fdb9d",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.221,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e1caf6c823",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1372,
+        "on_s": 0.9628,
+        "off_s": 0.8612
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.868,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-a2ce78a57f",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.341,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-fd1d40e1f4",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.486,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-753873684a",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.049,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-d7fda00d6a",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.141,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-98068155ee",
+    "source": "space_filling",
+    "route_id": "bench2drive:28048",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.794,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-924b2e1b2a",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0551
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.437,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-036bbea7b6",
+    "source": "space_filling",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2416,
+        "side": "negative",
+        "magnitude": 0.2857,
+        "ramp_s": 0.2833
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.966,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b613fd8cb5",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1564,
+        "side": "negative",
+        "magnitude": 0.3456,
+        "ramp_s": 0.1937
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.503,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-4111b189b3",
+    "source": "space_filling",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6607,
+        "side": "positive",
+        "magnitude": 0.4652,
+        "ramp_s": 0.2161
+      }
+    },
+    "onset_event": "curve_exit",
+    "onset_offset_s": 0.723,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-1de4cba89a",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0273
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.527,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-7896ad5fcb",
+    "source": "space_filling",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.9945,
+        "side": "positive",
+        "magnitude": 0.4167,
+        "ramp_s": 0.016
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.327,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-568a4e61cd",
+    "source": "space_filling",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1232,
+        "on_s": 0.9505,
+        "off_s": 0.4758
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.135,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-308d1c0da2",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0643
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.012,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3ab3577752",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0599
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.351,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-908981aecd",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0493
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.368,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-7654096dba",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0365
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.016,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-159aaf824c",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0586
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.359,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-93057f0d33",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0488
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.212,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-dca04a9401",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0591
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.104,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-21504ec682",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0403
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.144,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-820452a740",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0535
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.615,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-ad17462e89",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0707
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.396,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-1f8c75066e",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0643
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.675,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-888d37ef78",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0805
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.288,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-cf33fb69dc",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0664
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.443,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-4ac4e0c7c6",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0931
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.767,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-d996444282",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0559
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.557,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6c2482b198",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0648
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.523,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-65413d14b4",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.1
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.517,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b9574ce8d1",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0757
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.595,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-941866df32",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0728
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.748,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3776bdac7c",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0344
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.22,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e93b06c981",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0486
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.411,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-2780ec1a44",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0404
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.217,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-9527473bf7",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.044
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.191,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-035e3d9c58",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.02
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.26,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-f680886267",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0289
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.051,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-dc0720bca1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0607
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.131,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-7a12eea8e2",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0555
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.158,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-bfd86095ec",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 15.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0516
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.236,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6bc750f342",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.043
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.239,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-cb9ccf46d4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0368
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.085,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-94dfbea38e",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0272
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.297,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-870b1fa7e2",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0148
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.442,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-2a8f9ae4a5",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0361
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.819,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-f0659ef9b1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0235
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.083,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-ed4e31fbb6",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0241
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.805,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-bde11f6437",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0227
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.051,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-8ef4e0a256",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0173
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.053,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e9f7569d41",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0179
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.332,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6b94106db4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0188
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.273,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-171313e068",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0151
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.547,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6f7f09ead3",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0178
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.148,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-8f2acba9c6",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.005
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.318,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-84e023b906",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0194
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.028,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-40c7c042c5",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0199
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.408,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-66ded4edd1",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0132
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.177,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-a88013426f",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0153
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.622,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-610a15921d",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.019
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.993,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-2359565c72",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0237
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.858,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e13ab8aaf7",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-05",
+      "mode": "drift",
+      "params": {
+        "rate_rad_s": 0.0052
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.523,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-83536c47d7",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.4444,
+        "side": "positive",
+        "magnitude": 0.8175,
+        "ramp_s": 0.0523
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.143,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-9f44723df4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5233,
+        "side": "positive",
+        "magnitude": 0.6449,
+        "ramp_s": 0.0815
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.179,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-92507b0ef6",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1591,
+        "side": "positive",
+        "magnitude": 0.7613,
+        "ramp_s": 0.0901
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.186,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b30eea9f1b",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3898,
+        "side": "positive",
+        "magnitude": 0.5835,
+        "ramp_s": 0.0019
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.048,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-9cd0387bbc",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3304,
+        "side": "positive",
+        "magnitude": 0.6749,
+        "ramp_s": 0.0909
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.564,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-406fbc519d",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2516,
+        "side": "positive",
+        "magnitude": 0.6678,
+        "ramp_s": 0.1352
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.088,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-1b296e7032",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.4207,
+        "side": "positive",
+        "magnitude": 0.6088,
+        "ramp_s": 0.0392
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.403,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-70df801122",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1895,
+        "side": "positive",
+        "magnitude": 0.656,
+        "ramp_s": 0.0837
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.043,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e63588d83d",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2229,
+        "side": "positive",
+        "magnitude": 0.7716,
+        "ramp_s": 0.1704
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.012,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-57b2342538",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.4777,
+        "side": "positive",
+        "magnitude": 0.7593,
+        "ramp_s": 0.1001
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.347,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-31524d09bb",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6048,
+        "side": "positive",
+        "magnitude": 0.4113,
+        "ramp_s": 0.0671
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.084,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-ae6511a7df",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5449,
+        "side": "positive",
+        "magnitude": 0.5429,
+        "ramp_s": 0.0259
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.347,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-29b275e464",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.4594,
+        "side": "positive",
+        "magnitude": 0.6343,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.391,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6ac4334b0d",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6932,
+        "side": "positive",
+        "magnitude": 0.482,
+        "ramp_s": 0.0311
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.055,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-bccd05563b",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.7313,
+        "side": "positive",
+        "magnitude": 0.4668,
+        "ramp_s": 0.0006
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.128,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b68d330e25",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6265,
+        "side": "positive",
+        "magnitude": 0.5903,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.033,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-59d8c83445",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.672,
+        "side": "positive",
+        "magnitude": 0.5587,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.044,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-7f26be86ba",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6437,
+        "side": "positive",
+        "magnitude": 0.4992,
+        "ramp_s": 0.0357
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.316,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-06032e356f",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.5386,
+        "side": "positive",
+        "magnitude": 0.4957,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.053,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-5e15a4bdd4",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.6444,
+        "side": "positive",
+        "magnitude": 0.5384,
+        "ramp_s": 0.1291
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.117,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-84cc183925",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.4252,
+        "side": "negative",
+        "magnitude": 0.4683,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.614,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-22511f565b",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1551,
+        "side": "negative",
+        "magnitude": 0.4673,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.127,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-469bcd8492",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2792,
+        "side": "negative",
+        "magnitude": 0.6325,
+        "ramp_s": 0.0023
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.654,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-d9dcd36103",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1266,
+        "side": "negative",
+        "magnitude": 0.543,
+        "ramp_s": 0.0252
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.315,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-0a93b6babb",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3165,
+        "side": "negative",
+        "magnitude": 0.7328,
+        "ramp_s": 0.0146
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.615,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3b1bb3588e",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3407,
+        "side": "negative",
+        "magnitude": 0.3621,
+        "ramp_s": 0.0536
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.696,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-d61cfa8be2",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2857,
+        "side": "negative",
+        "magnitude": 0.745,
+        "ramp_s": 0.0654
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.036,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-1905658d2c",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3375,
+        "side": "negative",
+        "magnitude": 0.6978,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.571,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-8f4b087dc4",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2027,
+        "side": "negative",
+        "magnitude": 0.446,
+        "ramp_s": 0.0152
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.279,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-fadc5006c6",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2614,
+        "side": "negative",
+        "magnitude": 0.7491,
+        "ramp_s": 0.0008
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.465,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e8de3ca193",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.047,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-04a6a1d9e2",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.009,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-c701c0cdba",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.083,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-059912e33f",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.281,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-bca89ab69c",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.063,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-634f728008",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.293,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-0b16ee3b0a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.069,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-c6319baf58",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.752,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-ff599b4ea9",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.463,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-984c0d7554",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.409,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-297d1a4525",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.988,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-07bcb3a91c",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -1.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-ee5f9bebb7",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.441,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-2969c856c8",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.681,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6273f53165",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.121,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-0ebe9f18c5",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.381,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b54e99dee7",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 20.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.594,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-71e2c633ec",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-01",
+      "mode": "solver_fail",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.442,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-67d36d2f02",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.182,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-5e31580b6f",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.255,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6d6ff631d0",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.215,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-2c2f14d1c3",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.085,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-79c9fe4a46",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.362,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-4a07876857",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.016,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-27b5b38076",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.387,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-0354c23244",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.161,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-c5b3ac9d71",
+    "source": "perturbation",
+    "route_id": "bench2drive:24206",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-02",
+      "mode": "stale",
+      "params": {}
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.476,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-a561fd4835",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.479,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-4f8cabc6cf",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.588,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3da97b355c",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 4
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.298,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-73e2694370",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.352,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-631be23530",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.222,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-ad6d7a9b55",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.331,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-95a5897839",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 2
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.113,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6c99e5a6ce",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.304,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-fb44688274",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.272,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-eca8378e3d",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-03",
+      "mode": "output_delay",
+      "params": {
+        "delay_ticks": 3
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.038,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-af9344fd2b",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0985,
+        "on_s": 0.3988,
+        "off_s": 0.397
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 1.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-1f6d9e6a2d",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1022,
+        "on_s": 0.4185,
+        "off_s": 0.3742
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.688,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-945e21005f",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0835,
+        "on_s": 0.5846,
+        "off_s": 0.4092
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.488,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-6b27cd8426",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1014,
+        "on_s": 0.5517,
+        "off_s": 0.4521
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.784,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-8eed969f21",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0983,
+        "on_s": 0.3667,
+        "off_s": 0.4795
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.497,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b64725cd1b",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0696,
+        "on_s": 0.6098,
+        "off_s": 0.4736
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.699,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-382b92799f",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1055,
+        "on_s": 0.5,
+        "off_s": 0.7965
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.499,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-59a7aaf1cf",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1012,
+        "on_s": 0.5306,
+        "off_s": 0.487
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.801,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-d2da723883",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.0951,
+        "on_s": 0.2614,
+        "off_s": 0.5299
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.589,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-88e8f5298f",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-07",
+      "mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1096,
+        "on_s": 0.4578,
+        "off_s": 0.5784
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.31,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-8813d5564f",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0615
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.119,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-271abff597",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0397
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.393,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-bd8bdb7756",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0552
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.137,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-7a875ce9b6",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0596
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.132,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-27b7d49ee4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0493
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.586,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-76b3b08d6b",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0497
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.41,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-abecb932c4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0645
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": -0.047,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-011476abd4",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0347
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.414,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-53bd507926",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.3
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.032
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.43,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-e7364a532c",
+    "source": "perturbation",
+    "route_id": "bench2drive:28154",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0617
+      }
+    },
+    "onset_event": "curve_apex",
+    "onset_offset_s": 0.284,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-f73c54c6c7",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0595
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 1.0,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-f937de32fd",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0413
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": -0.108,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-271f788fd4",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0523
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.699,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-9189ce542f",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0401
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.825,
+    "tags": [],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-1e8f30ba91",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0601
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.461,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-91d6625b16",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0319
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.13,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-2a6d2d9b55",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0265
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.161,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3a78afb66b",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0235
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.619,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-77dcd3c016",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 1.0
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.042
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.486,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-bd42542836",
+    "source": "perturbation",
+    "route_id": "town10_long",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.8
+    },
+    "fault": {
+      "fault_id": "F-04",
+      "mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0632
+      }
+    },
+    "onset_event": "straight",
+    "onset_offset_s": 0.691,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-9c8bc5dd98",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.9
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2356,
+        "side": "positive",
+        "magnitude": 0.2759,
+        "ramp_s": 0.0404
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.219,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-9322ce85ae",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2085,
+        "side": "positive",
+        "magnitude": 0.3698,
+        "ramp_s": 0.0254
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.023,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-834e51b3ad",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2352,
+        "side": "positive",
+        "magnitude": 0.2405,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.529,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-7207459477",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 25.0,
+      "tire_friction_scale": 0.6
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.4027,
+        "side": "positive",
+        "magnitude": 0.3345,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.112,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-91a4f15277",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1603,
+        "side": "positive",
+        "magnitude": 0.2,
+        "ramp_s": 0.0014
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.021,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-352e05cbc1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.4043,
+        "side": "positive",
+        "magnitude": 0.2408,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.346,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-0253245401",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 30.0,
+      "tire_friction_scale": 0.7
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.2557,
+        "side": "positive",
+        "magnitude": 0.2499,
+        "ramp_s": 0.0605
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": 0.208,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-3e41c1cd2a",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 40.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.3279,
+        "side": "positive",
+        "magnitude": 0.4394,
+        "ramp_s": 0.0
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.062,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-b9bf1953f1",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.4
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1245,
+        "side": "positive",
+        "magnitude": 0.2746,
+        "ramp_s": 0.0386
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.062,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  },
+  {
+    "scenario_id": "SC-4e7ee8d546",
+    "source": "perturbation",
+    "route_id": "bench2drive:28035",
+    "environment": {
+      "max_speed_kmh": 35.0,
+      "tire_friction_scale": 0.5
+    },
+    "fault": {
+      "fault_id": "F-06",
+      "mode": "saturate",
+      "params": {
+        "duration_s": 0.1,
+        "side": "positive",
+        "magnitude": 0.3714,
+        "ramp_s": 0.0041
+      }
+    },
+    "onset_event": "curve_entry",
+    "onset_offset_s": -0.396,
+    "tags": [
+      "G-01_pending_baseline"
+    ],
+    "evidence_ids": [],
+    "expected_mechanism": null,
+    "expected_side": null,
+    "range_extremes": null,
+    "extreme_justification": null
+  }
+]

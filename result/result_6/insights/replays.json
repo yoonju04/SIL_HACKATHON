@@ -1,0 +1,57 @@
+{
+  "R00-0000-saturate": {
+    "run_id": "R00-0000-saturate",
+    "clip": "clips/c8e5d06f0366d2749c89.mp4",
+    "start_s": 45.5,
+    "end_s": 49.8,
+    "event_s": 46.8,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "ebbc1a9d79a90ed8547760a80c184b82aeab74c8c9d07bca69238eb9995f39f0"
+  },
+  "R00-0001-bias": {
+    "run_id": "R00-0001-bias",
+    "clip": "clips/51ea812158b8bd344d8d.mp4",
+    "start_s": 16.9,
+    "end_s": 22.05,
+    "event_s": 19.05,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "e4aaa993bab93477c35c722efac96e84c67fb5d29e101b902c1fc32253ad1b24"
+  },
+  "R01-0005-intermittent_bias": {
+    "run_id": "R01-0005-intermittent_bias",
+    "clip": "clips/3344602f64eb44e23193.mp4",
+    "start_s": 27.05,
+    "end_s": 32.8,
+    "event_s": 29.8,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "d343275d8433e620a43dfa00aceea54d023ba5bb95c9f9cb17702b3aa49e8998"
+  },
+  "R01-0006-saturate": {
+    "run_id": "R01-0006-saturate",
+    "clip": "clips/888d6d9be4b26e002054.mp4",
+    "start_s": 15.75,
+    "end_s": 20.05,
+    "event_s": 17.05,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "bf531a9fb1d8e16f141138ca21e82991470fe8cfac3a13d6b4dd1e9ce6772600"
+  },
+  "R01-0007-bias": {
+    "run_id": "R01-0007-bias",
+    "clip": "clips/c4ecfe7c727d96a9ef70.mp4",
+    "start_s": 6.4,
+    "end_s": 11.95,
+    "event_s": 8.95,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "28693e461429c2f179b99596ef82bea20db71e9086c9882fba8e48bdb8a1c9bb"
+  }
+}
