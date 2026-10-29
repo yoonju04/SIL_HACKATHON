@@ -126,7 +126,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
         self.fault = FaultConfig(self.options['mpc_fault'], float(self.options['fault_start']),
                                  float(self.options['fault_duration']),
                                  float(self.options.get('fault_magnitude', .05)),
-                                 float(self.options.get('fault_on_s', .2)), float(self.options.get('fault_off_s', .2)))
+                                 float(self.options.get('fault_on_s', .2)), float(self.options.get('fault_off_s', .2)),
+                                 float(self.options.get('fault_level', 1.)), float(self.options.get('fault_ramp_s', 0.)))
         self.mode = self.options['controller']
         self.lateral = None
         self.reference = None
@@ -166,7 +167,8 @@ class PDMLiteOwnSteerAgent(AutoPilot):
             self.monitor_logs = MonitorLogs(carla, self._world, self._vehicle, route, Path(self.options['out']),
                                             meta=dict(planner='PDM-Lite', controller=self.mode,
                                                       fault_mode=self.fault.mode, fault_start=self.fault.at_s,
-                                                      fault_magnitude=self.fault.magnitude))
+                                                      fault_magnitude=self.fault.magnitude,
+                                                      fault_level=self.fault.level, fault_ramp_s=self.fault.ramp_s))
             self.resources.callback(self.monitor_logs.close)
 
     def _hold_lights_green(self) -> None:

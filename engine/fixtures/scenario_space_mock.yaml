@@ -153,6 +153,20 @@ faults:
       - positive
       - negative
       note: MPC 조향 부호
+    magnitude:
+      range:
+      - 0.2
+      - 1.0
+      unit: fraction_of_max_steer
+      default: 1.0
+      cli: --saturate-level
+    ramp_s:
+      range:
+      - 0.0
+      - 0.3
+      unit: s
+      default: 0.0
+      cli: --fault-ramp
   next_question: 몇 초 고정부터 전환해도 차선 안에서 회복하지 못하는가
 - id: F-07
   name: intermittent_bias

@@ -119,7 +119,8 @@ def _fault_config(run: RunData) -> dict[str, Any]:
     mode = cfg.get("mpc_fault", meta.get("fault_mode", "none")) or "none"
     return dict(mode=mode, start=cfg.get("fault_start", meta.get("fault_start")),
                 duration=cfg.get("fault_duration"), magnitude=cfg.get("fault_magnitude", meta.get("fault_magnitude")),
-                on_s=cfg.get("fault_on_s"), off_s=cfg.get("fault_off_s"))
+                on_s=cfg.get("fault_on_s"), off_s=cfg.get("fault_off_s"),
+                level=cfg.get("fault_level", 1.0), ramp_s=cfg.get("fault_ramp_s", 0.0))
 
 
 def _finite(x: Any) -> bool:

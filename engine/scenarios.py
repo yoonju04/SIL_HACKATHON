@@ -230,10 +230,13 @@ def fault_cli_local(space: dict, c: dict, onset_s: float) -> list[str]:
         args += ["--fault-magnitude", "%.4f" % mag]
     if "on_s" in p:
         args += ["--fault-on", "%.3f" % p["on_s"], "--fault-off", "%.3f" % p["off_s"]]
+    for name, spec in (f.get("params") or {}).items():   # integration3: --saturate-level / --fault-ramp
+        if (spec or {}).get("cli") and p.get(name) is not None:
+            args += [spec["cli"], "%.4f" % float(p[name])]
     for name, value in (c.get("environment") or {}).items():
-        flag = (space["environment"].get(name) or {}).get("cli")
-        if flag:
-            args += [flag, "%.1f" % value]
+        spec = space["environment"].get(name) or {}
+        if spec.get("cli") and value is not None:
+            args += [spec["cli"], spec.get("cli_format", "%.1f") % float(value)]
     return args
 
 
@@ -242,7 +245,8 @@ def fault_dict_for_sim(space: dict, c: dict, onset_s: float) -> dict:
     args = fault_cli_local(space, c, onset_s)
     get = lambda flag, d=None: float(args[args.index(flag) + 1]) if flag in args else d
     return dict(mode=c["fault"]["mode"], start=get("--fault-start"), duration=get("--fault-duration"),
-                magnitude=get("--fault-magnitude", 0.05), on_s=get("--fault-on", 0.2), off_s=get("--fault-off", 0.2))
+                magnitude=get("--fault-magnitude", 0.05), on_s=get("--fault-on", 0.2), off_s=get("--fault-off", 0.2),
+                level=get("--saturate-level", 1.0), ramp_s=get("--fault-ramp", 0.0))
 
 
 def detect_route_events(ticks: list[dict], dt: float = 0.05, *, kappa_on: float = 1 / 60, kappa_off: float = 1 / 300,

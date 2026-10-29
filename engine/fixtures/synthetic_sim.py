@@ -108,7 +108,11 @@ def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, see
                     if round(t - start, 6) % (on + off) < on - 1e-9:
                         u += mag
                 elif mode == "saturate":
-                    u = math.copysign(MAX_STEER, mag)
+                    # integration3: level = fraction of the limit, ramp_s = linear blend from the MPC command
+                    target = math.copysign(float(fault.get("level", 1.0) or 1.0) * MAX_STEER, mag)
+                    ramp = float(fault.get("ramp_s", 0.0) or 0.0)
+                    frac = 1.0 if ramp <= 0 else min(1.0, max(0.0, round(t - start, 6) / ramp))
+                    u = u + frac * (target - u)
                 elif mode == "output_delay":
                     u = history[max(0, len(history) - 1 - int(round(mag)))]
             if not supervised:
@@ -202,6 +206,7 @@ def write_run_folder(out: Path, *, route: str, max_speed_kmh: float, fault: dict
     config = dict(model=None, planner="pdm", record_front=record_front, controller=controller,
                   mpc_fault=f["mode"], fault_start=f["start"], fault_duration=f["duration"],
                   fault_magnitude=f["magnitude"], fault_on_s=f.get("on_s", 0.2), fault_off_s=f.get("off_s", 0.2),
+                  fault_level=f.get("level", 1.0), fault_ramp_s=f.get("ramp_s", 0.0),
                   stop_after_fault=stop_after_fault_s, max_speed_kmh=max_speed_kmh, dt=DT, out=str(out),
                   geometry=dict(max_steer_rad=MAX_STEER, lf=1.35, lr=1.55), **marker)
     (out / "agent_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
