@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from integration.fault_injection import FaultConfig, MPCFaultInjector
-from integration.supervised_lateral import MPCSupervisor, SupervisedLateral
+from integration.supervised_lateral import SUPERVISOR_PROFILES, MPCSupervisor, SupervisedLateral
 from mpc_controller import MPCOutput
 from planner import PlannerConfig, ReferencePlanner
 from sim.plant import PlantParams
@@ -188,3 +188,29 @@ if __name__ == '__main__':
         if name.startswith('test_') and callable(check):
             check()
             print('PASS ' + name)
+
+
+def test_steer_rate_check_catches_a_saturate_step_and_an_intermittent_bias_edge() -> None:
+    # integration4: both stay inside the angle range, so only the rate check sees them at once
+    for jump, expected in ((0.5 - 0.1, 'steer_rate_exceeded'), (0.08, 'steer_rate_exceeded'),
+                           (math.radians(60) * 0.05, None)):      # the MPC's own 60 deg/s limit is fine
+        supervisor = MPCSupervisor(0.5)
+        assert supervisor.inspect(output(), 1.0, 2.0) is None
+        nxt = replace(output(), steer=0.1 + jump, seq=2, stamp_s=1.05)
+        assert supervisor.inspect(nxt, 1.05, 2.0) == expected, jump
+    legacy = MPCSupervisor(0.5, config=SUPERVISOR_PROFILES['legacy'])
+    assert legacy.inspect(output(), 1.0, 2.0) is None
+    assert legacy.inspect(replace(output(), steer=0.5, seq=2, stamp_s=1.05), 1.05, 2.0) is None
+
+
+def test_tight_divergence_reacts_before_the_lane_edge_legacy_does_not() -> None:
+    # in-lane margin is 0.83-1.08 m: 0.7 m held 0.15 s switches with tight, never with legacy (needs > 1.0 m)
+    for name, expected in (('tight', 'tracking_divergence'), ('legacy', None)):
+        supervisor = MPCSupervisor(0.5, config=SUPERVISOR_PROFILES[name])
+        reasons = [supervisor.inspect(replace(output(), state=np.array([0.7, 0, 0, 0]), seq=k + 1, stamp_s=1.0 + 0.05 * k),
+                                      1.0 + 0.05 * k, 2.0) for k in range(4)]
+        assert reasons[-1] == expected and reasons[:3] == [None, None, None], (name, reasons)
+    # normal tracking (fault-free baselines: |e_y| <= 0.46 m) never trips it
+    supervisor = MPCSupervisor(0.5)
+    assert all(supervisor.inspect(replace(output(), state=np.array([0.46, 0, 0.23, 0]), seq=k + 1, stamp_s=1.0 + 0.05 * k),
+                                  1.0 + 0.05 * k, 2.0) is None for k in range(40))

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TypedDict
 
 import numpy as np
@@ -16,14 +16,37 @@ from mpc_controller import MPCOutput, MPCConfig
 from planner import Trajectory
 
 
+@dataclass(frozen=True)
+class SupervisorConfig:
+    """Thresholds for faults whose output values stay in range (bias, drift, saturate, intermittent bias).
+
+    'tight' (default, integration4) is set from 61 fault-free CARLA baselines (result_2..5, 48k ticks):
+    |e_y| max 0.46 m, |e_psi| max 0.23 rad, commanded steer rate max 61 deg/s (the MPC itself limits it to
+    60 deg/s, mpc.py steer_rate_lim_dps). 'legacy' (1.0 m / 0.6 rad / 0.25 s, no rate check) reacted only after
+    the car had left its lane: the in-lane margin is 0.83-1.08 m, and all 15 switched risk-fault runs crossed
+    the lane edge before the switch."""
+    max_lateral_error_m: float = 0.6
+    max_heading_error_rad: float = 0.35
+    divergence_hold_s: float = 0.15
+    max_steer_rate_dps: float | None = 90.0   # None = no rate check; 1.5 x the MPC's own 60 deg/s constraint
+
+
+SUPERVISOR_PROFILES = {'tight': SupervisorConfig(),
+                       'legacy': SupervisorConfig(1.0, 0.6, 0.25, None)}
+
+
 class MPCSupervisor:
     """Accumulate health observations; this monitor has no fault-injector input."""
 
-    def __init__(self, max_steer_rad: float, deadline_ms: float = 50.0) -> None:
+    def __init__(self, max_steer_rad: float, deadline_ms: float = 50.0,
+                 config: SupervisorConfig = SupervisorConfig()) -> None:
         self.max_steer = max_steer_rad
         self.deadline_ms = deadline_ms
+        self.config = config
         self.sequence = -1
         self.tracking_bad_since: float | None = None
+        self.last_steer: float | None = None
+        self.last_t: float | None = None
 
     def inspect(self, output: MPCOutput, t: float, elapsed_ms: float) -> str | None:
         if not output.ok:
@@ -42,12 +65,20 @@ class MPCSupervisor:
         if output.seq <= self.sequence:
             return 'stale_sequence'
         self.sequence = output.seq
-        bad_tracking = abs(float(output.state[0])) > 1.0 or abs(float(output.state[2])) > 0.6
+        cfg = self.config
+        last_steer, last_t = self.last_steer, self.last_t
+        self.last_steer, self.last_t = float(output.steer), t
+        if cfg.max_steer_rate_dps is not None and last_steer is not None and t > last_t:
+            # a command jump the MPC's own rate constraint cannot produce (saturate step, intermittent bias edge)
+            if abs(output.steer - last_steer) / (t - last_t) > math.radians(cfg.max_steer_rate_dps) + 1e-9:
+                return 'steer_rate_exceeded'
+        bad_tracking = (abs(float(output.state[0])) > cfg.max_lateral_error_m
+                        or abs(float(output.state[2])) > cfg.max_heading_error_rad)
         if not bad_tracking:
             self.tracking_bad_since = None
         elif self.tracking_bad_since is None:
             self.tracking_bad_since = t
-        if self.tracking_bad_since is not None and t - self.tracking_bad_since >= 0.25:
+        if self.tracking_bad_since is not None and t - self.tracking_bad_since >= cfg.divergence_hold_s - 1e-9:
             return 'tracking_divergence'
         return None
 
@@ -68,10 +99,10 @@ class SupervisedLateral:
 
     def __init__(self, geometry: dict[str, float], dt: float, trajectory: Trajectory,
                  fault: FaultConfig = FaultConfig(), mpc_config: MPCConfig | None = None,
-                 lqr_config: LQRConfig | None = None) -> None:
+                 lqr_config: LQRConfig | None = None, supervisor: SupervisorConfig = SupervisorConfig()) -> None:
         self.mpc = build_controller('mpc', geometry, dt, trajectory, mpc_cfg=mpc_config)
         self.lqr = build_controller('lqr', geometry, dt, trajectory, lqr_cfg=lqr_config)
-        self.monitor = MPCSupervisor(geometry['max_steer_rad'], deadline_ms=dt * 1000)
+        self.monitor = MPCSupervisor(geometry['max_steer_rad'], deadline_ms=dt * 1000, config=supervisor)
         self.injector = MPCFaultInjector(fault, geometry['max_steer_rad'])
         self.dt = dt
         self.active = 'mpc'

@@ -57,6 +57,9 @@ def main() -> int:
                         help="saturate: fraction of the steering limit in (0, 1] (1.0 = exactly the limit, the original fault)")
     parser.add_argument("--fault-ramp", type=float, default=0.0,
                         help="saturate: seconds to ramp linearly from the MPC command to the saturated value (0 = step)")
+    parser.add_argument("--supervisor", choices=("tight", "legacy"), default="tight",
+                        help="supervisor thresholds (integration/supervised_lateral.py SUPERVISOR_PROFILES): tight = "
+                             "0.6 m / 0.35 rad / 0.15 s + 90 deg/s steer-rate check, legacy = 1.0 m / 0.6 rad / 0.25 s")
     parser.add_argument("--tire-friction-scale", type=float, default=1.0,
                         help="multiply every wheel's CARLA tire_friction by this after spawn (1.0 = default tyres)")
     parser.add_argument("--fault-start", type=float, default=20.0)
@@ -110,7 +113,7 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     config = dict(model=None if args.model is None else str(args.model.resolve()), planner=args.planner, record_front=args.record_front, controller=args.controller, longitudinal=args.longitudinal, mpc_extension=args.mpc_extension, speed_policy=args.speed_policy, mpc_fault=args.mpc_fault,
                   fault_start=args.fault_start, fault_duration=args.fault_duration, fault_magnitude=args.fault_magnitude, fault_on_s=args.fault_on, fault_off_s=args.fault_off, fault_level=args.saturate_level, fault_ramp_s=args.fault_ramp, stop_after_fault=args.stop_after_fault,
-                  max_speed_kmh=args.max_speed, tire_friction_scale=args.tire_friction_scale, comfort=not args.no_comfort, monitor_period=args.monitor, view=not args.no_view, green_lights=args.green_lights,
+                  max_speed_kmh=args.max_speed, tire_friction_scale=args.tire_friction_scale, supervisor=args.supervisor, comfort=not args.no_comfort, monitor_period=args.monitor, view=not args.no_view, green_lights=args.green_lights,
                   out=str(args.out), device=args.device, dt=0.05)
     agent_config = args.out / "agent_config.json"
     agent_config.write_text(json.dumps(config, indent=2), encoding="utf-8")
