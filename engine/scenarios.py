@@ -195,6 +195,35 @@ def space_filling(space: dict, routes: list[str], fault_pool: list[str], n: int,
     return out
 
 
+def truth_points(space: dict, routes: list[str], fault_pool: list[str], n: int, rng: random.Random) -> list[dict]:
+    """integration3 #8c: FROZEN copy of space_filling as of 02832ea (random fault per sample, random onset), used only
+    for the mock GP sign-accuracy test set (run.boundary_accuracy, Random(1234)). Changing space_filling must not move
+    the yardstick: with the new cycling sampler the 40 test points changed (truth safe fraction 0.65 -> 0.90) and
+    before/after accuracies were not comparable. Not used to choose scenarios."""
+    if n <= 0:
+        return []
+    fax = friction_axis(space)
+    strata = [rng.sample(range(n), n) for _ in range(4 if fax else 3)]
+    out = []
+    for i in range(n):
+        u_speed, u_par, u_off = ((strata[d][i] + rng.random()) / n for d in range(3))
+        u_fr = (strata[3][i] + rng.random()) / n if fax else None
+        fid = fault_pool[(i + rng.randrange(len(fault_pool))) % len(fault_pool)]
+        f = faults_by_id(space)[fid]
+        rg = sampling_ranges(space, f)
+        env, events, off = rg["max_speed_kmh"], rg["onset_event"], rg["offset_s"]
+        friction = None
+        if fax:
+            flo, fhi = rg["tire_friction_scale"]
+            friction = flo + u_fr * (fhi - flo)
+        params = {k: _param_from_unit(spec, u_par if j == 0 else rng.random()) for j, (k, spec) in enumerate((f.get("params") or {}).items())}
+        out.append(make_candidate(space, route_id=routes[i % len(routes)] if i < len(routes) else rng.choice(routes),
+                                  speed=env[0] + u_speed * (env[1] - env[0]), fault_id=fid, params=params,
+                                  onset_event=rng.choice(events), offset=off[0] + u_off * (off[1] - off[0]),
+                                  source="truth_set", objective="S1", round_index=0, friction=friction))
+    return out
+
+
 def perturb(space: dict, seed: dict, n: int, rng: random.Random, scale: float = 0.15) -> list[dict]:
     """04 local perturbation: route, fault type and onset_event stay fixed (05b answers reusable)."""
     env = space["environment"]["max_speed_kmh"]["range"]

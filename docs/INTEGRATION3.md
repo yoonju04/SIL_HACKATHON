@@ -178,6 +178,117 @@ arrives; how the real Nemotron uses it is unmeasured. The mock route ends shrink
 against the nearest probed speed, so some rejections remain. In real mode route_geometry is empty until baselines
 exist.
 
+## 8. Route-end onsets, supervisor reaction, cold start (integration3 #8)
+
+`d36b712` (cherry-pick of teammate `d26144d`, integration4), `fe2c28f` (#8a), `cf72c6b` (#8b), `85fd500` (#8c), #8d (this
+section + frozen GP truth set). Every number below was re-measured on `result/` (result_1..6), not copied from the
+proposal. / 아래 수치는 제안서 값을 옮긴 것이 아니라 result_1..6 에서 다시 잰 값이다.
+
+### 8.1 route_onset_exclusions (#8b)
+
+KO: 짧은 경로는 커브가 경로 끝에 붙어 있어, 그 이벤트에서 고장을 넣으면 평가창 5 s + 오프셋 최대 +1 s = 6 s 가
+남지 않아 V-03 으로 항상 버려진다. `scenario_space_av_stack.yaml route_onset_exclusions` 에 (경로, 시작 이벤트) 를
+적고, 문자열은 항상 제외, `{event, min_kmh}` 는 그 속도 이상에서만 제외한다. `SC.allowed_onset_events` 로
+space_filling 이 제외 조합을 뽑지 않고, `validate_against_space` 가 G-02 로 거른다(Nemotron A / perturb /
+counterfactual / quantize 후 후보 모두 04 단계에서 걸림, CARLA 미실행). `--gp-history` 는 예전 런이라 검사 안 함.
+Nemotron A 에는 `scenario_space.route_onset_exclusions` + 규칙 문장을 넘긴다.
+
+EN: onsets that leave < 6 s (5 s window + max +1 s offset) always fail V-03. String entries are always excluded,
+`{event, min_kmh}` only at or above that speed (not applied when the speed is unknown). space_filling samples only
+allowed onsets; validate_against_space rejects the rest (G-02) for every source; A is told.
+
+Measured time left after the event (unique baselines in result_1..6) vs the proposal:
+
+| route | event | proposal | measured | entry |
+|---|---|---|---|---|
+| 28035 (10 baselines) | curve_apex / curve_exit | 3.1–8.1 / 2.1–6.0 s | 3.1–8.1 / 2.1–6.0 s ✓ | excluded |
+| 28035 | curve_entry | – | 4.2–10.9 s; < 6 s at ≥ 30 km/h (5.5/4.8/4.2), 25 km/h 6.4 | `{curve_entry, min_kmh: 30}` (added) |
+| 28154 (12) | curve_apex / curve_exit | 1.1–11.4 / 0 s | 1.1–11.4 / 0.0 s ✓ | excluded |
+| 28154 | curve_entry | – | 4.6–14.6 s; < 6 s at ≥ 25 km/h | `{curve_entry, min_kmh: 25}` (added) |
+| 28048 (4, 15–25 km/h) | straight | 1.9–3.3 s | 1.9–3.3 s ✓ | excluded |
+| 28048 | curve_exit | 4.4–7.6 s (excluded) | 15 km/h 7.6, 20 km/h 5.8, 25 km/h 4.4 | `{curve_exit, min_kmh: 20}` (**changed**: 15 km/h is gradable) |
+| 28048 | curve_apex | – | 5.7–9.6 s (25 km/h 5.7) | `{curve_apex, min_kmh: 25}` (added) |
+| 24206, town10_long | all | – | ≥ 14.9 s | none |
+
+result_6: 15 candidates = 8 runs + 7 V-03 skips at stage 08 (after the baseline). The proposal's list catches 6 of 7
+✓; the 7th (28035 curve_entry, 35 km/h, offset 0.0) is caught by the speed-conditional entry → 7/7. Cost of the
+unconditional entries: a few low-speed combos that would have been gradable are no longer sampled (e.g. 28035
+curve_apex at 15–20 km/h: 8.1 / 6.3 s left; 28154 curve_apex at 10 km/h: 11.4 s).
+
+### 8.2 Tighter supervisor (d36b712 + #8a)
+
+KO: 팀원 커밋 `d26144d` 가 제안과 같은 내용(0.6 m / 0.35 rad / 0.15 s, MPC 출력 조향 속도 > 90 °/s 즉시 전환,
+`--supervisor tight|legacy`, 기본 tight)을 이미 av_stack 에 구현했다 → cherry-pick (`d36b712`). #8a 는 그 나머지:
+mock 시뮬레이터(MPC 자체 60 °/s 제한 + 프로필), runner/Loop `--supervisor`, 런 기록 `supervisor_profile`,
+monitor 의 전환 오차 정규화를 런 프로필로, `--gp-history` 는 다른 프로필 런을 건너뜀, Nemotron B Q-B4 에
+`steer_rate_exceeded`, safety_profile T-08/T-10, 트리거 목록, 스펙 줄 번호. 판정 기준(4.41 m/s², 3 s, onset+10 s)은
+그대로.
+
+EN: the teammate's `d26144d` already implemented the proposal in av_stack; #8a wires it through the mock simulator,
+runner, run records, monitor, gp-history filter, Nemotron B Q-B4 expectations and the specs. Judgment thresholds are
+unchanged.
+
+Fault-free baselines (unique; result_1..5 have 61 baseline folders but only 29 distinct hashes, 44 with result_6,
+58,858 MPC ticks):
+
+| item | proposal | measured | legacy | tight |
+|---|---|---|---|---|
+| max \|e_y\| | 0.46 m | 0.463 m ✓ | 1.0 m | 0.6 m |
+| max \|e_psi\| | 0.23 rad | **0.242 rad** | 0.6 rad | 0.35 rad |
+| hold | – | – | 0.25 s | 0.15 s |
+| max MPC command rate | 61 °/s | 61.1 °/s ✓ | no check | > 90 °/s → switch |
+
+Tight rules replayed on the 44 baselines: 0 fires; max pre-onset rate in the 44 risk-fault runs 49.2 °/s (0
+pre-onset fires). Switched bias/drift/saturate/intermittent runs: result_2..5 15/15 crossed the lane before the
+switch ✓ (18/18 with result_6). Open-loop replay of tight on lane-departure runs (result_2..5, incl. output_delay):
+24 departures, tight detects 21 before (saturate 14, intermittent 3, drift 3, bias 1), 3 after (2 drift, 1 bias),
+none missed; legacy 0 before. Teammate's INTEGRATION4 says 19/22 — not reproduced exactly (different set/definition).
+The rate check fires at bias onset when \|magnitude\| ≳ 0.0785 rad (4.5°/tick), intermittent edges, saturate
+ramp-0 steps and saturate end steps, possibly output_delay onset jumps; never on drift; a slow saturate ramp evades it.
+
+### 8.3 Cold start rule (#8c)
+
+KO: `cold_start.total_runs: 24 # 예시` → `total_runs: null` + `rule: {per_fault_type: 2, max_runs: 12}`:
+max(min_train_runs_for_acquisition 8, 2 × 라운드 0 고장 종류(위험 5 + 대조군 cap 1)) = 12, 상한 12. `--cold-start`,
+`Loop(cold_start=)`, 숫자 total_runs 는 그대로 덮어씀. space_filling 은 고장 종류를 실제로 순환(무작위 시작, 대조군은
+라운드 cap 남은 만큼), 고장마다 시작 이벤트도 순환, 그 이벤트를 채점할 수 있는 경로를 고르고, 양자화 속도로 제외
+검사. 라운드 0 은 A 후보를 먼저 거르고, 04 탈락분을 cold + 6 까지 채운다(이전: cold 24 중 21 만 실행).
+mock 정확도 시험 세트는 예전 space_filling 을 그대로 얼린 `SC.truth_points` 로 고정하고(샘플러가 바뀌어도 잣대가
+안 움직이게), 진실 런은 그 런의 감독기 프로필로 돌린다.
+
+EN: rule-based cold start (12 here), real fault cycling, round-0 refill; the mock GP truth set is frozen
+(`SC.truth_points` = space_filling as of 02832ea) and simulated with the run's supervisor profile.
+
+Experiment (mock, SYNTHETIC simulator + stub LLMs, X-5, video off, budget 48 = cold + rounds × 4, seeds 0–9;
+`/workspace/coldstart_sens`, before = `results.csv` b_total48 @ 02832ea, after = `results_after.csv` @ #8d):
+
+| variant | cold | runs | r0 runs | r0 fault types | r0 fault×onset | r0 both sides | campaign both sides | GP first active round | balanced acc mean±sd [min,max] | majority | truth safe | final safe | rejected (V-03/G-02/G-04) | wall s |
+| before (b_total48) | 4 | 48.0 | 4.0 | 3.4 | 3.9 | 5/10 | 10/10 | 2-3 | 0.836±0.033 [0.79,0.88] | 0.657 | 0.657 | 5.6 | n/a | 32 |
+| before (b_total48) | 8 | 48.0 | 8.0 | 4.6 | 6.4 | 7/10 | 10/10 | 1-2 | 0.828±0.027 [0.79,0.86] | 0.649 | 0.649 | 3.9 | n/a | 32 |
+| before (b_total48) | 12 | 47.1 | 11.1 | 5.5 | 8.9 | 9/10 | 10/10 | 1-1 | 0.825±0.039 [0.75,0.86] | 0.650 | 0.650 | 4.0 | n/a | 31 |
+| before (b_total48) | 24 | 44.0 | 20.0 | 6.0 | 13.0 | 8/10 | 10/10 | 1-1 | 0.813±0.027 [0.78,0.86] | 0.644 | 0.644 | 3.9 | n/a | 28 |
+| after tight | 4 | 48.0 | 4.0 | 3.5 | 3.8 | 5/10 | 10/10 | 2-3 | 0.510±0.076 [0.39,0.67] | 0.880 | 0.880 | 23.5 | 1.3/8.5/4.8 | 51 |
+| after tight | 8 | 48.0 | 8.0 | 5.4 | 7.1 | 6/10 | 9/10 | 1-2 | 0.506±0.044 [0.46,0.62] | 0.872 | 0.872 | 24.1 | 2.0/5.2/3.3 | 48 |
+| after tight | 12 | 48.0 | 12.0 | 6.0 | 10.2 | 9/10 | 10/10 | 1-1 | 0.577±0.109 [0.41,0.77] | 0.872 | 0.872 | 22.8 | 2.7/4.7/3.5 | 48 |
+| after tight | 24 | 47.9 | 23.9 | 6.0 | 17.9 | 10/10 | 10/10 | 1-1 | 0.566±0.083 [0.45,0.67] | 0.862 | 0.862 | 23.0 | 2.2/4.2/3.5 | 45 |
+| after legacy | 4 | 48.0 | 4.0 | 3.5 | 3.8 | 4/10 | 10/10 | 2-3 | 0.786±0.051 [0.69,0.86] | 0.649 | 0.649 | 4.8 | 2.6/8.8/3.5 | 48 |
+| after legacy | 8 | 48.0 | 8.0 | 5.4 | 7.1 | 7/10 | 10/10 | 1-2 | 0.805±0.080 [0.61,0.88] | 0.652 | 0.652 | 5.3 | 1.9/9.0/3.5 | 47 |
+| after legacy | 12 | 48.0 | 12.0 | 6.0 | 10.2 | 10/10 | 10/10 | 1-1 | 0.812±0.033 [0.78,0.86] | 0.656 | 0.656 | 5.1 | 2.5/8.8/3.5 | 44 |
+| after legacy | 24 | 47.9 | 23.9 | 6.0 | 17.9 | 10/10 | 10/10 | 1-1 | 0.812±0.037 [0.75,0.86] | 0.654 | 0.654 | 3.5 | 1.9/6.8/4.3 | 44 |
+
+Reading / 해석: with the legacy supervisor (same truth labels as before) the sampler + rule change mostly the cold
+start itself: round 0 really runs its size (11.1 → 12.0 at 12, 20 → 23.9 at 24), sees more fault × onset combos and
+both sides of the boundary more often (12: 9 → 10/10); campaign balanced accuracy is unchanged within seed spread
+(0.825 → 0.812 at 12). The tight supervisor makes the synthetic simulator recover far more often (final safe ≈ 5 →
+≈ 23 per campaign, truth safe 0.65 → 0.87), so the GP mostly predicts the majority class (balanced ≈ 0.5–0.58): in
+the mock the boundary moves to stronger faults that the space barely contains. Cold 12 vs 24 is within noise in every
+variant; 4 sees both sides in round 0 only 4–5/10 and starts GP acquisition a round later.
+
+Risks / 위험: (1) `gp_history_same_supervisor: true` → the next campaign's `--gp-history` (48 legacy runs) loads 0
+runs; set false to reuse them. (2) the baseline cache key ignores the profile (no fault-free baseline fires under
+tight). (3) Q-B4 expectations are written for tight. (4) supervised_lateral.py line refs were remapped mechanically.
+(5) the tight effect, the mock boundary shift and all accuracy numbers are mock-only; nothing here ran on CARLA.
+
 ## Mock comparison (seed 0, `PYTHONHASHSEED=0`, SYNTHETIC simulator, stub LLMs)
 
 `python run.py --mock --seed 0 --open-screen off`; before = `bd683b5`, after = `651add7`.
@@ -202,6 +313,7 @@ run on CARLA.
 ## Tests
 
 `tests/test_integration3_faults.py`, `tests/test_integration3_nemotron.py`, `tests/test_integration3_gp.py`,
-`tests/test_integration3_nemotron_b.py`, `tests/test_integration3_nemotron_a_context.py`
-(plus updated existing tests). Root suite, `pipeline/09_monitor` and the av_stack suite (without GPU / reference
+`tests/test_integration3_nemotron_b.py`, `tests/test_integration3_nemotron_a_context.py`,
+`tests/test_integration3_supervisor.py`, `tests/test_integration3_onset_exclusions.py`,
+`tests/test_integration3_cold_start.py` (plus updated existing tests). Root suite, `pipeline/09_monitor` and the av_stack suite (without GPU / reference
 tests) pass.

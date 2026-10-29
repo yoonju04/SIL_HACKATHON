@@ -1281,7 +1281,7 @@ def boundary_accuracy(loop: Loop) -> dict | None:
         if metric not in gps.models:
             return None
         rng = random.Random(1234)
-        test = [loop.quantize(c) for c in SC.space_filling(loop.space, loop.route_ids, loop.fault_pool, 40, rng)]
+        test = [loop.quantize(c) for c in SC.truth_points(loop.space, loop.route_ids, loop.fault_pool, 40, rng)]   # #8c: frozen test set
         tmp = loop.out / "_truth"
         ok = n = 0
         pairs: list[tuple[bool, bool]] = []
@@ -1294,7 +1294,7 @@ def boundary_accuracy(loop: Loop) -> dict | None:
             d = write_run_folder(tmp / f"t{i}", route=c["route_id"], max_speed_kmh=c["environment"]["max_speed_kmh"],
                                  fault=SC.fault_dict_for_sim(loop.space, c, onset), seed=loop.runner.seed,
                                  stop_after_fault_s=loop.runner.stop_after_fault_s, record_front=False,
-                                 tire_friction_scale=SC.friction_of(c))
+                                 tire_friction_scale=SC.friction_of(c), supervisor=loop.supervisor)   # #8c: truth under the run's profile
             rec = compute_run_record(load_av_stack_run(d), load_av_stack_run(base), candidate=c, metric_rules=loop.metric_rules,
                                      th=scale_thresholds_for_friction(loop.th, SC.friction_of(c)))
             y = (rec.get("gp_targets") or {}).get(metric)

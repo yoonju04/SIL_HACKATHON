@@ -18,6 +18,8 @@ cold_start:
   #   0.84/0.83/0.83/0.81 (seed 간 범위 ~0.1 이 크기 간 차이 0.02 보다 큼), 전체 캠페인 경계 양쪽 관측 10/10 모두.
   #   라운드 0 이 경계 양쪽을 본 seed 5/7/9/8, GP 획득 시작 라운드 2/1~2/1/1, 24 는 실제로 20 런만 돌고(G-02/V-03 탈락)
   #   예산 절반을 GP 없이 씀. 12 = 8 (GP 시작) 이상이면서 라운드 0 에 고장 종류를 2번씩 볼 수 있는 가장 작은 값.
+  #   #8 이후 (legacy 감독기, 같은 진실 세트): 0.79/0.81/0.81/0.81, 라운드 0 양쪽 4/7/10/10, 라운드 0 실행 4/8/12/23.9;
+  #   tight 감독기는 mock 에서 대부분 회복돼 0.51~0.58 (docs/INTEGRATION3.md 8.3).
   # integration3 #8c: rule instead of the unfounded fixed 24 (null = rule, a number = that number, --cold-start overrides):
   #   max(min_train_runs_for_acquisition, per_fault_type x fault types round 0 can run) capped at max_runs.
   #   Evidence is mock-only (synthetic simulator, tendencies only): /workspace/coldstart_sens.

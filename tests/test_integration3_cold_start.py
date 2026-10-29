@@ -100,3 +100,12 @@ def test_space_filling_speed_step_checks_quantized_speed():
             assert not SC.onset_exclusions(space, x["route_id"], q["environment"]["max_speed_kmh"]) or \
                 x["onset_event"] in SC.allowed_onset_events(space, x["route_id"], SC.faults_by_id(space)[x["fault"]["fault_id"]],
                                                             q["environment"]["max_speed_kmh"])
+
+
+def test_truth_points_frozen_and_independent_of_sampler():
+    _, space, routes, pool, _ = _ctx()
+    a = SC.truth_points(space, routes, pool, 40, random.Random(1234))
+    b = SC.truth_points(space, routes, pool, 40, random.Random(1234))
+    assert [x["scenario_id"] for x in a] == [x["scenario_id"] for x in b] and len(a) == 40
+    # old sampler drew a random fault per sample: the frozen set is not the cycling sampler's output
+    assert [x["fault"]["fault_id"] for x in a] != [x["fault"]["fault_id"] for x in SC.space_filling(space, routes, pool, 40, random.Random(1234))]
