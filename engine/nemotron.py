@@ -24,7 +24,7 @@ from typing import Any
 from . import schema as S
 from .llm import LLMError, extract_json, json_schema_format
 from .feedback import failed_reason, outcome_view
-from .scenarios import faults_by_id, friction_axis, make_candidate, sampling_ranges
+from .scenarios import faults_by_id, friction_axis, make_candidate, onset_exclusions, sampling_ranges
 
 
 # ----------------------------------------------------------------------------- A
@@ -42,6 +42,24 @@ def param_schema(spec: dict) -> dict:
         return {"enum": vals}
     lo, hi = spec["range"] if "range" in spec else (spec["ranges"][0][0], spec["ranges"][-1][1])
     return {"type": "number", "minimum": lo, "maximum": hi}
+
+
+ROUTE_ONSET_EXCLUSIONS_RULE = ("route_id -> onset_events never used on that route: a plain name is always excluded, "
+                               "{event, min_kmh} only at max_speed_kmh >= min_kmh. Measured: fewer than 6 s (5 s V-03 window "
+                               "+ max +1 s offset) are left after the event before the route ends. Such candidates are "
+                               "rejected at stage 04 and cost a proposal.")
+
+
+def _stub_respect_exclusions(c: dict, items_schema: dict, exclusions: dict) -> None:
+    """SYNTHETIC: a careful proposer reads scenario_space.route_onset_exclusions and moves an excluded onset to an
+    allowed one of the same fault branch (integration3 #8b)."""
+    ex = onset_exclusions({"route_onset_exclusions": exclusions or {}}, c.get("route_id"), c.get("max_speed_kmh"))
+    if c.get("onset_event") not in ex:
+        return
+    br = next((b for b in items_schema.get("anyOf", []) if b["properties"]["fault_id"]["enum"] == [c.get("fault_id")]), None)
+    ok = [e for e in (br["properties"]["onset_event"]["enum"] if br else []) if e not in ex]
+    if ok:
+        c["onset_event"] = ok[0]
 
 
 def candidate_schema(space: dict, routes: list[str], fault_pool: list[str], objectives: list[str],
@@ -102,7 +120,8 @@ the tracking error reaches the supervisor trigger (supervisor.tracking_divergenc
 "failed_whenever_switched" -> make it milder (smaller magnitude, shorter, lower speed, higher friction, gentler curve); \
 "recovered_whenever_switched" -> make it harder; "mixed" -> bracket the condition that separates the outcomes.
 - route_geometry gives, per route and onset_event, the baseline time, curvature and speed and the latest onset offset that \
-still leaves the evaluation window before the route ends (V-03). Do not propose an onset the route cannot grade. Use the \
+still leaves the evaluation window before the route ends (V-03). Do not propose an onset the route cannot grade; \
+scenario_space.route_onset_exclusions lists (route, onset_event) pairs that are rejected before CARLA. Use the \
 nominal lateral acceleration v^2*|kappa| against the friction-scaled P-02 limit (route_geometry.rules) to reason about \
 speed and tyre friction.
 - Avoid the ends of the allowed ranges (within 5% of a minimum or maximum). If a value at a range end is genuinely needed, \
@@ -184,7 +203,10 @@ def a_context(*, profile: dict, prior: dict, space: dict, objective_cfg: dict, r
         "unreviewed_code_observations_static_extraction": unreviewed,
         "domain_prior_knowledge": prior.get("principles", []),
         "supervisor": space.get("supervisor"),
-        "scenario_space": {"environment": space.get("environment"), "fault_timing": space.get("fault_timing"), "faults": faults},
+        "scenario_space": {"environment": space.get("environment"), "fault_timing": space.get("fault_timing"), "faults": faults,
+                           # integration3 #8b: (route, onset_event) pairs stage 04 rejects before CARLA
+                           "route_onset_exclusions": space.get("route_onset_exclusions") or {},
+                           "route_onset_exclusions_rule": ROUTE_ONSET_EXCLUSIONS_RULE},
         "routes": routes,
         "route_geometry": route_geometry or {"note": "no baseline run yet: route geometry unknown"},
         "outcome_examples": outcome_examples or [],
@@ -837,8 +859,10 @@ def stub_handler(seed: int = 0):
                         cands.append(c)
                         continue
                 cands.append(S.sample(items_schema, rng))
+            excl = (payload.get("scenario_space") or {}).get("route_onset_exclusions") or {}
             for c in cands:
                 _stub_fit_route(c, items_schema, geom)
+                _stub_respect_exclusions(c, items_schema, excl)
                 c["expected_mechanism"] = "SYNTHETIC stub: no model was called"
                 c["extreme_justification"] = ""
             return json.dumps({"candidates": cands})

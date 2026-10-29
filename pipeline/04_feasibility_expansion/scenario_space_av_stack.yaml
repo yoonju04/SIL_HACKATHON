@@ -49,6 +49,26 @@ fault_timing:
   onset_event: {values: [straight, curve_entry, curve_apex, curve_exit]}
   offset_s:    {range: [-1.0, 1.0], unit: s}
 
+# integration3 #8b: 이 경로에서는 이 시작 이벤트를 쓰지 않음 (이벤트 뒤 6 s 미만 = 5 s 평가창(V-03) + 시작 오프셋 최대 +1 s.
+#   V-03으로 항상 버려짐). result_6: 15개 중 7개가 baseline V-03로 버려졌고 그중 6개가 아래 무조건 목록, 1개(28035
+#   curve_entry 35 km/h)가 속도 조건 항목에 걸린다. 실측 = result_1~6 고장 없는 baseline (경로 끝 - 이벤트 시각):
+#     28035 (10개, 15~40 km/h): straight 45.3~53.3 s, curve_entry 4.2~10.9, curve_apex 3.1~8.1, curve_exit 2.1~6.0
+#     28154 (12개, 10~40 km/h): straight 24.6~58.6, curve_entry 4.6~14.6, curve_apex 1.1~11.4, curve_exit 0.0 (커브 중 경로 끝)
+#     28048 (4개, 15~25 km/h):  straight 1.9~3.3, curve_entry 7.8~13.4, curve_apex 5.7~9.6, curve_exit 4.4~7.6
+#   무조건 제외 = 실측 baseline 의 80% 이상이 6 s 미만인 조합. 28048 curve_exit 은 4개 중 2개만 6 s 미만(15 km/h 7.6 s 두 번,
+#   20 km/h 5.8, 25 km/h 4.4)이라 사용자 제안(무조건 제외) 대신 20 km/h 이상만 제외.
+#   {event, min_kmh}: 그 속도 이상에서만 제외 (그 아래에서는 6 s 이상 남음). 28035 curve_entry: 25 km/h 6.4 s, 30 km/h 5.5 s;
+#   28154 curve_entry: 20 km/h 7.4 s, 25 km/h 4.7 s; 28048 curve_apex: 20 km/h 7.9 s, 25 km/h 5.7 s. 측정 안 한 더 빠른 속도는
+#   더 짧아지는 방향. 판정은 여전히 baseline 이 생긴 뒤 gate(BUG-028)/baseline_gate 가 정확히 한다; 이 표는 baseline 이
+#   없는 첫 조합에서 CARLA 시간을 아끼는 사전 필터다. (engine/scenarios.py allowed_onset_events, validate_against_space)
+# integration3 #8b: onset events this route never grades (< 6 s left after the event = 5 s V-03 window + max +1 s
+#   offset). Measured on the fault-free baselines of result_1..6 (route end - event time). {event, min_kmh} = excluded
+#   from that speed up only. A pre-filter for (route, speed) pairs whose baseline has not run yet.
+route_onset_exclusions:
+  bench2drive:28035: [curve_apex, curve_exit, {event: curve_entry, min_kmh: 30}]
+  bench2drive:28154: [curve_apex, curve_exit, {event: curve_entry, min_kmh: 25}]
+  bench2drive:28048: [straight, {event: curve_exit, min_kmh: 20}, {event: curve_apex, min_kmh: 25}]
+
 # group: control = 대조군, risk = 위험 고장
 # injector_mode = run_benchmark.py --mpc-fault 값 (integration/fault_injection.py)
 faults:

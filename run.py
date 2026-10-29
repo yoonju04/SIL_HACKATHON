@@ -618,7 +618,7 @@ class Loop:
                                           fault_id=fault["fault_id"], params=params, onset_event=p.get("onset_event"),
                                           offset=p.get("onset_offset_s", 0.0), source="history",
                                           friction=env.get(SC.FRICTION))
-                    probs = SC.validate_against_space(self.space, c, self.route_ids)
+                    probs = SC.validate_against_space(self.space, c, self.route_ids, check_exclusions=False)
                     if probs:
                         why = "outside current space: " + probs[0].split(" ")[0]
                 if why is not None:
