@@ -9,7 +9,8 @@ meta:
 
 nemotron:
   model: nvidia/Nemotron-3-Ultra-550b-a55b     # 호출 파라미터의 원본은 pipeline/llm_models.yaml roles.B (3회 다수결)
-  temperature: 0.0
+  # temperature: 여기 값(0.0)은 run.py가 읽지 않았다 (integration3 #7에서 제거). 유일한 원본 = pipeline/llm_models.yaml roles.B
+  #   (실제 적용값 temperature 1.0, top_p 0.95; engine/llm.py role_settings)
   require_json_schema_validation: true
 
 B_question_answering:

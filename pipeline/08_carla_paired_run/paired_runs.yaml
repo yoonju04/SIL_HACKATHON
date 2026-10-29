@@ -39,18 +39,21 @@ carla:
       route_id_arg: 24206
       town: Town03
       note: 'ParkingCrossingPedestrian. 30km/h 검증: 36.4 s 완주, curve_entry/apex/exit/straight 모두 gate 통과 (곡선 6.2~11.3 s, 출발 직후라 저속)'
+      note_en: 'ParkingCrossingPedestrian. Checked at 30 km/h: route completed in 36.4 s; curve_entry/apex/exit and straight all pass the gate (curve at 6.2-11.3 s, right after the start so speed is low)'
       enabled: true
     - route_id: bench2drive:28048
       routes_arg: bench2drive
       route_id_arg: 28048
       town: Town02
       note: 'T_Junction. 30km/h 검증: 38.5 s 완주, curve_entry만 통과. straight는 BUG-012 수정 후 경로 끝(36.8 s)이라 V-03, curve_apex/exit도 V-03'
+      note_en: 'T_Junction. Checked at 30 km/h: completed in 38.5 s; only curve_entry passes. straight sits at the route end (36.8 s) -> V-03, curve_apex / curve_exit also V-03'
       enabled: true
     - route_id: bench2drive:28154
       routes_arg: bench2drive
       route_id_arg: 28154
       town: Town10HD
       note: 'T_Junction 155 m. 30km/h 검증: 31.3 s 완주, straight만 통과, 곡선 3개는 V-03(곡선이 끝에 있음)'
+      note_en: 'T_Junction 155 m. Checked at 30 km/h: completed in 31.3 s; only straight passes, the three curve events are V-03 (the curve is at the end)'
       enabled: true
   ego_vehicle_blueprint: null
   fixed_delta_seconds: 0.05                  # 1/frame_rate 20 Hz (sim-eval tfpp_benchmark/agent_config dt 0.05) = 제어 주기 50 ms

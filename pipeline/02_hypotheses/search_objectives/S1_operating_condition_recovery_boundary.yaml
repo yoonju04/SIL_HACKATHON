@@ -58,6 +58,12 @@ switch_state_control:
     (AV/integration/supervised_lateral.py:45-51). 그래서 이 트리거로 전환되면 전환 순간 오차는
     대략 임계값 이상(+0.25 s 동안 더 커진 만큼)으로 고정된다. 임계값보다 작은 오차에서의 전환은
     즉시 검사 트리거(solver_failure 등)로만 만들 수 있고, 임계값보다 훨씬 큰 오차는 감지가 늦어질 때만 생긴다.
+  natural_switch_bound_en: >                    # integration3 #7: Nemotron A prompt (English); Korean above is the original
+    tracking_divergence fires when |e_y| > 1.0 m or |e_psi| > 0.6 rad holds for 0.25 s
+    (av_stack integration/supervised_lateral.py:45-51). A switch by this trigger therefore happens at an error of
+    roughly the threshold or more (plus whatever it grew during the 0.25 s). A switch at a smaller error is only
+    possible through an instant check (solver_failure, stale_sequence, ...); a much larger error only arises when
+    detection is delayed (e.g. output_delay sends the old state, saturate passes the range check).
   detection_delay_sources_seen:
     output_delay: '옛 상태(state)를 감독기에 보냄 (AV/integration/fault_injection.py:100-103) → 추종 오차 감지가 늦어짐. 관측 최대 편차 4.86 m (pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:85)'
     saturate: '최대각 정확히 = 범위 검사 통과 (AV/integration/fault_injection.py:95-98; supervised_lateral.py:36). 관측 0.70~0.85 s 뒤 전환, 최대 편차 7~9 m (pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml:140-142)'
