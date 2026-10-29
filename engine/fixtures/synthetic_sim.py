@@ -102,6 +102,10 @@ def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, see
             if fault_on:
                 if mode == "solver_fail":
                     ok = False
+                elif mode == "stale":
+                    # integration3: the repeated message (same stamp/sequence) is caught by stale_sequence at once
+                    # (av_stack supervised_lateral.py); without a supervisor the last command is held
+                    ok = False
                 elif mode == "bias":
                     u += mag
                 elif mode == "drift":
@@ -124,7 +128,7 @@ def simulate(route: str, max_speed_kmh: float, fault: dict[str, Any] | None, see
                     delta = max(delta - lim, min(delta + lim, max(-MAX_STEER, min(MAX_STEER, u))))
             else:
                 if not ok:
-                    reason = "solver_failure"
+                    reason = "stale_sequence" if mode == "stale" else "solver_failure"
                 elif abs(reported[0]) > 1.0 or abs(reported[1]) > 0.6:
                     bad_since = t if bad_since is None else bad_since
                     if t - bad_since >= 0.25 - 1e-9:

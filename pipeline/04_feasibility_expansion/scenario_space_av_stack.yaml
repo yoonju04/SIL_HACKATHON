@@ -57,6 +57,15 @@ faults:
     implemented: true
     # BUG-024: no duration axis. The supervisor latches LQR on the first bad sample, so 1 s or 3 s gives the same
     # run (result_4 R00-0013 / R00-0019). Without a duration the fault stays on until the route ends (to_cli).
+    # integration3 #3: 지속시간 축이 없으니(BUG-024) 결과를 바꾸는 건 "LQR이 넘겨받는 순간의 차량 상태"다.
+    # handover_axes = 이 고장을 샘플링할 때 쓰는 좁힌 범위 (engine/scenarios.py space_filling, Nemotron A 스키마).
+    # 검증(G-02)은 위의 전체 범위 그대로. result_2~5: 25 km/h 통과, 35 km/h 커브 진입 실패가 유일한 경계 단서.
+    handover_axes:
+      onset_event:         {values: [curve_entry, curve_apex]}
+      offset_s:            {range: [-0.5, 0.5], unit: s, note: "커브 진입·정점 주변을 촘촘히 (전체 -1~1 s의 절반 폭)"}
+      max_speed_kmh:       {range: [25, 40], unit: km/h}
+      tire_friction_scale: {range: [0.3, 1.0]}
+      todo: "측풍·질량·속도 외란 노브는 run_benchmark.py 에 아직 없다 (CARLA 물리 API 확인 전). 새 물리를 만들지 않고, 생기면 여기에 추가"
     params: {}
     observations:
       - {source: route_26956, result: "0.0 s에 전환 (solver_failure), 최대 e_y 0.625 m, 차선 이탈 0%, 점수 100", runs: 1}
@@ -74,6 +83,15 @@ faults:
     implemented: true
     # BUG-024: no duration axis. The supervisor latches LQR on the first bad sample, so 1 s or 3 s gives the same
     # run (result_4 R00-0013 / R00-0019). Without a duration the fault stays on until the route ends (to_cli).
+    # integration3 #3: 지속시간 축이 없으니(BUG-024) 결과를 바꾸는 건 "LQR이 넘겨받는 순간의 차량 상태"다.
+    # handover_axes = 이 고장을 샘플링할 때 쓰는 좁힌 범위 (engine/scenarios.py space_filling, Nemotron A 스키마).
+    # 검증(G-02)은 위의 전체 범위 그대로. result_2~5: 25 km/h 통과, 35 km/h 커브 진입 실패가 유일한 경계 단서.
+    handover_axes:
+      onset_event:         {values: [curve_entry, curve_apex]}
+      offset_s:            {range: [-0.5, 0.5], unit: s, note: "커브 진입·정점 주변을 촘촘히 (전체 -1~1 s의 절반 폭)"}
+      max_speed_kmh:       {range: [25, 40], unit: km/h}
+      tire_friction_scale: {range: [0.3, 1.0]}
+      todo: "측풍·질량·속도 외란 노브는 run_benchmark.py 에 아직 없다 (CARLA 물리 API 확인 전). 새 물리를 만들지 않고, 생기면 여기에 추가"
     params: {}
     observations:
       - {source: route_26956, result: "0.0 s에 전환 (stale_sequence)", runs: 1}

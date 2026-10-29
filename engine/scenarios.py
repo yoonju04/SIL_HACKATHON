@@ -69,6 +69,19 @@ def _param_from_unit(spec: dict, u: float) -> Any:
     return vals[min(len(vals) - 1, int(round(u * (len(vals) - 1))))]
 
 
+def sampling_ranges(space: dict, fault: dict) -> dict:
+    """Ranges to SAMPLE a fault from: the global environment / timing ranges, narrowed by the fault's
+    `handover_axes` (integration3 #3, control faults F-01/F-02: onset around curve entry/apex, higher speed,
+    friction). Validation (G-02) still uses the global ranges."""
+    ho = fault.get("handover_axes") or {}
+    fax = friction_axis(space)
+    pick = lambda key, default: (ho.get(key) or {}).get("range") or (ho.get(key) or {}).get("values") or default
+    return {"onset_event": list(pick("onset_event", space["fault_timing"]["onset_event"]["values"])),
+            "offset_s": list(pick("offset_s", space["fault_timing"]["offset_s"]["range"])),
+            "max_speed_kmh": list(pick("max_speed_kmh", space["environment"]["max_speed_kmh"]["range"])),
+            "tire_friction_scale": list(pick("tire_friction_scale", fax["range"])) if fax else None}
+
+
 def make_candidate(space: dict, *, route_id: str, speed: float, fault_id: str, params: dict, onset_event: str,
                    offset: float, source: str, objective: str = "S1", round_index: int = 0,
                    seed_scenario_id: str | None = None, friction: float | None = None, **extra) -> dict:
@@ -97,20 +110,20 @@ def space_filling(space: dict, routes: list[str], fault_pool: list[str], n: int,
     """Latin-hypercube style: every continuous dim is stratified into n bins; categoricals cycle."""
     if n <= 0:
         return []
-    env = space["environment"]["max_speed_kmh"]["range"]
-    events = space["fault_timing"]["onset_event"]["values"]
-    off = space["fault_timing"]["offset_s"]["range"]
     fax = friction_axis(space)
     strata = [rng.sample(range(n), n) for _ in range(4 if fax else 3)]
     out = []
     for i in range(n):
         u_speed, u_par, u_off = ((strata[d][i] + rng.random()) / n for d in range(3))
-        friction = None
-        if fax:
-            flo, fhi = fax["range"]
-            friction = flo + (strata[3][i] + rng.random()) / n * (fhi - flo)
+        u_fr = (strata[3][i] + rng.random()) / n if fax else None
         fid = fault_pool[(i + rng.randrange(len(fault_pool))) % len(fault_pool)]
         f = faults_by_id(space)[fid]
+        rg = sampling_ranges(space, f)   # integration3 #3: control faults sample their handover_axes
+        env, events, off = rg["max_speed_kmh"], rg["onset_event"], rg["offset_s"]
+        friction = None
+        if fax:
+            flo, fhi = rg["tire_friction_scale"]
+            friction = flo + u_fr * (fhi - flo)
         params = {k: _param_from_unit(spec, u_par if j == 0 else rng.random()) for j, (k, spec) in enumerate((f.get("params") or {}).items())}
         out.append(make_candidate(space, route_id=routes[i % len(routes)] if i < len(routes) else rng.choice(routes),
                                   speed=env[0] + u_speed * (env[1] - env[0]), fault_id=fid, params=params,

@@ -176,3 +176,33 @@ def test_synthetic_sim_responds_to_friction():
         rows = SIM.simulate("bench2drive:28048", 40.0, None, seed=17, tire_friction_scale=fr)["rows"]
         return max(abs(r["e_y"]) for r in rows)
     assert peak(0.3) > peak(1.0) + 0.2
+
+
+# ----------------------------------------------------------------------------- #3 control-fault handover axes
+def test_control_faults_sample_handover_axes(space):
+    for fid in ("F-01", "F-02"):
+        f = SC.faults_by_id(space)[fid]
+        assert f["params"] == {} and "handover_axes" in f and "todo" in f["handover_axes"]
+        rg = SC.sampling_ranges(space, f)
+        assert rg["onset_event"] == ["curve_entry", "curve_apex"] and rg["max_speed_kmh"] == [25, 40]
+    cands = SC.space_filling(space, ROUTES, ["F-01", "F-02"], 40, random.Random(1))
+    assert all(c["onset_event"] in ("curve_entry", "curve_apex") for c in cands)
+    assert all(-0.5 <= c["onset_offset_s"] <= 0.5 and 25 <= c["environment"]["max_speed_kmh"] <= 40 for c in cands)
+    assert all(SC.validate_against_space(space, c, ROUTES) == [] for c in cands)
+    risk = SC.space_filling(space, ROUTES, ["F-04"], 40, random.Random(1))   # risk faults keep the full ranges
+    assert {c["onset_event"] for c in risk} >= {"straight", "curve_exit"}
+
+
+def test_nemotron_schema_uses_handover_axes_for_control_faults(space):
+    from engine import nemotron as NM
+    sch = NM.candidate_schema(space, ROUTES, ["F-01", "F-06"], ["S1"], ["F-01", "S1"], 5)
+    br = {b["properties"]["fault_id"]["enum"][0]: b["properties"] for b in sch["properties"]["candidates"]["items"]["anyOf"]}
+    assert br["F-01"]["onset_event"]["enum"] == ["curve_entry", "curve_apex"]
+    assert br["F-01"]["max_speed_kmh"]["minimum"] == 25 and br["F-06"]["max_speed_kmh"]["minimum"] == 10
+    assert "tire_friction_scale" in br["F-06"] and "magnitude" in br["F-06"]["params"]["properties"]
+
+
+def test_synthetic_stale_switches_at_once():
+    rows = SIM.simulate("town10_long", 30.0, dict(mode="stale", start=20.0, duration=500.0, magnitude=0.05), seed=17)["rows"]
+    sw = next(r for r in rows if r["active"] == "lqr")
+    assert sw["reason"] == "stale_sequence" and sw["t"] == pytest.approx(20.0, abs=0.06)

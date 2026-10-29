@@ -19,7 +19,7 @@ from typing import Any
 
 from . import schema as S
 from .llm import LLMError, extract_json, json_schema_format
-from .scenarios import faults_by_id, friction_axis, make_candidate
+from .scenarios import faults_by_id, friction_axis, make_candidate, sampling_ranges
 
 
 # ----------------------------------------------------------------------------- A
@@ -41,24 +41,23 @@ def param_schema(spec: dict) -> dict:
 
 def candidate_schema(space: dict, routes: list[str], fault_pool: list[str], objectives: list[str],
                      evidence: list[str], n_max: int) -> dict:
-    env_lo, env_hi = space["environment"]["max_speed_kmh"]["range"]
-    olo, ohi = space["fault_timing"]["offset_s"]["range"]
     fax = friction_axis(space)
     branches = []
     for fid in fault_pool:
         f = faults_by_id(space)[fid]
         params = {k: param_schema(s) for k, s in (f.get("params") or {}).items()}
+        rg = sampling_ranges(space, f)   # integration3 #3: control faults are proposed on their handover axes
         branches.append({
             "type": "object",
             "properties": {
                 "fault_id": {"enum": [fid]},
                 "params": {"type": "object", "properties": params, "required": list(params), "additionalProperties": False},
                 "route_id": {"enum": routes},
-                "max_speed_kmh": {"type": "number", "minimum": env_lo, "maximum": env_hi},
-                **({"tire_friction_scale": {"type": "number", "minimum": fax["range"][0], "maximum": fax["range"][1]}}
-                   if fax else {}),
-                "onset_event": {"enum": space["fault_timing"]["onset_event"]["values"]},
-                "onset_offset_s": {"type": "number", "minimum": olo, "maximum": ohi},
+                "max_speed_kmh": {"type": "number", "minimum": rg["max_speed_kmh"][0], "maximum": rg["max_speed_kmh"][1]},
+                **({"tire_friction_scale": {"type": "number", "minimum": rg["tire_friction_scale"][0],
+                                            "maximum": rg["tire_friction_scale"][1]}} if fax else {}),
+                "onset_event": {"enum": rg["onset_event"]},
+                "onset_offset_s": {"type": "number", "minimum": rg["offset_s"][0], "maximum": rg["offset_s"][1]},
                 "objective_ids": {"type": "array", "items": {"enum": objectives}, "minItems": 1, "maxItems": len(objectives)},
                 "evidence_ids": {"type": "array", "items": {"enum": evidence}, "minItems": 1, "maxItems": 6},
                 "expected_mechanism": {"type": "string"},
@@ -100,7 +99,8 @@ def a_context(*, profile: dict, prior: dict, space: dict, objective_cfg: dict, r
     verified = [o for o in obs if o.get("verified") is True]
     unreviewed = [] if not include_unreviewed else [
         {k: o.get(k) for k in ("id", "field", "observed_value", "note")} for o in obs if o.get("verified") is not True]
-    faults = [{k: f.get(k) for k in ("id", "name", "group", "injector_mode", "description", "check", "params", "next_question")}
+    faults = [{k: f.get(k) for k in ("id", "name", "group", "injector_mode", "description", "check", "params",
+                                     "handover_axes", "next_question") if f.get(k) is not None}
               for f in space.get("faults", [])]
     return {
         "objective": objective_cfg,
