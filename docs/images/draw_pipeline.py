@@ -77,8 +77,8 @@ def path(pts, color, text="", at=0, ls="-", tx=0, ty=0):
 
 path([(32, 26.5), (32, 30.5), (140, 30.5), (140, 34)], "#1f6fb2", "retrain GP on graded runs", at=2, tx=-40, ty=0)
 path([(12, 26.5), (12, 60), (40, 60), (40, 64)], "#1f6fb2", "past outcomes", at=1, ls="--", tx=1, ty=-8)
-path([(68, 26.5), (68, 60), (56, 60), (56, 64)], "#2e8b57", "accepted explanations:\nexamples + counterfactual re-runs",
-     at=1, tx=1.5, ty=0)
+path([(68, 26.5), (68, 60), (56, 60), (56, 64)], "#2e8b57", "accepted explanations + counterfactual re-runs",
+     at=1, tx=-11, ty=1.8)
 
 # legend
 for i, (c, t) in enumerate([(LLM, "NVIDIA model (proposes / explains, never grades)"),
