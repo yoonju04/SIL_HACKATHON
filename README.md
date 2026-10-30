@@ -10,6 +10,46 @@
 > **심사위원 안내 / Judges: [JUDGES_GUIDE.md](JUDGES_GUIDE.md)** — 2분 안에 결과 보기, CARLA 없이 1분 실행, 전체 실행 방법, 핵심 결과
 > (크리티컬 고장 1. drift, 2. bias; 경계값과 GP 경계 탐색 성능)
 
+## For judges (English)
+
+**What it is.** An AI-driven test campaign for a self-driving steering stack: faults are injected into the primary
+MPC controller in CARLA, a supervisor must hand over to a backup LQR controller, and the system searches for the
+faults and conditions where that handover is late or unsafe. LLMs propose and explain; **a deterministic monitor makes
+every safety verdict**. Result: the critical faults are slowly growing steering errors (ramp bias / drift, then
+constant bias) and their boundary values are found (`result/result_12/insights/boundaries.md`).
+
+**Start here: [JUDGES_GUIDE.md](JUDGES_GUIDE.md)** — results in 2 minutes, a 1-minute run without CARLA or API keys
+(`pip install -r requirements-pipeline.txt` then `python run.py --mock ...`), the full CARLA setup, how it works.
+
+### How we used NVIDIA models
+
+| NVIDIA model (via Nebius) | Role in the pipeline | Code |
+|---|---|---|
+| **Nemotron 3.5 Lightning** (`nvidia/Nemotron-3_5-Lightning`) | Nemotron A: proposes fault scenarios aimed at the safe/unsafe boundary from the GP summary, past outcomes and route geometry; refines candidates near the boundary | `engine/nemotron.py`, stage 03 |
+| **Nemotron 3 Ultra 550B** (`nvidia/Nemotron-3-Ultra-550b-a55b`) | Nemotron B: reads the controller source code and answers fixed questions per scenario (3 votes); answers become GP features and are checked against a code answer key (hallucination rate reported) | stage 05b |
+| **Cosmos 3 Super Reasoner** (NVIDIA Cosmos Reason) | Explains each failed run's front-camera video with the monitor's events as facts (counterfactuals are re-run automatically); after the campaign, reads the boundary table and states the critical faults and boundary values | `engine/explainer.py`, `engine/boundaries.py` |
+| **Nemotron 3.5 Super VL** (`nvidia/Nemotron-3.5-Super-VL`) | Fallback video / vision model when the Cosmos endpoint is not up | stage 10 |
+
+### Where Nebius Token Factory accelerated the work, and other Nebius services
+
+* **One OpenAI-compatible API and key for every model**: we switch models per role in `pipeline/llm_models.yaml`
+  (fast Lightning for many proposals, the 550B Ultra for code reasoning) with no local GPU and no serving code.
+* **Structured outputs** (`response_format` = `json_schema`, `engine/llm.py`): Nemotron A returns scenarios that parse
+  and validate against the scenario space every time, so 30+ CARLA runs per night needed no manual cleanup.
+* **A 550B model on demand**: Nemotron 3 Ultra runs three votes per scenario during a campaign; hosting it ourselves
+  was not possible on our hardware.
+* **Nebius dedicated endpoint for Cosmos Reason**, started and stopped by our code through the control API
+  (`GET/PATCH /v0/dedicated_endpoints`, `engine/cosmos_power.py`): billed only while the video step runs, also stopped
+  on errors and at exit.
+* Not used: Nebius AI Cloud compute (CARLA ran on a local Windows PC with an NVIDIA GPU).
+
+### License
+
+[MIT](LICENSE) for this repository's code. Third-party components keep their own licenses
+(`pipeline/08_carla_paired_run/av_stack/THIRD_PARTY_NOTICES.md`).
+
+---
+
 [Architecture](docs/ARCHITECTURE.md) · [Research & Evaluation](docs/RESEARCH.md) · [Roadmap](docs/ROADMAP.md) · [Sources](docs/REFERENCES.md)
 
 ---
@@ -74,15 +114,15 @@ flowchart LR
 | **피드백 루프** | 실패 요약과 미탐색 영역을 다음 라운드 에이전트 입력으로 반영 | 탐색 성능 우위는 실험으로 검증 필요 |
 | **캠페인 리포트** | 실패 사례, 무작위 대비 발견 효율 비교 | — |
 
-### Nebius 활용
+### Nebius 활용 (실제 사용)
 
 | 서비스 | 실제 기능 | 이 프로젝트에서의 사용 |
 |---|---|---|
-| Token Factory | NVIDIA Nemotron 추론 API | 기존 실패를 분석하고 다음 고장 조건 추론 |
-| Token Factory | Tool Calling | 시나리오 생성 도구와 시뮬레이터 실행 요청 |
-| Token Factory | 여러 Nemotron 모델 선택 | 분석이 어려운 단계와 단순 생성 단계 분리 |
-| AI Cloud | Serverless Jobs | 고장 시나리오별 시뮬레이션 실행 |
-| AI Cloud | GPU 컴퓨팅 · 시뮬레이션 인프라 | Isaac Sim 등 GPU 기반 환경으로 확장 |
+| Token Factory | NVIDIA Nemotron 추론 API (OpenAI 호환) | Nemotron 3.5 Lightning: 시나리오 제안(A) · Nemotron 3 Ultra 550B: 코드 질문 답변(B, 3표) · Nemotron 3.5 Super VL: 영상 해설 대체 |
+| Token Factory | 구조화 출력 (`json_schema`) | 시나리오 JSON이 항상 스키마를 통과 → 검증 후 바로 CARLA 실행 |
+| Token Factory | 역할별 모델 선택 | `pipeline/llm_models.yaml`에서 역할마다 모델 지정 |
+| Dedicated Endpoint | Cosmos 3 Super Reasoner 전용 배포 | 영상 해설·경계 해석. 제어 API(`/v0/dedicated_endpoints`)로 필요할 때만 자동 시작·종료 (`engine/cosmos_power.py`) |
+| AI Cloud | (사용 안 함) | CARLA는 로컬 Windows PC(NVIDIA GPU)에서 실행 |
 
 사용 가능한 Nemotron 모델 ID는 계정에서 `GET /v1/models`로 확인한 뒤 정합니다. 자세한 인터페이스는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 있습니다.
 

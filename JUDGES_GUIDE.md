@@ -115,7 +115,19 @@ supervisor switches to the LQR on solver failure, stale or out-of-range output, 
 error > 0.6 m / 0.35 rad held 0.15 s ("tight"; the original "legacy" thresholds were 1.0 m / 0.6 rad / 0.25 s with no
 rate check, and every switch on a slowly growing fault came after the car had left the lane).
 
-## 5. Limitations (honest)
+## 5. NVIDIA models and Nebius
+
+See the README section *How we used NVIDIA models* (Nemotron 3.5 Lightning = scenario proposals, Nemotron 3 Ultra =
+code questions, Cosmos 3 Super Reasoner = video explanations and the critical-fault / boundary summary, Nemotron 3.5
+Super VL = fallback) and *Where Nebius Token Factory accelerated the work* (one OpenAI-compatible API for every model,
+`json_schema` structured outputs, a 550B model on demand, a Cosmos dedicated endpoint started and stopped by code).
+Every model call of a campaign is logged in `llm_calls.jsonl` (model, tokens; no keys).
+
+## 6. License
+
+MIT ([LICENSE](LICENSE)) for this repository's code; third-party components keep their own licenses.
+
+## 7. Limitations (honest)
 
 * Thresholds marked PROVISIONAL in `pipeline/09_monitor/safety_spec.yaml` (e.g. lateral jerk 15 m/s³, data-based) are
   our choices for this study, not certified limits. Simulation only; not a safety certification.
