@@ -1582,25 +1582,22 @@ def campaign_insights(out: Path, mode: str, cfg: dict, cosmos: CosmosGuard | Non
         return None
     log(f"campaign insights ({res.get('role') or mode}): {res['status']}, {res.get('n_insights', 0)} insights, "
         f"{res.get('model_calls', 0)} model calls -> {res['path']}" + (f"  error: {res['error']}" if res.get("error") else ""))
-    # integration4: which faults are critical and where their boundaries are (code table + Cosmos reading of it)
-    bnd = None
-    try:
-        from engine.boundaries import run_boundaries
-        bnd = run_boundaries(out, history=history, mode=mode, cfg=cfg)
-        log(f"boundaries: {bnd['status']}, {bnd['n_points']} runs, ranking {bnd['ranking']} -> {bnd['path']}")
-    except Exception as e:  # noqa: BLE001 - a report add-on; run results are already written
-        log(f"boundaries failed (run results unaffected): {type(e).__name__}: {e}")
     try:
         with (out / "report.md").open("a", encoding="utf-8") as fh:
             fh.write(f"\n## 캠페인 인사이트 (09 monitor explain.py, Cosmos 텍스트 분석)\n"
                      f"- 상태: {res['status']}, 인사이트 {res.get('n_insights', 0)}개, 모델 호출 {res.get('model_calls', 0)}회"
                      + (f", 오류: {res['error']}" if res.get("error") else "") + "\n"
                      f"- 결과: `insights/insights.json`, 화면: `insights/campaign.html` (SR 모니터 기준 판정, 참고용)\n")
-            if bnd is not None:
-                fh.write(f"\n## 크리티컬 고장과 경계값 (코드 표 + Cosmos)\n- 상태: {bnd['status']}, 런 {bnd['n_points']}개, "
-                         f"순위 {', '.join(bnd['ranking'])}\n- 결과: `insights/boundaries.md`, `insights/boundaries.json`\n")
     except OSError as e:
         log(f"report.md insights line not written: {e}")
+    # integration4: which faults are critical and where their boundaries are (code table + Cosmos reading of it);
+    # after the insights lines so publish() can put its section into report.md, insights.json and both pages
+    try:
+        from engine.boundaries import run_boundaries
+        bnd = run_boundaries(out, history=history, mode=mode, cfg=cfg)
+        log(f"boundaries: {bnd['status']}, {bnd['n_points']} runs, ranking {bnd['ranking']} -> {bnd['path']}")
+    except Exception as e:  # noqa: BLE001 - a report add-on; run results are already written
+        log(f"boundaries failed (run results unaffected): {type(e).__name__}: {e}")
     return res
 
 

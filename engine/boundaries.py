@@ -364,6 +364,61 @@ def write_markdown(path: Path, table: dict, cosmos: dict | None, meta: dict) -> 
     path.write_text("\n".join(L) + "\n", encoding="utf-8")
 
 
+REPORT_HEAD = "## 크리티컬 고장과 경계값"
+
+
+def publish(out: Path, cfg: dict | None = None) -> None:
+    """Put insights/boundaries.json where people look (result_12: it was only in boundaries.md):
+    insights/insights.json (critical_faults, boundaries, boundary_summary, ...), the two campaign.html pages and
+    report.md (the section is replaced, not appended). Each step is best effort."""
+    out = Path(out)
+    dst = out / "insights"
+    row = json.loads((dst / "boundaries.json").read_text(encoding="utf-8"))
+    ans = ((row.get("cosmos") or {}).get("answer")) or {}
+    merged = {"boundary_status": (row.get("cosmos") or {}).get("status", "code_only"), "boundary_summary": row["summary"],
+              "boundary_ranking": row["table"]["critical_ranking"], "boundary_meta": row["meta"],
+              "critical_faults": ans.get("critical_faults") or [], "boundaries": ans.get("boundaries") or [],
+              "boundary_condition_effects": ans.get("condition_effects") or [],
+              "boundary_next_experiments": ans.get("next_experiments") or []}
+    ip = dst / "insights.json"
+    try:
+        ins = json.loads(ip.read_text(encoding="utf-8")) if ip.is_file() else {"status": "boundaries_only"}
+        ins.update(merged)
+        ip.write_text(json.dumps(ins, ensure_ascii=False, indent=2), encoding="utf-8")
+    except (OSError, ValueError) as e:
+        print(f"boundaries: insights.json not updated: {e}")
+    try:
+        from .insights import load_explain
+        load_explain()
+        from dashboard import refresh as refresh_sr          # pipeline/09_monitor/dashboard.py
+        if (dst / "run_records_sr.jsonl").is_file():
+            refresh_sr(dst / "run_records_sr.jsonl", dst)
+    except Exception as e:  # noqa: BLE001 - a view
+        print(f"boundaries: insights/campaign.html not refreshed: {type(e).__name__}: {e}")
+    try:
+        from .config import load_stage_configs
+        from .dashboard import refresh as refresh_screen
+        if (out / "run_records.jsonl").is_file():
+            refresh_screen(out / "run_records.jsonl", out / "screen", explanations=out / "explanations.jsonl",
+                           spec=(cfg or load_stage_configs())["safety_spec"])
+    except Exception as e:  # noqa: BLE001 - a view
+        print(f"boundaries: screen/campaign.html not refreshed: {type(e).__name__}: {e}")
+    rp = out / "report.md"
+    try:
+        body = (dst / "boundaries.md").read_text(encoding="utf-8").split("\n", 1)[1].lstrip("\n")
+        section = (REPORT_HEAD + "\n\n" + body.replace("\n## ", "\n### ").replace("\n### ", "\n#### ", 0)).rstrip() + "\n"
+        text = rp.read_text(encoding="utf-8") if rp.is_file() else ""
+        i = text.find(REPORT_HEAD)
+        if i >= 0:
+            j = text.find("\n## ", i + len(REPORT_HEAD))
+            text = text[:i] + section + (text[j + 1:] if j >= 0 else "")
+        else:
+            text = text.rstrip() + "\n\n" + section
+        rp.write_text(text, encoding="utf-8")
+    except OSError as e:
+        print(f"boundaries: report.md not updated: {e}")
+
+
 def run_boundaries(out: Path, *, history: list[str] | None = None, mode: str = "real", client=None,
                    cfg: dict | None = None, max_tokens: int = 24000) -> dict:
     from .config import load_stage_configs, load_yaml, resolve_scenario_space
@@ -387,6 +442,7 @@ def run_boundaries(out: Path, *, history: list[str] | None = None, mode: str = "
            "cosmos": cosmos}
     (dst / "boundaries.json").write_text(json.dumps(row, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     write_markdown(dst / "boundaries.md", table, cosmos, meta)
+    publish(out, cfg)
     return {"status": (cosmos or {}).get("status", "code_only"), "n_points": len(pts), "path": str(dst / "boundaries.md"),
             "model_calls": (cosmos or {}).get("model_calls", 0), "ranking": table["critical_ranking"]}
 
@@ -396,7 +452,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("out", type=Path)
     ap.add_argument("--history", nargs="*", default=[], help="earlier run_records.jsonl (glob ok)")
     ap.add_argument("--mock", action="store_true", help="code table only, no model call")
+    ap.add_argument("--publish-only", action="store_true", help="re-publish an existing insights/boundaries.json")
     a = ap.parse_args(argv)
+    if a.publish_only:
+        publish(a.out)
+        return 0
     if not a.mock:
         from run import load_dotenv
         load_dotenv()

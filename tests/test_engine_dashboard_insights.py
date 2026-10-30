@@ -106,3 +106,25 @@ def test_checks_no_switch_rows_have_no_green_but_keep_lane_and_collision():
     assert all(ok is None for _, ok, _, _ in D._checks(clean, lim))
     sw = dict(clean, recovery_outcome="safe_recovery", switch_time=10.0)
     assert True in [ok for _, ok, _, _ in D._checks(sw, lim)]
+
+
+def test_boundary_table_replaces_the_findings_with_critical_faults(tmp_path):
+    # integration4: with insights/boundaries.json the panel shows critical faults + their boundary values
+    from engine import boundaries as B
+    (tmp_path / "run_records.jsonl").write_text(json.dumps(_rec()) + "\n", encoding="utf-8")
+    (tmp_path / "insights").mkdir()
+    table = {"modes": {"drift": {"fault_id": "F-05", "runs": 4, "harmful_runs": 2, "late_or_missed_runs": 4, "switched_runs": 4,
+                                 "harmful_rate": 0.5, "late_rate": 1.0, "worst_margin": -0.9, "worst_run": "r1", "detected_by": {},
+                                 "parameters": {"rate_rad_s": {"space_range": [0.005, 0.05], "unit": "rad/s", "groups": {
+                                     "all conditions": {"harm": B.bracket([(0.01, False), (0.03, True)]),
+                                                        "detection": B.bracket([(0.01, True)]), "runs": []}}}}},
+                       "solver_fail": {"fault_id": "F-01", "runs": 3, "harmful_runs": 0, "late_or_missed_runs": 0,
+                                       "switched_runs": 3, "harmful_rate": 0.0, "late_rate": 0.0, "worst_margin": 0.3,
+                                       "worst_run": "r2", "detected_by": {}, "parameters": {}}},
+             "critical_ranking": ["drift", "solver_fail"]}
+    (tmp_path / "insights" / "boundaries.json").write_text(json.dumps({
+        "meta": {"n_points": 7, "n_campaign": 7}, "table": table, "summary": [], "cosmos": None}), encoding="utf-8")
+    page = D.refresh(tmp_path / "run_records.jsonl", tmp_path / "screen", spec={}).read_text(encoding="utf-8")
+    panel = page[page.index('id="ins"'):]
+    assert "Cosmos Insights" in panel and "Ramp Bias / Drift" in panel and "unsafe <b>50%</b>" in panel
+    assert "<b>0.01–0.03</b> rad/s" in panel and "no unsafe run: Solver Failure" in panel

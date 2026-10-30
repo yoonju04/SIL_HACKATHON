@@ -309,6 +309,32 @@ def _stability_short(r) -> str:
 FAILS = ("F1_no_or_late_switch", "F2_switch_transient", "F3_not_recovered")
 
 
+def render_boundaries(report: dict) -> str:
+    """integration4 (engine/boundaries.py): critical faults and boundary values, merged into insights.json."""
+    if not report.get("boundary_summary"):
+        return ""
+    out = ['<article class="insight-item"><h3>크리티컬 고장과 경계값</h3>']
+    crit = sorted(report.get("critical_faults") or [], key=lambda c: c.get("rank", 99))
+    if crit:
+        out.append('<ol>' + ''.join('<li><b>' + _e(c.get("fault")) + '</b>: ' + _e(c.get("reason")) + '</li>' for c in crit)
+                   + '</ol>')
+    for b in report.get("boundaries") or []:
+        r = b.get("range") or ["?", "?"]
+        out.append('<p>' + _e(f"{b.get('fault')} / {b.get('parameter')} ({b.get('kind')}, {b.get('condition')}): "
+                              f"{r[0]}~{r[1]} [{b.get('status')}] {b.get('statement') or ''}") + '</p>')
+    out.append('<details class="analysis-details"><summary>코드 계산 경계 표 (' + _e(report.get("boundary_status"))
+               + ')</summary><pre>' + _e("\n".join(report["boundary_summary"])) + '</pre>')
+    if report.get("boundary_condition_effects"):
+        out.append('<h4>조건에 따른 변화</h4><ul>' + ''.join('<li>' + _e(x) + '</li>' for x in report["boundary_condition_effects"])
+                   + '</ul>')
+    if report.get("boundary_next_experiments"):
+        out.append('<h4>경계를 좁힐 다음 실험</h4><ul>' + ''.join(
+            '<li>' + _e(f"{n.get('fault')} {n.get('parameter', '')} = {n.get('values')} @ {n.get('condition', '')}: {n.get('why', '')}")
+            + '</li>' for n in report["boundary_next_experiments"]) + '</ul>')
+    out.append('</details></article>')
+    return "".join(out)
+
+
 def render_insights(report: dict | None) -> str:
     """Lead with concise interpretations; keep evidence and experiments available on demand."""
     if not report:
@@ -317,6 +343,7 @@ def render_insights(report: dict | None) -> str:
               else 'Cosmos Reason이 모니터 판정 수치에서 도출한 해석' if report.get('status') == 'complete'
               else 'Cosmos Reason · 분석 대기')
     out = ['<div class="insights"><div class="insight-meta">' + _e(credit) + '</div>']
+    out.append(render_boundaries(report))
     if report.get("selection") == "failures_only":
         out.append('<div class="cap">실패 사례만 분석</div>')
     if report.get("error"):

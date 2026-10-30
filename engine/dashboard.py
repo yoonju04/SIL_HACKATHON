@@ -206,6 +206,18 @@ table.list tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--acc)}
 .ins .it{flex:1;min-width:0;font-size:1.06rem;font-weight:500;line-height:1.4;color:var(--fg)}
 .ins .conf{flex:none}
 .ins ol.itop .fd{font-size:.94rem;color:var(--mut);margin-top:.2rem;line-height:1.45;font-variant-numeric:tabular-nums;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+/* Cosmos Insights (integration4): one block per critical fault, readable without scrolling */
+.stack>.col.hypo{max-height:40%;overflow:auto}
+#ins .ibody{min-height:0;overflow:hidden;display:flex;flex-direction:column}
+#ins ol.brank{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--s2)}
+#ins ol.brank li{padding:var(--s2) var(--s3);background:rgba(255,255,255,.55);border-radius:8px;border-left:3px solid var(--d-ins)}
+#ins .bt{display:flex;align-items:baseline;gap:var(--s2);flex-wrap:wrap}
+#ins .rk{font-weight:700;color:var(--d-ins);min-width:1rem}
+#ins .bn{font-weight:600;font-size:1rem;color:var(--fg);flex:1;min-width:8rem}
+#ins .bs{font-size:.84rem;color:var(--mut);font-variant-numeric:tabular-nums}#ins .bs b{color:var(--fg)}
+#ins .bb{margin:.15rem 0 0 1.5rem;font-size:.86rem;color:var(--fg2);font-variant-numeric:tabular-nums}
+#ins .bb b{color:var(--fg)}
+#ins .bfoot{margin:var(--s2) 0 0;font-size:.78rem;color:var(--mut2)}
 /* long lists (12+ rows): one line per row */
 .listbox.dense table.list{font-size:.84rem}
 .listbox.dense table.list td{padding:.12rem .55rem}
@@ -923,8 +935,46 @@ def insight_view(it: dict, outcomes: dict) -> tuple[str, str]:
     return head, " · ".join(p for p in parts if p)
 
 
-def render_insights(ins: dict | None, out_dir: Path = Path("."), records: list | None = None) -> str:
-    """Insights panel (Cosmos): failure rate + top 3 findings as headline / evidence numbers, always open."""
+UNITS = {"rad": "rad", "rad/s": "rad/s", "s": "s", "fraction_of_max_steer": "x max steer"}
+
+
+def _boundary_lines(row: dict, per_fault: int = 2) -> dict[str, list[str]]:
+    """Per fault: up to per_fault parameters that HAVE a boundary (Cosmos range for harm / all conditions, else the
+    code bracket or mixed zone), as short 'name a–b unit' strings; parameters safe over the whole tested range are
+    left out. Numbers from boundaries.json only."""
+    ans = (row.get("cosmos") or {}).get("answer") or {}
+    cos = {(b.get("fault"), b.get("parameter")): b for b in ans.get("boundaries") or []
+           if b.get("kind") == "harm" and (b.get("condition") or "all conditions") == "all conditions"}
+    out: dict[str, list[str]] = {}
+    for m, e in row["table"]["modes"].items():
+        lines = []
+        for k, pr in e["parameters"].items():
+            unit = UNITS.get(pr.get("unit") or "", pr.get("unit") or "")
+            c, g = cos.get((m, k)), (pr["groups"].get("all conditions") or {}).get("harm")
+            if c and isinstance(c.get("range"), list):
+                lo, hi = c["range"]
+            elif g and g["status"] in ("bracketed", "overlap"):
+                lo, hi = g["range"]
+            elif g and g["status"] == "all_bad":
+                lo, hi = g["bad_from"], None
+            else:
+                continue
+            name = k.replace("_rad_s", "").replace("_rad", "").replace("_s", "").replace("_", " ")
+            rng = f"{lo:g}–{hi:g}" if hi is not None else f"≥ {lo:g}"
+            lines.append(f'{_e(name)} <b>{_e(rng)}</b> {_e(unit)}')
+        out[m] = lines[:per_fault]
+    return out
+
+
+def _load_boundaries(out_dir: Path) -> dict | None:
+    try:
+        return json.loads((Path(out_dir).parent / "insights" / "boundaries.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def render_findings(ins: dict | None, records: list | None = None) -> str:
+    """Insights panel without a boundary table: failure rate + top 3 Cosmos findings as headline / evidence numbers."""
     if not ins or ins.get("status") != "complete":
         why = "generated after the campaign ends" if not ins else f"generation failed: {ins.get('error') or ins.get('status')}"
         return (f'<section class="col ins" id="insbadge"><h2>Insights <span class="src">by Cosmos</span></h2>'
@@ -940,9 +990,35 @@ def render_insights(ins: dict | None, out_dir: Path = Path("."), records: list |
         head, evid = insight_view(it, outcomes)
         conf, cls = CONF_KO.get(it.get("confidence"), (it.get("confidence") or "–", "mut"))
         lis += (f'<li><div class="ih"><span class="it">{_e(head)}</span> <span class="conf {cls}">{_e(conf)}</span></div> '
-                f'<div class="fd">{_e(evid)}</div></li>\n')
+                f'<div class="fd">{_e(evid)}</div></li>' + chr(10))
     return (f'<section class="col ins" id="ins"><h2>Insights <span class="src">by Cosmos</span></h2>'
             f'<div class="ibody"><p class="ikey">{key}</p><ol class="itop">{lis}</ol></div></section>')
+
+
+def render_insights(ins: dict | None, out_dir: Path = Path("."), records: list | None = None) -> str:
+    """Cosmos Insights panel under the hypotheses (integration4): the critical faults (ranked by the code table:
+    unsafe rate, late/missed-switch rate, worst margin) and, under each, the boundary values of its parameters
+    (Cosmos range when it gave one, else the code bracket). Compact enough to read without scrolling."""
+    row = _load_boundaries(out_dir)
+    if row is None:      # campaigns before integration4's boundary analysis: the Cosmos findings as before
+        return render_findings(ins, records)
+    modes = row["table"]["modes"]
+    crit = [m for m in row["table"]["critical_ranking"] if modes[m]["harmful_runs"] or modes[m]["late_or_missed_runs"]]
+    safe = [m for m in row["table"]["critical_ranking"] if m not in crit]
+    lines = _boundary_lines(row)
+    lis = ""
+    for i, m in enumerate(crit, 1):
+        e = modes[m]
+        bnd = " · ".join(lines.get(m) or []) or '<span class="mut">no unsafe run in the tested range</span>'
+        lis += (f'<li><div class="bt"><span class="rk">{i}</span><span class="bn">{_e(FAULT_KO.get(m, (m,))[0])}</span>'
+                f'<span class="bs">unsafe <b>{e["harmful_rate"]:.0%}</b> · late switch <b>{e["late_rate"]:.0%}</b></span></div>'
+                f'<div class="bb">boundary: {bnd}</div></li>')
+    st = (row.get("cosmos") or {}).get("status", "code only")
+    foot = (f'{row["meta"]["n_points"]} runs · unsafe = safety margin &lt; 0'
+            + (f' · no unsafe run: {_e(", ".join(FAULT_KO.get(m, (m,))[0] for m in safe))}' if safe else ""))
+    return (f'<section class="col ins" id="ins"><h2>Cosmos Insights <span class="src">critical faults &amp; boundaries · '
+            f'Cosmos {_e(st)}</span></h2><div class="ibody"><ol class="brank">{lis}</ol><p class="bfoot">{foot}</p></div></section>')
+
 
 SIDE_KO = {"recover": "Lane kept", "fail": "Fail", "boundary": "Boundary"}
 
