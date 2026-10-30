@@ -1,5 +1,7 @@
 # AI-Driven Fault Injection for Safety Validation of MPC-to-LQR Controller Switching
 
+> **Judges: the final submission is on branch [`inter_final`](https://github.com/yoonju04/SIL_HACKATHON/tree/inter_final)** — see its [JUDGES_GUIDE.md](https://github.com/yoonju04/SIL_HACKATHON/blob/inter_final/JUDGES_GUIDE.md) (results, 1-minute run without CARLA, how NVIDIA Nemotron / Cosmos and Nebius Token Factory are used). License: [MIT](LICENSE).
+
 > **A system that injects computation and execution faults into an MPC lateral controller and automatically searches
 > for, and verifies, the conditions under which the switch to a backup LQR becomes unsafe, depending on when the
 > switch happens and on the vehicle's dynamic state.**
