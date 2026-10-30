@@ -4,7 +4,11 @@
 >
 > NVIDIA × Nebius 해커톤 **Physical AI 트랙** 제출 프로젝트
 >
-> **상태:** 연구 구상 · 구현 계획 단계. **실험 결과나 안전 인증은 아직 없습니다.**
+> **상태 (최종 제출, 브랜치 `inter_final`):** 구현과 CARLA 실험 완료. 최종 캠페인 `result/result_12` (32런 + 이전 117런).
+> 시뮬레이션 결과이며 안전 인증은 아닙니다.
+>
+> **심사위원 안내 / Judges: [JUDGES_GUIDE.md](JUDGES_GUIDE.md)** — 2분 안에 결과 보기, CARLA 없이 1분 실행, 전체 실행 방법, 핵심 결과
+> (크리티컬 고장 1. drift, 2. bias; 경계값과 GP 경계 탐색 성능)
 
 [Architecture](docs/ARCHITECTURE.md) · [Research & Evaluation](docs/RESEARCH.md) · [Roadmap](docs/ROADMAP.md) · [Sources](docs/REFERENCES.md)
 
