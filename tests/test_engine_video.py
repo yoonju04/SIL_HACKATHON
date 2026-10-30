@@ -188,3 +188,16 @@ def test_log_grounded_verify_checks_agreement_with_the_log():
     assert not verify(ok, gone, clip, TAX, mode="log_grounded")["accepted"]                    # stable_recovery contradicts
     assert verify(dict(ok, mechanism_tags=["departed_before_switch"], evidence_frames_s=[41.75]), gone, clip, TAX,
                   mode="log_grounded")["accepted"]
+
+
+def test_log_grounded_novel_tags_must_be_english_snake_case():
+    # result_11: the model wrote Chinese novel tags
+    from engine.video import Clip
+    ft = [40.0 + 0.25 * k for k in range(9)]
+    clip = Clip(None, None, [], ft, ft[0], ft[-1], 41.0, "front.mp4", "front_frames.jsonl", True)
+    tl = {"switch_time_s": 41.0, "lane_departure_intervals_s": [], "collision_times_s": []}
+    ok = {"mechanism": "The supervisor switched at the fault and LQR kept the lane without trouble.",
+          "mechanism_tags": ["stable_recovery"], "novel_tags": ["straight_road_handover"], "evidence_frames_s": [41.0]}
+    assert verify(ok, tl, clip, TAX, mode="log_grounded")["accepted"]
+    bad = dict(ok, novel_tags=["bias\u8bf1\u5bfc\u6f02\u79fb"])
+    assert not verify(bad, tl, clip, TAX, mode="log_grounded")["accepted"]

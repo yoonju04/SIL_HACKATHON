@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from pathlib import Path
 from typing import Any
 
@@ -108,7 +109,12 @@ def build_messages(clip: Clip, timeline: dict, taxonomy: list[str], media: str, 
             "report must be one of these frame times; times in the context below may lie before the clip and are not "
             "frames.\n"
             f"Known context from the logs (deterministic):\n{json.dumps(shown, default=str)}\n"
-            + ("These logged events are facts (an empty list means it did not happen). Do not re-measure them.\n"
+            + ("These logged events are facts (an empty list means it did not happen). Do not re-measure them. "
+               "trigger_time_s is when the fault became effective, NOT when it was detected (detection = switch_time_s). "
+               "angle_saturation_ratio_1s = share of the first second after the switch with the steering at its ANGLE "
+               "limit; rate_saturation_ratio_1s = share at the steering RATE limit; use steering_angle_saturation only "
+               "if the first is > 0 and steering_rate_limit only if the second is > 0. Fault names (bias, drift, ...) are "
+               "not tags. novel_tags must be English snake_case.\n"
                if mode == "log_grounded" else "Lane departure, collision and offsets are NOT given: read them from the frames.\n")
             + "Allowed mechanism_tags (use only these exact strings; anything else goes to novel_tags):\n"
             + "\n".join(f"- {t}: {TAG_HELP.get(t, '')}".rstrip(": ") for t in taxonomy) + "\n\n"
@@ -189,6 +195,9 @@ def visible_departure(timeline: dict, frame_times: list[float], eps: float = 1e-
     return None, over
 
 
+SNAKE = re.compile(r"[a-z][a-z0-9_]{0,40}")
+
+
 def tag_conflicts(tags: list, timeline: dict) -> list[str]:
     """Mechanism tags that contradict the monitor log (log_grounded mode)."""
     dep = timeline.get("lane_departure_intervals_s") or []
@@ -234,6 +243,12 @@ def verify_grounded(expl: dict | None, timeline: dict, clip: Clip, taxonomy: lis
         checks["evidence_at_given_events"] = {"pass": bool(near), "events_s": points, "departure_intervals_s": spans}
     mech = expl.get("mechanism")
     checks["mechanism_written"] = {"pass": isinstance(mech, str) and len(mech.strip()) >= 20}
+    novel = expl.get("novel_tags") or []
+    # result_11: Chinese novel tags ('bias...'); tags feed the taxonomy builder, so they must be English snake_case
+    checks["novel_tags_snake_case"] = {"pass": isinstance(novel, list) and all(isinstance(t, str) and SNAKE.fullmatch(t)
+                                                                             for t in novel),
+                                       "bad": [t for t in novel if not (isinstance(t, str) and SNAKE.fullmatch(t))]
+                                       if isinstance(novel, list) else novel}
     return {"accepted": all(c["pass"] for c in checks.values()), "checks": checks, "tolerance_s": tol, "mode": "log_grounded"}
 
 

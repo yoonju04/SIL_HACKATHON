@@ -76,3 +76,27 @@ Re-grade result_8 + result_9 + result_10:
 
 Tests: `tests/test_integration3_safety_margin.py` updated (limit 15, no-switch re-scoring, re-derived labels) plus
 `test_no_switch_margin_and_footprint_departure`.
+
+## Critical faults and boundary values (`engine/boundaries.py`)
+
+Goal of the campaign insights: which faults are a problem and where their boundary is. The old Cosmos campaign
+insights (`pipeline/09_monitor/explain.py`, kept as is) only quoted group means (result_11: "failed runs had 4.2 s
+detection latency"), and no boundary.
+* Code builds the table (deterministic): the campaign's runs plus `--gp-history` runs, all re-scored with the current
+  thresholds (`judgment.rescore_safety_margin`). Per fault: runs, harmful rate (safety_margin < 0), late/missed
+  detection rate (SR F1), worst margin, detection sources; ranking = harmful rate, then late rate, then worst margin.
+  Per fault parameter and condition group (all, speed band, onset event, friction < / >= 0.7): the bracket for the harm
+  and the detection boundary - bracketed [max OK, min BAD], overlap [min BAD, max OK], all_ok, all_bad.
+* Cosmos (C_cosmos, text only) reads only that table and answers critical_faults, boundaries (copying a bracket, or
+  `estimated` approximate ranges inside the space range when the data do not bracket it), condition_effects and
+  next experiments that narrow the boundary. `check_answer` keeps only items that agree with the table (names,
+  ranges, run ids, no Han / kana) and re-asks with the problems; the code summary is written either way.
+* Runs after the explain.py insights in `run.py campaign_insights` (`--insights on`, history = `--gp-history`);
+  standalone: `python -m engine.boundaries OUT --history "result/result_*/run_records.jsonl" [--mock]`.
+  Outputs `insights/boundaries.md` and `insights/boundaries.json`, plus a line in `report.md`.
+* Code table on result_8..11 (119 runs): drift (late 100 %, harmful 20 %), bias (harmful 14 %, late 19 %), then
+  intermittent_bias; saturate, solver_fail, output_delay, stale never harmful.
+
+Video explanation (result_11): the prompt now says that trigger_time_s is when the fault became effective (not its
+detection), what the angle vs rate saturation ratios mean, that fault names are not tags; `novel_tags` must be
+English snake_case (new check `novel_tags_snake_case`).
