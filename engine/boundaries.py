@@ -204,18 +204,48 @@ JSON 객체 하나로만 답하라:
  "limitations":["..."]}"""
 
 
-def _table_view(table: dict, max_runs: int = 12) -> dict:
-    """Compact table for the prompt: per group brackets and up to max_runs points."""
-    view = {"critical_ranking_by_code": table["critical_ranking"], "modes": {}}
-    for m, e in table["modes"].items():
-        v = {k: e[k] for k in ("runs", "harmful_runs", "late_or_missed_runs", "switched_runs", "harmful_rate", "late_rate",
-                               "worst_margin", "worst_run", "detected_by")}
-        v["parameters"] = {}
-        for k, pr in e["parameters"].items():
-            v["parameters"][k] = {"space_range": pr["space_range"], "unit": pr["unit"],
-                                  "groups": {g: {"harm": gx["harm"], "detection": gx["detection"],
-                                                 "runs": gx["runs"][:max_runs]} for g, gx in pr["groups"].items()}}
-        view["modes"][m] = v
+PROMPT_BUDGET_CHARS = 30000
+
+
+def _near_boundary(runs: list[dict], b: dict, keep: int) -> list[dict]:
+    """The points that define a bracket: those inside / next to its range, then the closest others."""
+    if not runs:
+        return []
+    lo, hi = (b.get("range") or [b.get("ok_up_to", b.get("bad_from")), b.get("ok_up_to", b.get("bad_from"))])
+    ranked = sorted(runs, key=lambda r: 0.0 if lo <= r["value"] <= hi else min(abs(r["value"] - lo), abs(r["value"] - hi)))
+    slim = [{k: r[k] for k in ("run_id", "value", "margin", "harm_bad", "detect_bad", "speed_kmh", "onset_event")}
+            for r in ranked[:keep]]
+    return sorted(slim, key=lambda r: r["value"])
+
+
+def _table_view(table: dict, max_runs: int = 6, max_groups: int = 6) -> dict:
+    """Compact table for the prompt (budget PROMPT_BUDGET_CHARS): full detail only for faults with a harmful or late
+    run; per parameter 'all conditions' plus the groups where results are mixed; per group the points nearest the
+    bracket. Faults without any problem are listed with their counts only."""
+    def build(runs_n: int, groups_n: int) -> dict:
+        view = {"critical_ranking_by_code": table["critical_ranking"], "modes": {}, "no_problem_faults": {}}
+        for m, e in table["modes"].items():
+            head = {k: e[k] for k in ("runs", "harmful_runs", "late_or_missed_runs", "switched_runs", "harmful_rate",
+                                      "late_rate", "worst_margin", "worst_run", "detected_by")}
+            if not (e["harmful_runs"] or e["late_or_missed_runs"]):
+                view["no_problem_faults"][m] = head
+                continue
+            head["parameters"] = {}
+            for k, pr in e["parameters"].items():
+                gs = pr["groups"]
+                mixed = [g for g in gs if g != "all conditions"
+                         and (gs[g]["harm"]["status"] in ("bracketed", "overlap")
+                              or gs[g]["detection"]["status"] in ("bracketed", "overlap"))]
+                keep = (["all conditions"] if "all conditions" in gs else []) + mixed[:groups_n]
+                head["parameters"][k] = {"space_range": pr["space_range"], "unit": pr["unit"], "groups": {
+                    g: {"harm": gs[g]["harm"], "detection": gs[g]["detection"],
+                        "runs": _near_boundary(gs[g]["runs"], gs[g]["harm"], runs_n)} for g in keep}}
+            view["modes"][m] = head
+        return view
+    for runs_n, groups_n in ((max_runs, max_groups), (4, 4), (2, 3), (0, 2)):
+        view = build(runs_n, groups_n)
+        if len(json.dumps(view, ensure_ascii=False)) <= PROMPT_BUDGET_CHARS:
+            break
     return view
 
 
@@ -283,7 +313,7 @@ def check_answer(ans: Any, table: dict) -> tuple[dict, list[str]]:
     return kept, problems
 
 
-def ask_model(client, table: dict, max_tokens: int = 12000, retries: int = 2) -> dict:
+def ask_model(client, table: dict, max_tokens: int = 24000, retries: int = 2) -> dict:
     """Cosmos (explain.ModelClient) on the table; re-asks with the problems; keeps what passes on the last try."""
     from .llm import extract_json
     msgs = [{"role": "system", "content": SYSTEM},
@@ -335,7 +365,7 @@ def write_markdown(path: Path, table: dict, cosmos: dict | None, meta: dict) -> 
 
 
 def run_boundaries(out: Path, *, history: list[str] | None = None, mode: str = "real", client=None,
-                   cfg: dict | None = None, max_tokens: int = 12000) -> dict:
+                   cfg: dict | None = None, max_tokens: int = 24000) -> dict:
     from .config import load_stage_configs, load_yaml, resolve_scenario_space
     from .monitor import thresholds_from_config
     out = Path(out)
