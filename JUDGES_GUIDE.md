@@ -4,7 +4,7 @@
 every run, a Gaussian process steers the next runs towards the safe/unsafe boundary, and Cosmos Reason explains the
 videos and summarises *which faults are critical and where their boundaries are*.
 
-Branch `inter_final` = `integration4` (code) + all campaign results. The final campaign is **`result/result_12`**.
+The default branch `main` (same code as `inter_final`) holds the code and all campaign results. The final campaign is **`result/result_12`**.
 
 ---
 
