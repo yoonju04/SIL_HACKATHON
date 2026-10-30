@@ -1,7 +1,5 @@
 # AI-Driven Fault Injection for Safety Validation of MPC-to-LQR Controller Switching
 
-> **Judges: the final submission is on branch [`inter_final`](https://github.com/yoonju04/SIL_HACKATHON/tree/inter_final)** — see its [JUDGES_GUIDE.md](https://github.com/yoonju04/SIL_HACKATHON/blob/inter_final/JUDGES_GUIDE.md) (results, 1-minute run without CARLA, how NVIDIA Nemotron / Cosmos and Nebius Token Factory are used). License: [MIT](LICENSE).
-
 > **A system that injects computation and execution faults into an MPC lateral controller and automatically searches
 > for, and verifies, the conditions under which the switch to a backup LQR becomes unsafe, depending on when the
 > switch happens and on the vehicle's dynamic state.**
@@ -166,13 +164,28 @@ Role separation: only Nemotron A sees past failures · Nemotron B sees only code
 context (fault and switch times), not the departure / collision / offset values · only the 09 monitor grades runs.
 Explanations never change a verdict.
 
-### Nebius usage
+### NVIDIA models and Nebius usage
 
-| Service | Feature | Use in this project |
+| NVIDIA model (via Nebius) | Role in the pipeline | Code |
 |---|---|---|
-| Token Factory | NVIDIA Nemotron inference API | Analyse earlier failures and reason about the next fault conditions (Nemotron A), answer code questions (Nemotron B) |
-| Token Factory | Several Nemotron models | Lightning for generation, Ultra for code analysis, Super VL as the video fallback |
-| AI Cloud | Dedicated endpoint | Cosmos Reason for video explanations (started for the video step and stopped afterwards, `--cosmos-power auto`) |
+| **Nemotron 3.5 Lightning** (`nvidia/Nemotron-3_5-Lightning`) | Nemotron A: proposes fault scenarios aimed at the safe/unsafe boundary from the GP summary, past outcomes and route geometry; refines candidates near the boundary | `engine/nemotron.py`, stage 03 |
+| **Nemotron 3 Ultra 550B** (`nvidia/Nemotron-3-Ultra-550b-a55b`) | Nemotron B: reads the controller source code and answers fixed questions per scenario (3 votes); answers become GP features and are checked against a code answer key | stage 05b |
+| **Cosmos 3 Super Reasoner** (NVIDIA Cosmos Reason) | Explains each failed run's front-camera video with the monitor's events as facts; after the campaign, reads the boundary table and states the critical faults and boundary values | `engine/explainer.py`, `engine/boundaries.py` |
+| **Nemotron 3.5 Super VL** (`nvidia/Nemotron-3.5-Super-VL`) | Fallback video / vision model when the Cosmos endpoint is not up | stage 10 |
+
+Where **Nebius Token Factory** accelerated the work, and the other Nebius services used:
+
+* **One OpenAI-compatible API and key for every model**: models are switched per role in `pipeline/llm_models.yaml`
+  (fast Lightning for many proposals, the 550B Ultra for code reasoning) with no local GPU and no serving code.
+* **Structured outputs** (`response_format` = `json_schema`, `engine/llm.py`): Nemotron A's scenarios always parse
+  and validate against the scenario space, so overnight campaigns (84 CARLA runs in result_8) ran without manual cleanup.
+* **A 550B model on demand**: Nemotron 3 Ultra answers three votes per scenario during a campaign; hosting it
+  ourselves was not possible on our hardware.
+* **Dedicated endpoint for Cosmos Reason**, started and stopped by our code through the control API
+  (`GET/PATCH /v0/dedicated_endpoints`, `engine/cosmos_power.py`): billed only while the video step runs, and stopped
+  on errors and at exit.
+* Not used: Nebius AI Cloud compute (CARLA ran on a local Windows PC with an NVIDIA GPU).
+* Every model call of a campaign is logged in `llm_calls.jsonl` (model, tokens; never keys).
 
 Model ids are set in [`pipeline/llm_models.yaml`](pipeline/llm_models.yaml); check the ids available to your account with `GET /v1/models`.
 
@@ -333,3 +346,10 @@ review, never applied automatically), `evaluation_metrics.json`, `llm_calls.json
 * **Not finding a failure does not prove safety.**
 
 Bug reports and design notes: [docs/BUG_REPORTS.md](docs/BUG_REPORTS.md), [docs/INTEGRATION3.md](docs/INTEGRATION3.md), [docs/INTEGRATION4.md](docs/INTEGRATION4.md).
+
+## License
+
+[MIT](LICENSE) for this repository's code. Third-party components (CARLA, CARLA Garage / PDM-Lite, Bench2Drive, ...)
+keep their own licenses, listed in
+[`pipeline/08_carla_paired_run/av_stack/THIRD_PARTY_NOTICES.md`](pipeline/08_carla_paired_run/av_stack/THIRD_PARTY_NOTICES.md).
+NVIDIA models are used through Nebius Token Factory under their own terms.
