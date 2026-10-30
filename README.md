@@ -1,132 +1,195 @@
 # AI-Driven Fault Injection for Safety Validation of MPC-to-LQR Controller Switching
 
-> **MPC에 다양한 계산 및 실행 고장을 주입하고, 제어기 전환 시점과 차량 동적 상태에 따라 발생하는 안전 위반 조건을 자동으로 탐색 · 검증하는 시스템**
+> **A system that injects computation and execution faults into an MPC lateral controller and automatically searches
+> for, and verifies, the conditions under which the switch to a backup LQR becomes unsafe, depending on when the
+> switch happens and on the vehicle's dynamic state.**
 >
-> NVIDIA × Nebius 해커톤 **Physical AI 트랙** 제출 프로젝트
+> Submission to the NVIDIA × Nebius Hackathon, **Physical AI track**.
 >
-> **상태 (최종 제출, 브랜치 `inter_final`):** 구현과 CARLA 실험 완료. 최종 캠페인 `result/result_12` (32런, 경계 분석은 이전 결과 119런 포함 총 149런).
-> 시뮬레이션 결과이며 안전 인증은 아닙니다.
+> **Status (final submission):** implementation and CARLA experiments complete. Final campaign `result/result_12`
+> (32 runs; the boundary analysis also includes 119 earlier runs, 149 graded runs in total).
+> These are simulation results, not a safety certification.
 >
-> **심사위원 안내 / Judges: [JUDGES_GUIDE.md](JUDGES_GUIDE.md)** — 2분 안에 결과 보기, CARLA 없이 1분 실행, 전체 실행 방법, 핵심 결과
-> (크리티컬 고장 1. drift, 2. bias; 경계값과 GP 경계 탐색 성능)
+> **Judges: [JUDGES_GUIDE.md](JUDGES_GUIDE.md)**: see the results in 2 minutes, a 1-minute run without CARLA, the full
+> run, and the headline findings (critical faults: 1. drift, 2. bias; their boundary values and how well the GP found the boundary).
 
-## For judges (English)
+[Architecture](docs/ARCHITECTURE.md) · [Research & Evaluation](docs/RESEARCH.md) · [Roadmap](docs/ROADMAP.md) · [Sources](docs/REFERENCES.md) · [Stage configs](pipeline/README.md)
 
-**What it is.** An AI-driven test campaign for a self-driving steering stack: faults are injected into the primary
-MPC controller in CARLA, a supervisor must hand over to a backup LQR controller, and the system searches for the
-faults and conditions where that handover is late or unsafe. LLMs propose and explain; **a deterministic monitor makes
-every safety verdict**. Result: the critical faults are slowly growing steering errors (ramp bias / drift, then
-constant bias) and their boundary values are found (`result/result_12/insights/boundaries.md`).
+<p align="center">
+  <img src="docs/images/system_pipeline.png" alt="Pipeline: inputs → Nemotron A → feasibility gate → deterministic features / Nemotron B → GP surrogate → orchestrator → CARLA paired runs → deterministic monitor → Cosmos Reason explainer → campaign insights, with feedback to the GP and Nemotron A" width="900">
+</p>
 
-**Start here: [JUDGES_GUIDE.md](JUDGES_GUIDE.md)** — results in 2 minutes, a 1-minute run without CARLA or API keys
-(`pip install -r requirements-pipeline.txt` then `python run.py --mock ...`), the full CARLA setup, how it works.
+**In one line:** NVIDIA **Nemotron** proposes steering-controller faults, **CARLA** drives them, a **deterministic
+monitor** grades every run, a **Gaussian process** steers the next runs towards the safe/unsafe boundary, and
+**Cosmos Reason** explains the videos and summarises *which faults are critical and where their boundaries are*.
+**Safety verdicts are always made by code, never by an LLM.**
 
-### How we used NVIDIA models
+---
+
+## Headline results
+
+Sources: [`result/result_12/report.md`](result/result_12/report.md),
+[`result/result_12/evaluation_metrics.json`](result/result_12/evaluation_metrics.json),
+[`result/result_12/insights/boundaries.json`](result/result_12/insights/boundaries.json) /
+[`boundaries.md`](result/result_12/insights/boundaries.md). Supervisor profile: `tight`.
+
+### Final campaign (`result/result_12`, CARLA + Nebius Token Factory)
+
+| Metric | Value |
+|---|---|
+| CARLA fault runs | **32** (30 valid, 2 simulation-invalid) |
+| Runs where the supervisor switched to the LQR | **22 / 30** valid runs |
+| Final safe recovery | **14** runs (8 failures) |
+| Collisions | **0** of the 30 valid runs (monitor collision flag) |
+| Recovery outcomes | safe_recovery 19 · no_switch 8 · recovered_after_departure 2 · unsettled 1 · simulation_invalid 2 |
+| Switch triggers | steer_rate_exceeded 14 · tracking_divergence 9 · stale_sequence 1 · none 8 |
+| SR checks | pass 23 · F1 (no / late switch) 7 · invalid 2 |
+| Runs to first failure / unique failure conditions | 4 / 4 |
+| Runs near the boundary (\|safety margin\| < 0.2) | 11 of 30 (unsafe, margin < 0: 8) |
+| **GP boundary sign accuracy** (leave-one-out, n = 22) | **0.73** (majority baseline 0.64, balanced accuracy 0.76) |
+| Cosmos video explanations | 14, 11 accepted by verification (hallucination rate 0.21) |
+| Candidate sources of executed runs | space filling 11 · Nemotron A 11 · perturbation 7 · counterfactual 3 |
+
+### Critical faults and boundary values (149 graded runs: this campaign 30 + earlier 119)
+
+<p align="center"><img src="docs/images/fault_criticality.png" alt="Unsafe and late-switch rate per fault type" width="720"></p>
+
+| Rank | Fault (injected into the MPC output) | Runs | Unsafe | Late / missed switch | Worst margin | Boundary (unsafe = safety margin < 0) |
+|---|---|---|---|---|---|---|
+| 1 | Ramp bias / **drift** | 13 | 5 (38 %) | 13 (100 %) | −0.955 | rate 0.018–0.05 rad/s; at ≥ 35 km/h from 0.018–0.048, at ≤ 20 km/h only 0.049–0.05 |
+| 2 | Constant steering **bias** | 47 | 9 (19 %) | 11 (23 %) | −0.616 | magnitude 0.043–0.1 rad; 0.048–0.075 at 25–30 km/h, 0.043–0.075 at ≥ 35 km/h |
+| 3 | Steering **saturation** | 24 | 1 (4 %) | 0 (0 %) | −0.1 | duration 0.35–1.0 s, magnitude 0.6–1.0 of max steer; unsafe only when the handover happens while entering a curve |
+| – | Intermittent bias | 37 | 0 | 2 (5 %) | 0.0 | no unsafe run in the tested range (0.05–0.15 rad) |
+| – | Output delay / solver failure / stale output | 18 / 7 / 3 | 0 | 0 | 0.333 / 0.275 / 0.1 | no unsafe run in the tested range |
+
+* **Slowly growing faults (drift, bias) are the weak spot.** The supervisor only sees them through the tracking
+  error, so the switch comes late. Abrupt faults (saturation, intermittent bias) are caught on the first 50 ms
+  sample by the steering-rate check.
+* **The GP-guided search worked.** GP sign accuracy was 0.73 vs 0.64 for always guessing the majority (balanced 0.76).
+  Runs near the boundary (|safety margin| < 0.2) went from 0/8 in the random cold start to 2–3 of 6 per GP round.
+* A Cosmos counterfactual (raise the intermittent-bias magnitude) was re-run automatically and gave the same margin.
+  For faults that are caught at once, *where* the handover happens (curve entry, speed) decides the outcome, not the fault size.
+
+### Videos (CARLA front camera)
+
+GitHub does not play repository MP4 files inline, so the GIFs below are short previews; click one to open the MP4.
+
+| Worst bias run (`result_11/R00-0002-bias`) | Drift run (`result_11/R00-0003-drift`) |
+|---|---|
+| [![bias 0.0753 rad at curve exit, 35 km/h](docs/media/r11_R00-0002-bias.gif)](result/result_11/clips/R00-0002-bias/clip.mp4) | [![drift 0.0316 rad/s at curve apex, 10 km/h](docs/media/r11_R00-0003-drift.gif)](result/result_11/clips/R00-0003-drift/clip.mp4) |
+| Bias 0.0753 rad at curve exit, 35 km/h, friction 0.8. Switch by tracking divergence 1.05 s after onset, **after the car had left the lane** (recovered_after_departure, SR F1). Worst bias margin −0.616. | Drift 0.0316 rad/s at the curve apex, 10 km/h, friction 0.7. Detected only after 7.35 s (tracking divergence; SR F1 late switch), then recovered safely. |
+
+More: the Cosmos replay clips in [`result/result_11/insights/clips/`](result/result_11/insights/clips/) and
+[`result/result_10/clips/`](result/result_10/clips/). For the final campaign, frame contact sheets are in
+[`result/result_12/clips/`](result/result_12/clips/) (e.g. the worst drift run
+[`R00-0003-drift`](result/result_12/clips/R00-0003-drift/contact_sheet.jpg), margin −0.955), and the full dashboard is
+[`result/result_12/screen/campaign.html`](result/result_12/screen/campaign.html) (open it locally in a browser).
+
+---
+
+## 1. Project overview
+
+When the vehicle's primary lateral controller, an **MPC**, suffers a fault such as a computation deadline overrun, a
+stopped execution or a wrong output, the supervisor detects it and hands control to a backup **LQR**. Whether this
+handover is safe depends strongly on **when, and in which vehicle state**, it happens:
+
+- the MPC computation is delayed just as the car enters a curve;
+- the switch happens at a moment of **high yaw rate and steering angle**, so the two controllers' outputs differ a lot;
+- detection delay and high speed combine into a **long control gap**.
+
+There are too many combinations of fault × switch time × vehicle state to cover by hand or by random sampling. In this
+project, an agent based on NVIDIA **Nemotron** analyses earlier test results and proposes the next fault scenarios,
+SIL simulations run on **Nebius**, and the loop searches for safety-violation conditions. **Safety verdicts are made by
+deterministic code, not by the LLM.**
+
+**Research question**
+
+> With the same simulation budget, can an AI-driven fault injection framework find safety-critical MPC → LQR switching
+> failures more efficiently than random or grid search?
+
+## 2. System under test and scope
+
+### System under test: MPC → LQR controller switching
+
+```mermaid
+flowchart LR
+    FI["Fault injector"] -. "computation / execution faults" .-> MPC
+    MPC["Primary MPC<br/>nominal lateral command"] --> SUP["Supervisor<br/>fault detection + switch"]
+    LQR["Backup LQR<br/>backup command"] --> SUP
+    SUP --> ACT["Steering actuator model<br/>delay · rate limit · saturation"]
+    ACT --> VEH["Vehicle<br/>(CARLA)"]
+    VEH -- "vehicle state" --> MPC
+    VEH -- "vehicle state" --> LQR
+```
+
+Faults are injected **into the MPC only**. The steering actuator model is not a fault target; it is part of the vehicle
+dynamics and makes the vehicle state at the moment of the switch realistic.
+
+System under test: `pipeline/08_carla_paired_run/av_stack/integration/supervised_lateral.py`. The MPC steers; the
+supervisor switches to the LQR on solver failure, stale or out-of-range output, steering rate > 90 °/s, or tracking
+error > 0.6 m / 0.35 rad held for 0.15 s ("tight"). The original "legacy" thresholds were 1.0 m / 0.6 rad / 0.25 s
+with no rate check, and every switch on a slowly growing fault came after the car had left the lane.
+
+> Background: in steering systems without a mechanical link between the steering wheel and the wheels, such as
+> steer-by-wire (SbW), a driver cannot hold the wheel against a faulty controller, so the safety of controller switching matters even more.
+
+### Scope
+
+| | |
+|---|---|
+| **In scope** | MPC computation and execution faults, supervisor switching, LQR backup control, searching for safety violations as a function of switch time and vehicle state |
+| **Out of scope** | Hardware faults (sensors, actuators, communication), verification of redundant SbW motors / ECUs, hardware safety certification |
+
+> MPC → LQR is an **example controller pair for research and testing**, not a standard production combination. An
+> algorithmic backup does not address physical faults of sensors, power, motors or ECUs, and it does not imply hardware redundancy.
+
+## 3. System architecture
+
+The figure at the top shows the loop as implemented in `run.py` (stages 00–10). Stage configs are listed in
+[pipeline/README.md](pipeline/README.md), interfaces in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+| Stage | What it does | Code / config |
+|---|---|---|
+| 00–02 | Prior knowledge, code-verified safety profile of the system under test, hypotheses and the search objective | `pipeline/00..02_*`, `run.py stage_00_02` |
+| 03 | **Nemotron A** (Nemotron 3.5 Lightning) proposes fault scenarios (route, speed, tyre friction, fault type and size, onset) aimed at the boundary, given the GP summary and past outcomes | `engine/nemotron.py`, `pipeline/03_nemotron_a` |
+| 04 | Feasibility gate (scenario space, route events, evaluation window) + space-filling, perturbed and counterfactual candidates | `engine/scenarios.py`, `pipeline/04_feasibility_expansion/` |
+| 05a / 05b | Deterministic features; **Nemotron B** (Nemotron 3 Ultra) answers code questions about the controller (cited lines, checked against a code answer key) | `pipeline/05a_*`, `pipeline/05b_nemotron_b` |
+| 06 | GP surrogate: safety margin (regression) and switch probability (classifier) | `engine/surrogate.py`, `pipeline/06_gp_surrogate` |
+| 07 | Batch selection: level-set acquisition near the boundary, Nemotron share, diversity, control-fault cap | `run.py stage_07`, `pipeline/07_orchestrator` |
+| 08 | CARLA paired runs: fault-free baseline (cached) and fault run on Bench2Drive routes with the PDM-Lite planner and our MPC / supervisor / LQR | `engine/carla_runner.py`, `pipeline/08_carla_paired_run/av_stack` |
+| 09 | **Deterministic monitor**: recovery verdict, safety margin (lane / settle / lateral acceleration / jerk), SR1–SR6 safety requirements, F1/F2/F3/pass | `engine/monitor.py`, `engine/sr_checks.py`, `pipeline/09_monitor/` |
+| 10 | **Cosmos Reason** explains each failed run's front video using the monitor's events as facts; verified explanations feed back (examples for Nemotron A, counterfactual re-runs). After the campaign: critical faults and boundary values | `engine/explainer.py`, `engine/boundaries.py`, `pipeline/10_video_explainer` |
+
+Role separation: only Nemotron A sees past failures · Nemotron B sees only code · the explainer sees only the video and
+context (fault and switch times), not the departure / collision / offset values · only the 09 monitor grades runs.
+Explanations never change a verdict.
+
+### NVIDIA models and Nebius usage
 
 | NVIDIA model (via Nebius) | Role in the pipeline | Code |
 |---|---|---|
 | **Nemotron 3.5 Lightning** (`nvidia/Nemotron-3_5-Lightning`) | Nemotron A: proposes fault scenarios aimed at the safe/unsafe boundary from the GP summary, past outcomes and route geometry; refines candidates near the boundary | `engine/nemotron.py`, stage 03 |
-| **Nemotron 3 Ultra 550B** (`nvidia/Nemotron-3-Ultra-550b-a55b`) | Nemotron B: reads the controller source code and answers fixed questions per scenario (3 votes); answers become GP features and are checked against a code answer key (hallucination rate reported) | stage 05b |
-| **Cosmos 3 Super Reasoner** (NVIDIA Cosmos Reason) | Explains each failed run's front-camera video with the monitor's events as facts (counterfactuals are re-run automatically); after the campaign, reads the boundary table and states the critical faults and boundary values | `engine/explainer.py`, `engine/boundaries.py` |
+| **Nemotron 3 Ultra 550B** (`nvidia/Nemotron-3-Ultra-550b-a55b`) | Nemotron B: reads the controller source code and answers fixed questions per scenario (3 votes); answers become GP features and are checked against a code answer key | stage 05b |
+| **Cosmos 3 Super Reasoner** (NVIDIA Cosmos Reason) | Explains each failed run's front-camera video with the monitor's events as facts; after the campaign, reads the boundary table and states the critical faults and boundary values | `engine/explainer.py`, `engine/boundaries.py` |
 | **Nemotron 3.5 Super VL** (`nvidia/Nemotron-3.5-Super-VL`) | Fallback video / vision model when the Cosmos endpoint is not up | stage 10 |
 
-### Where Nebius Token Factory accelerated the work, and other Nebius services
+Where **Nebius Token Factory** accelerated the work, and the other Nebius services used:
 
-* **One OpenAI-compatible API and key for every model**: we switch models per role in `pipeline/llm_models.yaml`
+* **One OpenAI-compatible API and key for every model**: models are switched per role in `pipeline/llm_models.yaml`
   (fast Lightning for many proposals, the 550B Ultra for code reasoning) with no local GPU and no serving code.
-* **Structured outputs** (`response_format` = `json_schema`, `engine/llm.py`): Nemotron A returns scenarios that parse
-  and validate against the scenario space every time, so 30+ CARLA runs per night needed no manual cleanup.
-* **A 550B model on demand**: Nemotron 3 Ultra runs three votes per scenario during a campaign; hosting it ourselves
-  was not possible on our hardware.
-* **Nebius dedicated endpoint for Cosmos Reason**, started and stopped by our code through the control API
-  (`GET/PATCH /v0/dedicated_endpoints`, `engine/cosmos_power.py`): billed only while the video step runs, also stopped
+* **Structured outputs** (`response_format` = `json_schema`, `engine/llm.py`): Nemotron A's scenarios always parse
+  and validate against the scenario space, so overnight campaigns (84 CARLA runs in result_8) ran without manual cleanup.
+* **A 550B model on demand**: Nemotron 3 Ultra answers three votes per scenario during a campaign; hosting it
+  ourselves was not possible on our hardware.
+* **Dedicated endpoint for Cosmos Reason**, started and stopped by our code through the control API
+  (`GET/PATCH /v0/dedicated_endpoints`, `engine/cosmos_power.py`): billed only while the video step runs, and stopped
   on errors and at exit.
 * Not used: Nebius AI Cloud compute (CARLA ran on a local Windows PC with an NVIDIA GPU).
+* Every model call of a campaign is logged in `llm_calls.jsonl` (model, tokens; never keys).
 
-### License
+Model ids are set in [`pipeline/llm_models.yaml`](pipeline/llm_models.yaml); check the ids available to your account with `GET /v1/models`.
 
-[MIT](LICENSE) for this repository's code. Third-party components keep their own licenses
-(`pipeline/08_carla_paired_run/av_stack/THIRD_PARTY_NOTICES.md`).
-
----
-
-[Architecture](docs/ARCHITECTURE.md) · [Research & Evaluation](docs/RESEARCH.md) · [Roadmap](docs/ROADMAP.md) · [Sources](docs/REFERENCES.md)
-
----
-
-## 1. 프로젝트 개요
-
-차량의 주 횡방향 제어기인 **MPC**가 계산 시간 초과, 실행 중단, 잘못된 출력 같은 고장을 일으키면 Supervisor가 이를 감지해 백업 제어기인 **LQR**로 제어권을 넘깁니다. 이 전환이 안전한지는 **언제, 어떤 차량 상태에서** 전환이 일어나느냐에 크게 좌우됩니다.
-
-- 차가 커브에 진입한 순간 MPC 계산이 지연됨
-- 전환이 하필 **요레이트 · 조향각이 큰 순간**에 일어나 두 제어기 출력 차이가 커짐
-- 감지 지연과 높은 차속이 겹쳐 **제어 공백이 길어짐**
-
-이런 고장 × 전환 시점 × 차량 상태 조합은 경우의 수가 너무 많아 사람이 손으로 짜거나 무작위로 뽑아서는 놓치기 쉽습니다. 이 프로젝트는 NVIDIA **Nemotron** 기반 에이전트가 이전 시험 결과를 분석해 다음 고장 시나리오를 제안하고, **Nebius** 클라우드에서 SIL 시뮬레이션을 병렬로 돌려 안전 위반 조건을 찾아냅니다. **안전 여부 판정은 LLM이 아니라 결정론적 코드가 담당합니다.**
-
-**핵심 연구 질문**
-
-> 같은 시뮬레이션 예산에서, AI 기반 고장 주입 프레임워크가 무작위·격자 탐색보다 안전에 치명적인 MPC → LQR 전환 실패를 더 효율적으로 찾을 수 있는가?
-
-## 2. 검증 대상과 범위
-
-### 검증 대상: MPC → LQR 제어기 전환
-
-```mermaid
-flowchart LR
-    FI["고장 주입기"] -. "계산 · 실행 고장" .-> MPC
-    MPC["Primary MPC<br/>정상 횡방향 명령"] --> SUP["Supervisor<br/>고장 감지 + 전환"]
-    LQR["Backup LQR<br/>백업 명령"] --> SUP
-    SUP --> ACT["조향 액추에이터 모델<br/>지연 · 속도 제한 · 포화"]
-    ACT --> VEH["차량 모델<br/>bicycle model"]
-    VEH -- "차량 상태" --> MPC
-    VEH -- "차량 상태" --> LQR
-```
-
-고장은 **MPC에만** 주입합니다. 조향 액추에이터 모델은 고장 주입 대상이 아니라 차량 동역학의 일부로, 전환 순간의 차량 동적 상태를 현실적으로 만드는 역할을 합니다.
-
-> 배경: Steer-by-Wire(SbW)처럼 핸들과 바퀴 사이에 기계적 연결이 없는 조향 시스템에서는 제어기가 잘못돼도 운전자가 핸들로 대신 버틸 수 없어, 제어기 전환의 안전성이 특히 중요합니다.
-
-### 범위
-
-| 구분 | 내용 |
-|---|---|
-| **포함** | MPC 계산 · 실행 고장 주입, Supervisor 전환, LQR 백업 제어, 전환 시점과 차량 동적 상태에 따른 안전 위반 탐색 |
-| **포함하지 않음** | 센서 · 액추에이터 · 통신 등 하드웨어 고장 주입, SbW 이중화 모터 · ECU 검증, 하드웨어 안전 인증 |
-
-> MPC → LQR은 양산차의 표준 조합이 아니라 **연구 · 시험용 예시 제어기**입니다. 알고리즘 백업은 센서 · 전원 · 모터 · ECU의 물리적 고장을 해결하지 못하며, 하드웨어 이중화를 의미하지 않습니다.
-
-## 3. 시스템 구조
-
-<p align="center">
-  <img src="docs/images/system_pipeline.png" alt="시스템 구조: Safety profile → Hypotheses → Nemotron A → 타당성 검사 + 후보 확장 → 결정론적 feature / Nemotron B → GP surrogate → Orchestrator 선택 → CARLA 짝 실행 → Monitor → Error table" width="640">
-</p>
-
-단계별 설정 파일은 [pipeline/README.md](pipeline/README.md)에 정리되어 있습니다.
-
-| 구성요소 | 역할 | 경계 |
-|---|---|---|
-| **개발자 입력** | 검증할 제어기 코드(`primary_controller.py`, `fallback_controller.py`, `supervisor.py`)와 테스트 스펙(`test_spec.yaml`) | — |
-| **Nemotron 에이전트** 🟩 | 이전 시험 결과 분석, 위험 조건 가설, 다음 시나리오 후보 제안 | 안전 여부 최종 판정 **금지** |
-| **시나리오 검증기** 🟪 | JSON 스키마, 물리적 허용 범위, 중복, 예산 검사 | 잘못된 LLM 출력을 실험에 넣지 않음 |
-| **병렬 SIL 워커** 🟩 | 차량 동역학 · 제어기 · 고장 주입 · 주행 로그 생성 | 클라우드 배포 · CARLA 연동은 구현 예정 |
-| **평가기 · 결과 DB** 🟪 | 횡오차, 경계 침범, 전환 시간, 조향 불연속 계산 및 실패 분류 | 사전에 정한 수학적 기준으로만 판정 |
-| **피드백 루프** | 실패 요약과 미탐색 영역을 다음 라운드 에이전트 입력으로 반영 | 탐색 성능 우위는 실험으로 검증 필요 |
-| **캠페인 리포트** | 실패 사례, 무작위 대비 발견 효율 비교 | — |
-
-### Nebius 활용 (실제 사용)
-
-| 서비스 | 실제 기능 | 이 프로젝트에서의 사용 |
-|---|---|---|
-| Token Factory | NVIDIA Nemotron 추론 API (OpenAI 호환) | Nemotron 3.5 Lightning: 시나리오 제안(A) · Nemotron 3 Ultra 550B: 코드 질문 답변(B, 3표) · Nemotron 3.5 Super VL: 영상 해설 대체 |
-| Token Factory | 구조화 출력 (`json_schema`) | 시나리오 JSON이 항상 스키마를 통과 → 검증 후 바로 CARLA 실행 |
-| Token Factory | 역할별 모델 선택 | `pipeline/llm_models.yaml`에서 역할마다 모델 지정 |
-| Dedicated Endpoint | Cosmos 3 Super Reasoner 전용 배포 | 영상 해설·경계 해석. 제어 API(`/v0/dedicated_endpoints`)로 필요할 때만 자동 시작·종료 (`engine/cosmos_power.py`) |
-| AI Cloud | (사용 안 함) | CARLA는 로컬 Windows PC(NVIDIA GPU)에서 실행 |
-
-사용 가능한 Nemotron 모델 ID는 계정에서 `GET /v1/models`로 확인한 뒤 정합니다. 자세한 인터페이스는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 있습니다.
-
-## 4. 제어기 전환 흐름
+## 4. Controller switching logic
 
 ```mermaid
 stateDiagram-v2
@@ -141,236 +204,152 @@ stateDiagram-v2
     MINIMAL_RISK --> [*]
 ```
 
-전환 과정에서 확인할 위험:
+Risks checked during the switch:
 
-- **전환 과도 응답:** 두 제어기의 출력 차이로 조향각이 순간적으로 튀는 현상 (bumpless transfer 실패)
-- **감지 지연:** MPC 이상을 알아채기까지의 제어 공백
-- **운전 영역 이탈:** LQR은 선형화 기준점 근처에서만 잘 동작하므로 고속·큰 조향각에서 성능 저하 가능
+- **Switching transient:** the steering angle jumps because the two controllers' outputs differ (bumpless-transfer failure).
+- **Detection delay:** the control gap until the MPC fault is noticed.
+- **Leaving the operating region:** the LQR works well only near its linearisation point, so it can degrade at high speed or large steering angles.
 
-> 이 상태도는 시험 대상인 **제안 로직**입니다. `MINIMAL_RISK`는 목표 상태일 뿐 안전하게 도달함을 입증한 것이 아닙니다. 제어기 재전환(re-entry)은 MVP 범위에서 제외합니다.
+> This state diagram is the **proposed logic under test**. `MINIMAL_RISK` is a target state, not a proven safe one.
+> Switching back to the MPC (re-entry) is out of scope.
 
-## 5. 시험할 고장과 변수
+## 5. Faults and variables
 
-| 종류 | 고장 주입 예시 | 검증 대상 |
+| Type | Fault injection example | What it tests |
 |---|---|---|
-| 계산 시간 초과 | MPC update deadline 초과 | 탐지 · 전환 지연 |
-| 실행 중단 | MPC 계산/출력 중지 | LQR 활성화 및 궤적 오차 |
-| 잘못된 출력 | 조향 명령 bias / 부호 오류 / 포화 | 출력 유효성 검사 · 조향 급변 |
-| 출력 지연 | 이전 시점 조향 명령 유지 | stale command 대응 |
+| Deadline overrun | MPC update misses its deadline | detection / switch delay |
+| Execution stop | MPC computation / output stops (solver failure) | LQR activation and tracking error |
+| Wrong output | steering command bias / drift / saturation / intermittent bias | output validity checks, steering jumps |
+| Delayed output | previous steering command held (stale, output delay) | stale-command handling |
 
-**시나리오 변수 (입력)**
+**Scenario variables (inputs):** fault type, onset, magnitude and duration; route and onset event (straight, curve
+entry / apex / exit); initial speed; tyre friction.
 
-| 구분 | 변수 |
+**Vehicle state at the switch (recorded and analysed):** yaw rate, lateral acceleration, steering angle and rate,
+lateral and heading error, and the **MPC − LQR output difference** at the moment the LQR takes over.
+
+## 6. Metrics
+
+Numbers are computed from the run logs so that no LLM "guesses" safety. Definitions are in [docs/RESEARCH.md](docs/RESEARCH.md);
+thresholds are in [`pipeline/09_monitor/safety_spec.yaml`](pipeline/09_monitor/safety_spec.yaml).
+
+| Metric | Definition |
 |---|---|
-| 고장 | 고장 종류, 발생 시점, 강도, 지속시간 |
-| 전환 시점 | Supervisor 감지 지연, 감지 임계값 · debounce, LQR 초기화 상태 |
-| 주행 조건 | 초기 차속, 도로 곡률, 초기 횡방향 · 헤딩 오차, 노면 마찰(선택) |
+| **Safety margin** (GP target) | combines the lane margin (vehicle footprint vs lane boundary), settling, lateral acceleration and lateral jerk terms; < 0 = unsafe |
+| **Lane boundary violation** | whether the vehicle footprint crossed the lane boundary |
+| **Detection / handover latency** | time from fault onset to detection and LQR handover (s) |
+| **Recovery** | back within 0.3 m / 0.1 rad and held for 1 s inside a 3 s window |
+| **SR1–SR6** | safety requirements (F1 no / late switch, F2, F3, pass) |
+| **GP boundary sign accuracy** | leave-one-out accuracy of the GP's safe/unsafe sign |
+| **Runs to first failure, unique failure conditions** | search efficiency |
 
-**전환 순간 차량 동적 상태 (기록 · 분석)**
+Thresholds marked PROVISIONAL (0.3 m, 0.1 rad, 1.0 s hold, 3.0 s window, 4.41 m/s², 15.0 m/s³) are our choices for
+this study, not certified limits.
 
-LQR이 제어권을 넘겨받는 순간의 상태를 매 실행마다 기록해, 어떤 상태에서 전환이 일어날 때 안전 위반이 생기는지 분석합니다.
+## 7. Comparison design
 
-| 상태 | 의미 |
-|---|---|
-| 요레이트 · 횡가속도 · 횡슬립각 | 차량이 얼마나 급하게 회전 중이었나 |
-| 조향각 · 조향 속도 | 전환 순간 조향 입력 크기 |
-| 횡방향 · 헤딩 오차 | 이미 경로에서 얼마나 벗어나 있었나 |
-| **MPC − LQR 출력 차이** | 전환 직후 조향 명령이 얼마나 튈 수 있나 |
+Same vehicle, fault parameter space, seeds and simulation budget:
 
-예시는 [`configs/scenario.example.yaml`](configs/scenario.example.yaml)에 있습니다.
+1. **Random search** (`--ablation X-1`): random selection within the ranges
+2. **Grid / stratified search**: a fixed grid or stratified sample
+3. **LLM one-shot** (optional): Nemotron generation without feedback
+4. **Feedback-guided Nemotron + GP** (default, X-5 / X-6 with video explanations)
 
-## 6. 측정 지표
+The final campaign started from a random cold start (8 runs) followed by 4 GP-guided rounds of 6; see the headline results above.
 
-LLM이 "안전하다"고 추측하지 않도록, 실행 로그로 수치를 계산합니다. 수식과 정의는 [docs/RESEARCH.md](docs/RESEARCH.md)에 있습니다.
-
-| 지표 | 정의 |
-|---|---|
-| **Maximum lateral error** | 기준 경로 대비 최대 절대 횡방향 오차 (m) |
-| **Lane boundary violation** | 차량 외곽이 차선 경계를 넘었는지 (bool / count) |
-| **Steering discontinuity** | 적용 조향각의 연속 샘플 차이 최대값 (rad) |
-| **Detection / Handover latency** | 고장 발생 → 탐지 → LQR 인계까지 걸린 시간 (s) |
-| **Recovery time** | 허용 오차 안으로 들어와 일정 시간 유지되기까지 걸린 시간 (s) |
-| **State-at-switch failure map** | 전환 순간 차량 상태 공간에서 안전 위반이 생기는 영역 |
-| **Failure discovery rate** | 고정 예산에서 기준을 위반한 시나리오 비율 |
-| **Unique failure coverage** | 중복을 제거한 실패 유형 · 조건 그룹 수 |
-| **Trials to first failure** | 첫 유효 실패를 찾기까지 시뮬레이션 횟수 |
-
-수치 임계값(`allowed_lateral_error_m`, `max_steering_rate_rad_s`, `recovery_hold_s` 등)은 아직 정하지 않았으며, **실험 전에 고정하고 공개합니다.**
-
-## 7. 비교 실험 설계
-
-같은 차량 모델, 고장 파라미터 공간, 시드, 시뮬레이션 예산으로 비교합니다.
-
-1. **Random search:** 범위 안에서 무작위 선택
-2. **Grid / stratified search:** 미리 정한 격자 · 층화 표본
-3. **LLM one-shot (선택):** 피드백 없이 Nemotron으로 생성
-4. **Feedback-guided Nemotron:** 이전 실패 로그와 커버리지를 반영해 다음 시나리오 선택
-
-여러 시드로 반복해 예산별 누적 고유 실패 곡선, 첫 실패까지 시도 횟수, 실패 다양성, 연산 비용을 보고합니다. **현재 결과는 없습니다.**
-
-## 8. 데모 시나리오 (계획)
-
-1. 사용자가 제어기 코드와 `test_spec.yaml`을 넣거나 기본 예시를 고른다.
-2. 에이전트가 1차 시나리오를 만들고 검증기가 검사한다.
-3. 병렬 워커에서 MPC 고장을 주입하고 LQR 전환을 실행한다.
-4. 로그 · 리플레이 · 안전 지표를 기록하고 실패를 분류한다.
-5. 에이전트가 실패 요약을 받아 다음 배치를 만든다.
-6. 비교군 대비 발견 성능과 실패 장면을 리포트로 보여준다.
-
-**예상 결과물:** SIL 애니메이션(또는 CARLA 주행 영상), 횡오차 · 조향 명령 시계열, 전환 이벤트 타임라인, **전환 순간 상태별 안전 위반 지도**, 실패 조건 표와 요약 리포트.
-
-## 9. 저장소 구조
+## 8. Repository layout
 
 ```text
-SIL_HACKATHON/
-├── README.md
-├── docs/
-│   ├── ARCHITECTURE.md            # 모듈 · 데이터 흐름 · 인터페이스
-│   ├── RESEARCH.md                # 가설 · 지표 · 베이스라인 · 한계
-│   ├── ROADMAP.md                 # 구현 단계 체크리스트
-│   └── REFERENCES.md              # 공식 문서 · 출처
-├── pipeline/                      # code-aware 탐색 파이프라인 (단계별 설정, pipeline/README.md 참고)
-│   ├── 00_prior_knowledge/        # 물리 관계 · 검증 전 가설 (PK)
-│   ├── 01_safety_profile/         # 코드 관측 사실
-│   ├── 02_hypotheses/             # 지표 정의 + search_objectives/ (S1~S4 탐색 목표, A 분석층, R 회귀). 옛 H-01~11은 superseded
-│   ├── 03_nemotron_a/             # Nemotron A: 시나리오 생성
-│   ├── 04_feasibility_expansion/  # 타당성 검사 G-01~04 + 후보 확장, scenario space
-│   ├── 05a_deterministic_features/# DF-01~05
-│   ├── 05b_nemotron_b/            # Nemotron B: 코드 질문
-│   ├── 06_gp_surrogate/           # 지표별 GP (정규화 z)
-│   ├── 07_orchestrator/           # LCB 선택 · 예산
-│   ├── 08_carla_paired_run/       # baseline vs fault 짝 실행
-│   ├── 09_monitor/                # safety spec P-01~04 + SR1/2/4/6 수치 + error table (판정 코드는 engine/monitor.py · sr_checks.py)
-│   ├── 10_video_explainer/        # 영상 해설 + 검증 (Cosmos Reason / Nemotron VL)
-│   ├── llm_models.yaml            # 모델 id · 호출 파라미터 (역할 A, A_refine, B, C)
-│   └── evaluation/                # ablation X-1~6
-├── engine/                        # 실행 코드 전부 (pipeline/ 에는 단계 설정만 둔다)
-│   ├── judgment.py · monitor.py   # 판정 순수 함수 · 09 모니터 evaluate() (CLI: python -m engine.monitor RUN_DIR --baseline DIR)
-│   ├── sr_checks.py · dashboard.py# 팀원 Monitor v2의 SR1/SR2/SR4/SR6 검사 · 진행 화면 (outputs/<run>/screen/campaign.html)
-│   ├── fault_catalog.py · fault_args.py · av_stack_probe.py  # av_stack 고장 목록 검증 · run_benchmark 인자 · CARLA 차선 probe
-│   ├── config.py · config_check.py# YAML·av_stack 경로 해석 · null 항목 점검 (python run.py --check)
+├── README.md · JUDGES_GUIDE.md
+├── run.py                         # one entry point: python run.py --mock | --real | --check
+├── engine/                        # all executable code (pipeline/ holds stage configs only)
+│   ├── judgment.py · monitor.py   # pure grading functions · stage-09 monitor (CLI: python -m engine.monitor RUN_DIR --baseline DIR)
+│   ├── sr_checks.py · dashboard.py# SR1–SR6 checks · campaign screen (outputs/<run>/screen/campaign.html)
+│   ├── boundaries.py · insights.py# critical faults + boundary values · campaign insights
 │   ├── surrogate.py · scenarios.py · nemotron.py · llm.py · carla_runner.py · video.py · explainer.py · feedback.py
-│   ├── fixtures/                  # mock 전용 합성 시뮬레이터 · scenario space (SYNTHETIC)
-│   ├── hypothesis_tools/          # 가설 생성기 · 후보 샘플러 (+ examples/)
-│   └── prior_tools/               # Nemotron prior payload · 횡가속도 스크리닝
-├── run.py                         # 한 번에 실행: python run.py --mock | --real | --check
-├── tests/                         # python -m pytest -q (unittest 테스트 포함)
-├── requirements-pipeline.txt      # 루프용 패키지 (CARLA는 sim-eval .venv-tfpp)
-├── configs/
-│   └── scenario.example.yaml      # 시나리오 스펙 예시 (실행 설정 아님)
-├── examples/
-│   └── test-result.example.json   # 결과 스키마 예시 (실측 아님)
-├── .github/
-│   └── ISSUE_TEMPLATE.md
-├── .env.example                   # API 키 자리 (실제 키는 커밋 금지)
-└── .gitignore
+│   ├── fixtures/                  # mock-only synthetic simulator and scenario space (SYNTHETIC)
+│   ├── hypothesis_tools/ · prior_tools/
+├── pipeline/                      # stage configs 00..10 (see pipeline/README.md), llm_models.yaml, evaluation/ (ablations X-1..6)
+├── result/result_1..12/           # CARLA campaigns (final: result_12)
+├── docs/                          # architecture, research, roadmap, references, bug reports, integration notes, images
+├── tests/                         # python -m pytest -q
+├── configs/scenario.example.yaml  # scenario spec example (not a run config)
+├── examples/test-result.example.json
+├── requirements-pipeline.txt
+└── .env.example                   # API key placeholders (never commit real keys)
 ```
 
-## 10. 구현 순서
+## 9. Quickstart
 
-- **Phase 1 — Minimal SIL:** bicycle model + 조향 액추에이터 모델 + MPC / LQR + supervisor + MPC 고장 주입기 + JSON 로그 (전환 순간 상태 포함)
-- **Phase 2 — Reproducible evaluation:** 평가기, 무작위 / 격자 베이스라인, seed · config 기록
-- **Phase 3 — Agent loop:** Token Factory Nemotron 연결, 출력 스키마 검증, 피드백 기반 탐색
-- **Phase 4 — Parallelization:** 실험 큐 · 워커, Nebius AI Cloud 병렬 실행
-- **Phase 5 — Analysis & demo:** 전환 순간 상태별 안전 위반 지도, 실패 리플레이, 리포트. 여유가 있으면 CARLA / Isaac Sim
+### Install
 
-세부 체크리스트는 [docs/ROADMAP.md](docs/ROADMAP.md)에 있습니다.
+```bash
+python -m venv .venv-sil
+.venv-sil/bin/pip install -r requirements-pipeline.txt      # Windows: .venv-sil\Scripts\pip ...
+```
 
-## 11. 한계
+### Mock mode (no CARLA, no network, synthetic data, about 1 minute)
 
-고장은 MPC의 계산 · 실행 고장만 다루며, 센서 · 액추에이터 등 하드웨어 고장은 범위 밖입니다. 이 프로젝트는 시뮬레이션 기반 연구 도구이며 실제 차량용 소프트웨어나 ISO 26262 인증 도구가 아닙니다. 하나의 시뮬레이터 · 차량 모델 결과를 실제 차량 안전 보장으로 일반화할 수 없습니다. MPC와 LQR이 같은 센서나 ECU를 공유하면 알고리즘 백업만으로는 하드웨어 고장을 막지 못합니다. **실패를 찾지 못했다고 해서 안전이 증명되는 것은 아닙니다.**
+```bash
+python run.py --mock --cold-start 6 --rounds 1 --batch-size 3 --open-screen off --out outputs/judge_demo
+python run.py --mock --ablation-suite        # compare X-1,2,3,5,6 (SYNTHETIC)
+python -m pytest -q
+python run.py --check                        # report null entries in the stage YAMLs (exit 2 if any remain)
+python -m engine.monitor RUN_DIR --baseline BASE_DIR   # grade a single run folder
+python -m engine.boundaries result/result_12 --publish-only   # re-render the final campaign's pages
+```
 
-## 12. 한 번에 실행하기 (`python run.py`, 2026-10-27)
+Mock mode uses `engine/fixtures/synthetic_sim.py` (kinematic simulator, 320x180 synthetic video) and stub LLMs. Every
+file carries `synthetic_fixture: true` and the report is marked SYNTHETIC. **Mock numbers are not measurements.**
 
-`new_pipeline` + `junwoo/sim-eval` 을 main 에 병합하면 `pipeline/08_carla_paired_run/av_stack/` 와
-`pipeline/04_feasibility_expansion/scenario_space_av_stack.yaml` 이 생기고, 루프가 그것을 자동으로 찾는다.
-병합 전에는 `SIM_EVAL_ROOT`(sim-eval 체크아웃) 또는 `AV_STACK_ROOT` 로 위치를 알려준다.
-
-### 설치
+### Real mode (CARLA 0.9.15 + Nebius Token Factory)
 
 ```powershell
-# Windows (저장소 루트). 루프용 venv. CARLA 실행은 sim-eval 의 .venv-tfpp 가 맡는다.
-py -3.11 -m venv .venv-sil
-.venv-sil\Scripts\pip install -r requirements-pipeline.txt
+# 1) CARLA server
+powershell -ExecutionPolicy Bypass -File .\pipeline\08_carla_paired_run\av_stack\start_carla_stable.ps1
+# 2) key: NEBIUS_API_KEY=... in .env (never commit it)
+# 3) preflight, then run
+.\pipeline\08_carla_paired_run\av_stack\.venv-tfpp\Scripts\python.exe run.py --real --check
+.\pipeline\08_carla_paired_run\av_stack\.venv-tfpp\Scripts\python.exe run.py --real --cold-start 8 --rounds 4 --batch-size 6 --out results/my_campaign
 ```
 
-### mock 모드 (CARLA·네트워크 없음, 합성 데이터)
+See [JUDGES_GUIDE.md](JUDGES_GUIDE.md) §3 for the exact final-campaign command (with `--gp-history`).
 
-```powershell
-.venv-sil\Scripts\python run.py --mock                      # 00 → 10 전체, outputs\mock_<시각>\
-.venv-sil\Scripts\python run.py --mock --ablation-suite      # X-1,2,3,5,6 비교 (SYNTHETIC)
-.venv-sil\Scripts\python -m pytest -q
-.venv-sil\Scripts\python run.py --check                     # 단계 YAML null 항목 보고 (남아 있으면 exit 2)
-.venv-sil\Scripts\python -m engine.monitor RUN_DIR --baseline BASE_DIR   # 런 폴더 하나만 판정
-```
-
-`python -m run ...` 도 같다. 실행 코드는 전부 `engine/`, 단계 설정(YAML)은 `pipeline/` 에 있다.
-
-mock 은 `engine/fixtures/synthetic_sim.py`(운동학 근사 시뮬레이터, 320x180 합성 영상)와 stub LLM 을 쓴다.
-모든 파일에 `synthetic_fixture: true` 가 붙고 보고서에 SYNTHETIC 이 표시된다. **수치는 실측이 아니다.**
-
-### real 모드 (CARLA 0.9.15 + Nebius Token Factory)
-
-```powershell
-# 1) CARLA 서버 (sim-eval av_stack 폴더)
-cd pipeline\08_carla_paired_run\av_stack ; .\start_carla_stable.ps1 ; cd ..\..\..
-# 2) 키: .env 에 NEBIUS_API_KEY=... (커밋 금지) 또는
-$env:NEBIUS_API_KEY = "..."
-# 3) 점검 → 실행
-.venv-sil\Scripts\python run.py --real --check
-.venv-sil\Scripts\python run.py --real                       # 기본: X-5 + 영상 해설 on (= X-6)
-.venv-sil\Scripts\python run.py --real --ablation X-3 --video-explainer off --rounds 2
-```
-
-| 환경 변수 | 뜻 |
+| Environment variable | Meaning |
 |---|---|
-| `NEBIUS_API_KEY` | Token Factory 키 (필수, 출력·로그에 남기지 않음) |
-| `NEMOTRON_A_MODEL_ID`, `NEMOTRON_B_MODEL_ID` | 모델 id 덮어쓰기 (기본값 `pipeline/llm_models.yaml`) |
-| `COSMOS_MODEL_ID`, `COSMOS_BASE_URL`, `COSMOS_API_KEY` | Cosmos Reason Dedicated Endpoint. 없으면 `nvidia/Nemotron-3.5-Super-VL` 로 대체 |
-| `AV_STACK_ROOT` / `SIM_EVAL_ROOT` | 병합 전 av_stack 위치 |
-| `AV_STACK_PYTHON` | carla 를 import 할 수 있는 python (기본 `av_stack\.venv-tfpp\Scripts\python.exe`) |
-| `CARLA_HOST`, `CARLA_PORT` | 기본 localhost:2000 |
-| `FFMPEG` | ffmpeg 경로 (없으면 PATH → imageio-ffmpeg) |
+| `NEBIUS_API_KEY` | Token Factory key (required; never printed or logged) |
+| `NEMOTRON_A_MODEL_ID`, `NEMOTRON_B_MODEL_ID` | override model ids (defaults in `pipeline/llm_models.yaml`) |
+| `COSMOS_MODEL_ID`, `COSMOS_BASE_URL`, `COSMOS_API_KEY` | Cosmos Reason dedicated endpoint; falls back to `nvidia/Nemotron-3.5-Super-VL` if missing |
+| `AV_STACK_ROOT` / `SIM_EVAL_ROOT` | av_stack location if not in the default place |
+| `AV_STACK_PYTHON` | a python that can import carla (default `av_stack\.venv-tfpp\Scripts\python.exe`) |
+| `CARLA_HOST`, `CARLA_PORT` | default localhost:2000 |
+| `FFMPEG` | ffmpeg path (otherwise PATH, then imageio-ffmpeg) |
 
-Windows 메모: 경로에 공백이 있어도 된다(subprocess 리스트 인자). ffmpeg glob 을 쓰지 않는다. CARLA 는 1대만 쓴다
-(`parallel_workers: 1`). 각 런의 `--out` 은 새 폴더여야 하므로 `outputs\...\runs\R..` 를 매번 새로 만든다.
+Windows notes: paths with spaces are fine (subprocess list arguments); no ffmpeg globbing; one CARLA instance
+(`parallel_workers: 1`); each run's `--out` must be a new folder.
 
-### 루프
+### Outputs (`outputs/<mode>_<time>/`)
 
-```mermaid
-flowchart LR
-    P["00-02 prior · profile · S1 목표"] --> A["03 Nemotron A<br/>Lightning, thinking off<br/>(실패 사례 + 검증된 영상 메커니즘)"]
-    A --> G["04 G-01~03 게이트 + 섭동"]
-    SF["space filling"] --> G
-    CF["counterfactual 큐"] --> G
-    G --> B["05b Nemotron B<br/>Ultra x3, 코드만 봄"]
-    G --> D["05a DF"]
-    B --> GP["06 GP (sklearn)<br/>Matern5/2 ARD"]
-    D --> GP
-    M2["mechanism prevalence<br/>(검증 통과 해설만)"] --> GP
-    GP --> O["07 straddle<br/>β·σ − |μ| + 전환 GP 페널티"]
-    O --> C["08 CARLA 짝 실행<br/>baseline 캐시 + fault"]
-    C --> MO["09 monitor.py<br/>결정론 판정 (유일한 판정관)"]
-    MO --> V["10 영상 해설<br/>Cosmos / Super-VL<br/>영상만 보고 이탈·충돌 시각 주장"]
-    MO -- "숨긴 monitor 값" --> VF["검증 ±0.5 s<br/>환각률"]
-    V --> VF
-    VF -- "통과" --> A
-    VF -- "통과" --> M2
-    VF -- "통과" --> CF
-    VF -- "새 태그" --> R["monitor_rule_candidates.yaml<br/>(사람 검토, 자동 적용 안 함)"]
-    MO -- "재학습" --> GP
-```
+`run_records.jsonl`, `failure_table.jsonl`, `explanations.jsonl`, `monitor_rule_candidates.yaml` (proposals for human
+review, never applied automatically), `evaluation_metrics.json`, `llm_calls.jsonl` (token usage, no keys),
+`report.md`, `insights/` (boundaries, insights, dashboard), `round_xx/`, `runs/`, `clips/`, `screen/campaign.html`.
 
-역할 분리: A 만 실패 사례를 본다 · B 는 코드만 본다 · 해설기는 영상과 맥락(고장·전환 시각)만 보고
-이탈·충돌·오프셋은 못 본다 · 판정은 09 monitor 만 한다. 해설이 판정을 바꾸지 않는다.
+## 10. Limitations
 
-### 출력 (`outputs/<mode>_<시각>/`)
+* Only MPC computation and execution faults; sensor / actuator hardware faults are out of scope.
+* This is a simulation-based research tool, not production vehicle software or an ISO 26262 tool. Results from one
+  simulator and vehicle model do not generalise to a real-vehicle safety guarantee.
+* If the MPC and LQR share a sensor or ECU, an algorithmic backup cannot prevent hardware faults.
+* Boundaries come from 149 runs over several routes and speeds; most are "mixed zones" whose exact value depends on
+  road geometry and speed. Two of the most critical (very late) drift / bias runs were graded *invalid* because the
+  route or the 15 s run limit ended before the post-switch window.
+* **Not finding a failure does not prove safety.**
 
-`run_records.jsonl`, `failure_table.jsonl`, `explanations.jsonl`, `monitor_rule_candidates.yaml`,
-`evaluation_metrics.json`(경계 양쪽 관측, |robustness|<0.2 런 수, GP 경계 부호 정확도, 첫 실패까지 런 수,
-고유 실패 조건, 해설 통과율), `llm_calls.jsonl`(토큰 사용량, 키 없음), `report.md`, `round_xx/`, `runs/`, `clips/`.
+Bug reports and design notes: [docs/BUG_REPORTS.md](docs/BUG_REPORTS.md), [docs/INTEGRATION3.md](docs/INTEGRATION3.md), [docs/INTEGRATION4.md](docs/INTEGRATION4.md).
 
-### PROVISIONAL 값 (사용자 확인 전)
+## License
 
-복구 판정 0.3 m / 0.1 rad / 1 s / 3 s / 4.41 m/s² / 5 m/s³ (팀원 기준, 09 safety_spec.yaml), onset 이벤트 검출 κ 1/60·1/300 m⁻¹, fault 런
-`--stop-after-fault 15`, 속도 격자 5 km/h, 예산 72 런(cold 24 + 12×4), straddle β 1.96, 해설 선택 |robustness|<0.15.
+[MIT](LICENSE) for this repository's code. Third-party components (CARLA, CARLA Garage / PDM-Lite, Bench2Drive, ...)
+keep their own licenses, listed in
+[`pipeline/08_carla_paired_run/av_stack/THIRD_PARTY_NOTICES.md`](pipeline/08_carla_paired_run/av_stack/THIRD_PARTY_NOTICES.md).
+NVIDIA models are used through Nebius Token Factory under their own terms.

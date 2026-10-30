@@ -4,7 +4,7 @@
 every run, a Gaussian process steers the next runs towards the safe/unsafe boundary, and Cosmos Reason explains the
 videos and summarises *which faults are critical and where their boundaries are*.
 
-Branch `inter_final` = `integration4` (code) + all campaign results. The final campaign is **`result/result_12`**.
+The default branch `main` (same code as `inter_final`) holds the code and all campaign results. The final campaign is **`result/result_12`**.
 
 ---
 
@@ -117,9 +117,9 @@ rate check, and every switch on a slowly growing fault came after the car had le
 
 ## 5. NVIDIA models and Nebius
 
-See the README section *How we used NVIDIA models* (Nemotron 3.5 Lightning = scenario proposals, Nemotron 3 Ultra =
+See the README section *NVIDIA models and Nebius usage* (Nemotron 3.5 Lightning = scenario proposals, Nemotron 3 Ultra =
 code questions, Cosmos 3 Super Reasoner = video explanations and the critical-fault / boundary summary, Nemotron 3.5
-Super VL = fallback) and *Where Nebius Token Factory accelerated the work* (one OpenAI-compatible API for every model,
+Super VL = fallback); where Nebius Token Factory accelerated the work: (one OpenAI-compatible API for every model,
 `json_schema` structured outputs, a 550B model on demand, a Cosmos dedicated endpoint started and stopped by code).
 Every model call of a campaign is logged in `llm_calls.jsonl` (model, tokens; no keys).
 
