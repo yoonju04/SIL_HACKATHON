@@ -1,0 +1,17 @@
+{
+  "benchmark": "Bench2Drive 0.0.3",
+  "evaluation_scope": "single published route subset",
+  "full_benchmark_score": false,
+  "route_id": "28035",
+  "town": "Town01",
+  "source_commit": "48e6a6dbcb133220333bd65e242fbc2b492bb15b",
+  "routes_file": "C:\\Users\\dongh\\Desktop\\junwoo\\SIL_HACKATHON\\pipeline\\08_carla_paired_run\\av_stack\\third_party\\carla_garage\\Bench2Drive\\leaderboard\\data\\bench2drive220.xml",
+  "routes_sha256": "f8da9842fd0857b019123fb42ec2bcdf41c291e015e76be070a2a099552188c6",
+  "scenario_types": [
+    "T_Junction"
+  ],
+  "controller": "supervised",
+  "planner": "pdm",
+  "seed": 17,
+  "tire_friction_scale": 0.9
+}

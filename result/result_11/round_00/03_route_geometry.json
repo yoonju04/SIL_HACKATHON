@@ -1,0 +1,107 @@
+{
+  "columns": [
+    "max_speed_kmh",
+    "t_s",
+    "kappa_per_m",
+    "speed_mps",
+    "v2kappa_mps2",
+    "latest_onset_offset_s_for_V03"
+  ],
+  "rules": {
+    "V03": "onset = max(0.5, t_s + onset_offset_s); rejected when route_end_s - onset < 5 s, i.e. onset_offset_s must be <= latest_onset_offset_s_for_V03 (null row = event not detected on that baseline = rejected); events_gradable_at_kmh lists the probed speeds with room for some allowed offset",
+    "friction_demand": "v2kappa_mps2 = speed^2 * |kappa| is the nominal lateral demand; the P-02 limit is 4.41 * tire_friction_scale m/s^2. DF-06 friction_utilization = v2kappa / (0.9 * tire_friction_scale * 9.81): near 1 the tyres are close to the grip limit and LQR has little margin left to recover; v2kappa above the P-02 limit only tags stress_test",
+    "speed": "speed_mps is the baseline speed at the event (the car may be slower than max_speed_kmh in curves); it scales roughly with max_speed_kmh, the event times shift with speed"
+  },
+  "routes": {
+    "bench2drive:28035": {
+      "town": "Town01",
+      "baseline_tire_friction_scale": [],
+      "route_end_s_by_kmh": {},
+      "events": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "events_gradable_at_kmh": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "note": "no completed baseline yet: geometry unknown, V-03 decided after the baseline run"
+    },
+    "town10_long": {
+      "town": "Town10HD",
+      "baseline_tire_friction_scale": [],
+      "route_end_s_by_kmh": {},
+      "events": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "events_gradable_at_kmh": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "note": "no completed baseline yet: geometry unknown, V-03 decided after the baseline run"
+    },
+    "bench2drive:24206": {
+      "town": "Town03",
+      "baseline_tire_friction_scale": [],
+      "route_end_s_by_kmh": {},
+      "events": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "events_gradable_at_kmh": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "note": "no completed baseline yet: geometry unknown, V-03 decided after the baseline run"
+    },
+    "bench2drive:28048": {
+      "town": "Town02",
+      "baseline_tire_friction_scale": [],
+      "route_end_s_by_kmh": {},
+      "events": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "events_gradable_at_kmh": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "note": "no completed baseline yet: geometry unknown, V-03 decided after the baseline run"
+    },
+    "bench2drive:28154": {
+      "town": "Town10HD",
+      "baseline_tire_friction_scale": [],
+      "route_end_s_by_kmh": {},
+      "events": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "events_gradable_at_kmh": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "note": "no completed baseline yet: geometry unknown, V-03 decided after the baseline run"
+    }
+  }
+}

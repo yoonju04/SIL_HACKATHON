@@ -1,0 +1,24 @@
+{
+  "R00-0002-bias": {
+    "run_id": "R00-0002-bias",
+    "clip": "clips/6a0f098db21d6af57827.mp4",
+    "start_s": 37.45,
+    "end_s": 42.45,
+    "event_s": 39.45,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "6c2639cd568840ea527171ed6035e586acd4d0a74d90c2d279f11a01c9f8fe7d"
+  },
+  "R00-0003-drift": {
+    "run_id": "R00-0003-drift",
+    "clip": "clips/701d8b7018c11330dc02.mp4",
+    "start_s": 53.5,
+    "end_s": 64.48,
+    "event_s": 61.85,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "b2eef327d574c096946efaacca893c3753a4c819a4e5b201bcf91c8008a667f6"
+  }
+}
