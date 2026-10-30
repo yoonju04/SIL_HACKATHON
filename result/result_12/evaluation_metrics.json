@@ -1,0 +1,265 @@
+{
+  "n_runs": 32,
+  "n_valid": 30,
+  "n_switched": 22,
+  "n_final_safe_recovery": 14,
+  "n_failures": 8,
+  "both_sides_observed": true,
+  "boundary_band_runs": 11,
+  "boundary_band": 0.2,
+  "boundary_target": "safety_margin",
+  "boundary_band_runs_lrr": 6,
+  "target_negative_runs": 8,
+  "failures_per_simulation": 0.25,
+  "simulations_to_first_failure": 4,
+  "unique_failure_conditions": 4,
+  "outcome_counts": {
+    "safe_recovery": 19,
+    "no_switch": 8,
+    "recovered_after_departure": 2,
+    "simulation_invalid": 2,
+    "unsettled": 1
+  },
+  "trigger_counts": {
+    "steer_rate_exceeded": 14,
+    "None": 8,
+    "tracking_divergence": 9,
+    "stale_sequence": 1
+  },
+  "sr_outcome_counts": {
+    "pass": 23,
+    "F1_no_or_late_switch": 7,
+    "invalid": 2
+  },
+  "explanations": 14,
+  "explanations_accepted": 11,
+  "explanation_acceptance_rate": 0.7857142857142857,
+  "hallucination_rate": 0.2142857142857143,
+  "boundary_metrics": {
+    "band": 0.2,
+    "target": "safety_margin",
+    "boundary_band_runs": 11,
+    "boundary_band_runs_0.5": 17,
+    "n_target": 30,
+    "target_negative": 8,
+    "safety_margin_binding": {
+      "lat_acc": 3,
+      "lane": 11,
+      "lat_jerk": 8,
+      "settle": 8
+    },
+    "boundary_band_runs_lrr": 6,
+    "n_lrr": 22,
+    "per_fault_mode": {
+      "intermittent_bias": {
+        "n": 11,
+        "outcomes": {
+          "safe_recovery": 11
+        },
+        "final_safe": 11,
+        "mixed": false
+      },
+      "output_delay": {
+        "n": 2,
+        "outcomes": {
+          "no_switch": 2
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "bias": {
+        "n": 10,
+        "outcomes": {
+          "no_switch": 6,
+          "safe_recovery": 4
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "drift": {
+        "n": 3,
+        "outcomes": {
+          "recovered_after_departure": 2,
+          "safe_recovery": 1
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "saturate": {
+        "n": 3,
+        "outcomes": {
+          "safe_recovery": 2,
+          "unsettled": 1
+        },
+        "final_safe": 2,
+        "mixed": true
+      },
+      "stale": {
+        "n": 1,
+        "outcomes": {
+          "safe_recovery": 1
+        },
+        "final_safe": 1,
+        "mixed": false
+      }
+    },
+    "modes_with_mixed_outcome": [
+      "saturate"
+    ],
+    "gp_prediction_diversity": {
+      "recovery_success": {
+        "n": 24,
+        "distinct": 24,
+        "min": -0.565328,
+        "max": 10.244064,
+        "std": 3.0010458515520115
+      },
+      "switched_indicator": {
+        "n": 24,
+        "distinct": 24,
+        "min": 0.126932,
+        "max": 0.980376,
+        "std": 0.25168175117988234
+      }
+    },
+    "selection_sources": {
+      "space_filling": 11,
+      "nemotron_a": 11,
+      "perturbation": 7,
+      "counterfactual": 3
+    },
+    "nemotron_a_share": 0.34375
+  },
+  "gp_boundary_sign_accuracy": {
+    "n": 22,
+    "accuracy": 0.7272727272727273,
+    "truth": "leave-one-out on observed runs",
+    "truth_safe_fraction": 0.6363636363636364,
+    "majority_baseline": 0.6363636363636364,
+    "balanced_accuracy": 0.7589285714285714,
+    "predicted_safe_fraction": 0.45454545454545453,
+    "vs_final_safe": {
+      "n": 22,
+      "accuracy": 0.7272727272727273,
+      "truth_safe_fraction": 0.6363636363636364,
+      "majority_baseline": 0.6363636363636364,
+      "balanced_accuracy": 0.7589285714285714,
+      "predicted_safe_fraction": 0.45454545454545453
+    }
+  },
+  "a_schema_valid_items": 53,
+  "a_items_returned": 53,
+  "rejected_candidates": 7,
+  "nemotron_a": {
+    "proposals_in_pool": 11,
+    "executed": 11,
+    "share_of_executed_runs": 0.34375,
+    "share_after_cold_start": 0.4583333333333333,
+    "proposals_with_range_extreme": 1,
+    "proposals_extreme_unjustified": 1,
+    "mean_edge_distance": 0.18506493506493502,
+    "expected_side": {
+      "boundary": 11
+    }
+  },
+  "nemotron_b": {
+    "b_hallucination_rate": 0.10869565217391304,
+    "b_code_agreement_rate": 0.8260869565217391,
+    "b_checked_answers": 92,
+    "b_hallucinated_answers": 10,
+    "b_unknown_when_code_decides": 6,
+    "citation_valid_rate": 0.9927536231884058,
+    "citation_relevant_rate": 0.9927536231884058,
+    "per_question": {
+      "Q-B2": {
+        "asked": 1,
+        "checked": 1,
+        "hallucinated": 0,
+        "distinct_answers": 1,
+        "answers": {
+          "no": 1
+        }
+      },
+      "Q-B3": {
+        "asked": 1,
+        "checked": 1,
+        "hallucinated": 0,
+        "distinct_answers": 1,
+        "answers": {
+          "no": 1
+        }
+      },
+      "Q-B1": {
+        "asked": 30,
+        "checked": 30,
+        "hallucinated": 10,
+        "distinct_answers": 3,
+        "answers": {
+          "lqr_early": 14,
+          "stale_mpc": 3,
+          "corrupted_mpc": 13
+        }
+      },
+      "Q-B4": {
+        "asked": 30,
+        "checked": 30,
+        "hallucinated": 0,
+        "distinct_answers": 5,
+        "answers": {
+          "steer_rate_exceeded": 15,
+          "solver_failure": 2,
+          "none_during_fault": 5,
+          "unknown": 6,
+          "stale_sequence": 2
+        }
+      },
+      "Q-B5": {
+        "asked": 30,
+        "checked": 30,
+        "hallucinated": 0,
+        "distinct_answers": 4,
+        "answers": {
+          "steer_value_only": 22,
+          "ok_flag": 2,
+          "steer_and_reported_state": 4,
+          "sequence_or_stamp": 2
+        }
+      }
+    },
+    "note": "hallucinated = majority answer outside expected_from_code (not 'unknown'); one row per b_key + static",
+    "gp_b_columns": 18,
+    "gp_b_constant_columns": 11,
+    "gp_b_constant_fraction": 0.6111111111111112,
+    "gp_b_questions": [
+      "Q-B1",
+      "Q-B4"
+    ],
+    "b_keys": 30
+  },
+  "llm_usage": {
+    "A": {
+      "calls": 5,
+      "prompt_tokens": 87256,
+      "completion_tokens": 9462,
+      "stub": false
+    },
+    "B": {
+      "calls": 93,
+      "prompt_tokens": 1998672,
+      "completion_tokens": 558503,
+      "stub": false
+    },
+    "C": {
+      "calls": 14,
+      "prompt_tokens": 98995,
+      "completion_tokens": 12377,
+      "stub": false
+    },
+    "A_refine": {
+      "calls": 3,
+      "prompt_tokens": 40379,
+      "completion_tokens": 38583,
+      "stub": false
+    }
+  }
+}

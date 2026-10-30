@@ -1,0 +1,92 @@
+[
+  {
+    "scenario_id": "SC-2b2e6d67bc",
+    "source": "counterfactual",
+    "selected_by": "counterfactual_check",
+    "gp_mean": {
+      "recovery_success": 1.3783714660376423,
+      "switched_indicator": 0.9044943119623667,
+      "switched_indicator__latent": 4.4520578186162485
+    },
+    "gp_std": {
+      "recovery_success": 3.8267996438450615,
+      "switched_indicator": 0.2939121494428081,
+      "switched_indicator__latent": 2.8993536890396183
+    }
+  },
+  {
+    "scenario_id": "SC-4563b73251",
+    "source": "counterfactual",
+    "selected_by": "counterfactual_check",
+    "gp_mean": {
+      "recovery_success": 1.1618876935333255,
+      "switched_indicator": 0.9240364372523118,
+      "switched_indicator__latent": 5.008011110620982
+    },
+    "gp_std": {
+      "recovery_success": 3.180163417044559,
+      "switched_indicator": 0.2649398042619611,
+      "switched_indicator__latent": 3.000141794483549
+    }
+  },
+  {
+    "scenario_id": "SC-2ef520a616",
+    "source": "nemotron_a",
+    "selected_by": "nemotron_a_share",
+    "gp_mean": {
+      "recovery_success": -0.37884345875963266,
+      "switched_indicator": 0.9763829527557846,
+      "switched_indicator__latent": 5.930229022649874
+    },
+    "gp_std": {
+      "recovery_success": 4.9364306768432495,
+      "switched_indicator": 0.15185283113488507,
+      "switched_indicator__latent": 2.355586901126499
+    }
+  },
+  {
+    "scenario_id": "SC-d87c6c6c48",
+    "source": "nemotron_a",
+    "selected_by": "nemotron_a_share",
+    "gp_mean": {
+      "recovery_success": 1.6505808009245717,
+      "switched_indicator": 0.9003401430981057,
+      "switched_indicator__latent": 4.540945181126472
+    },
+    "gp_std": {
+      "recovery_success": 4.083761573838706,
+      "switched_indicator": 0.29954593942196617,
+      "switched_indicator__latent": 3.0540746372195646
+    }
+  },
+  {
+    "scenario_id": "SC-65488242a1",
+    "source": "perturbation",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 4.186324927060471,
+      "switched_indicator": 0.4654202717606779,
+      "switched_indicator__latent": -0.20966905433637917
+    },
+    "gp_std": {
+      "recovery_success": 2.7467837918105102,
+      "switched_indicator": 0.49880280912891284,
+      "switched_indicator__latent": 1.7162535981944642
+    }
+  },
+  {
+    "scenario_id": "SC-c9dcf74824",
+    "source": "perturbation",
+    "selected_by": "acquisition",
+    "gp_mean": {
+      "recovery_success": 3.080843507545813,
+      "switched_indicator": 0.5720991297779392,
+      "switched_indicator__latent": 0.4460094671692646
+    },
+    "gp_std": {
+      "recovery_success": 2.73727386549084,
+      "switched_indicator": 0.4947744086806268,
+      "switched_indicator__latent": 1.7664673446952044
+    }
+  }
+]

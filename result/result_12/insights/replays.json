@@ -1,0 +1,79 @@
+{
+  "R00-0003-drift": {
+    "run_id": "R00-0003-drift",
+    "clip": "clips/701d8b7018c11330dc02.mp4",
+    "start_s": 36.9,
+    "end_s": 43.9,
+    "event_s": 40.9,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "476ad6be2de0ea00b28bc260b0b42e633242ee49c3e5f738c99b0fed5573f88f"
+  },
+  "R02-0019-drift": {
+    "run_id": "R02-0019-drift",
+    "clip": "clips/34ffb5ecb721f80819ff.mp4",
+    "start_s": 37.1,
+    "end_s": 44.35,
+    "event_s": 41.35,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "ffc501298bac6f374c6133ca704379765b6291888c6f722fc0274e00210fd1b9"
+  },
+  "R03-0022-drift": {
+    "run_id": "R03-0022-drift",
+    "clip": "clips/d83a2b149acf286631e1.mp4",
+    "start_s": 33.4,
+    "end_s": 39.7,
+    "event_s": 36.7,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "a0ea451b4db35fe63e47398f177fb84db98f05997b85fbfa710b1f206578e0d3"
+  },
+  "R03-0024-bias": {
+    "run_id": "R03-0024-bias",
+    "clip": "clips/ac3baaf0e8de835fd48e.mp4",
+    "start_s": 16.4,
+    "end_s": 22.0,
+    "event_s": 19.0,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "917e06a4c81046f0548993bf18824f528531c426605bb6601e36d0cc32a9fbe0"
+  },
+  "R04-0027-bias": {
+    "run_id": "R04-0027-bias",
+    "clip": "clips/5bf71abbb84a5d5d8ecf.mp4",
+    "start_s": 16.35,
+    "end_s": 22.3,
+    "event_s": 19.3,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "7c2d70de2c65959ca8fd386d9d1eb99826e31a6f0928444a6ac3fc31304539d9"
+  },
+  "R04-0030-bias": {
+    "run_id": "R04-0030-bias",
+    "clip": "clips/8fba6fee2ed3f8d71ea5.mp4",
+    "start_s": 16.65,
+    "end_s": 22.85,
+    "event_s": 19.85,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "04c5d79c87e87270e7be5365a32742386b9aa2bfc705eaf648f0799dded708bd"
+  },
+  "R04-0031-bias": {
+    "run_id": "R04-0031-bias",
+    "clip": "clips/4925d99258f5667d0e89.mp4",
+    "start_s": 16.25,
+    "end_s": 22.95,
+    "event_s": 19.95,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "c8a06483822048e947d152665cc3f119accd0aef2fa417fc4bb81c5a6391dbb6"
+  }
+}
