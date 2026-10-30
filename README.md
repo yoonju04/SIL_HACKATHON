@@ -4,7 +4,7 @@
 >
 > NVIDIA × Nebius 해커톤 **Physical AI 트랙** 제출 프로젝트
 >
-> **상태 (최종 제출, 브랜치 `inter_final`):** 구현과 CARLA 실험 완료. 최종 캠페인 `result/result_12` (32런 + 이전 117런).
+> **상태 (최종 제출, 브랜치 `inter_final`):** 구현과 CARLA 실험 완료. 최종 캠페인 `result/result_12` (32런, 경계 분석은 이전 결과 119런 포함 총 149런).
 > 시뮬레이션 결과이며 안전 인증은 아닙니다.
 >
 > **심사위원 안내 / Judges: [JUDGES_GUIDE.md](JUDGES_GUIDE.md)** — 2분 안에 결과 보기, CARLA 없이 1분 실행, 전체 실행 방법, 핵심 결과
