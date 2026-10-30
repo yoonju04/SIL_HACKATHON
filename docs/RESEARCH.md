@@ -4,25 +4,25 @@
 
 Can a feedback-guided Nemotron scenario agent identify **more unique safety-critical MPC→LQR handover failures per fixed simulation budget** than random and grid/stratified test selection?
 
-### Hypotheses (검증 전)
+### Hypotheses (not yet verified)
 
 - H1: Feedback-guided agent increases **unique failure discovery** under matched trials/time/cost.
 - H2: The agent reduces **trials to first reproducible failure**.
 - H3: Found scenarios remain diverse rather than clustering around the same single failure.
 
-현재까지 H1~H3은 **가설**이며 연구 결과가 아니다.
+So far H1–H3 are **hypotheses**, not research results.
 
 ## Controlled experiment protocol
 
-1. 동일 plant/dynamics, controller gains, initial-state envelope, simulator and criteria versions 고정.
-2. 주입 범위·변수 사전 등록: speed, curvature, onset, duration, detection delay, magnitude, supervisor threshold/debounce. Faults are injected into the MPC only.
-3. **Identical query budget** (예: simulation calls); 시간·GPU 사용량은 별도 측정. LLM 추론 비용도 함께 보고.
-4. Random, grid/stratified, one-shot agent(optional), feedback agent 비교.
-5. 사전 고정된 여러 시드에 걸쳐 반복하고 평균·분산/신뢰구간 보고; 테스트 결과로 기준·임계값 사후 조정 금지.
-6. 유효하지 않은 후보 출력 비율, 중복률, retry 비용 보고.
-7. 중요한 실패는 같은 입력으로 독립 재실행하여 재현 여부를 기록.
+1. Fix the plant / dynamics, controller gains, initial-state envelope, simulator and criteria versions.
+2. Pre-register the injection ranges and variables: speed, curvature, onset, duration, detection delay, magnitude, supervisor threshold / debounce. Faults are injected into the MPC only.
+3. **Identical query budget** (e.g. simulation calls); time and GPU use are measured separately. LLM inference cost is reported as well.
+4. Compare random, grid / stratified, one-shot agent (optional) and feedback agent.
+5. Repeat over several pre-fixed seeds and report mean, variance / confidence intervals; no post-hoc adjustment of criteria or thresholds from test results.
+6. Report the share of invalid candidate outputs, the duplicate rate and the retry cost.
+7. Re-run important failures independently with the same input and record whether they reproduce.
 
-## 지표와 수식
+## Metrics and formulas
 
 ### Safety metrics (per run)
 
