@@ -152,3 +152,52 @@ def test_prompt_explains_tags_collision_and_hides_depth(clip_and_timeline):
     assert "lane_departure_depth_m" not in text
     assert "- steering_angle_saturation: steering held at its angle limit" in text
     assert "frames_outside_lane_s" in text and "not a collision" in text
+
+
+def test_log_grounded_prompt_gives_the_monitor_events_and_asks_only_why(clip_and_timeline):
+    # integration4: result_8 rejected 23/24 explanations on departure_time_s (no departure in any of the 24 runs)
+    clip, tl = clip_and_timeline
+    msgs = build_messages(clip, tl, TAX, "video", "think_answer", mode="log_grounded")
+    text = msgs[-1]["content"][-1]["text"]
+    assert "lane_departure_intervals_s" in text and "collision_times_s" in text and "are facts" in text
+    assert '"departure_time_s"' not in text and '"frames_outside_lane_s"' not in text and '"collision_seen"' not in text
+    assert "recovery_outcome" not in text                       # the final label stays hidden
+    assert "do not assume" in msgs[0]["content"]
+    good = stub_explanation(tl, clip, random.Random(0), hallucinate_p=0.0)
+    assert verify(good, tl, clip, TAX, 0.5, mode="log_grounded")["accepted"]
+
+
+def test_log_grounded_verify_checks_agreement_with_the_log():
+    from engine.video import Clip
+    ft = [40.0 + 0.25 * k for k in range(33)]
+    clip = Clip(None, None, [], ft, ft[0], ft[-1], 42.0, "front.mp4", "front_frames.jsonl", True)
+    calm = {"switch_time_s": 42.0, "lane_departure_intervals_s": [], "first_departure_after_switch_s": None,
+            "collision_times_s": [], "angle_saturation_ratio_1s": 0.0, "rate_saturation_ratio_1s": 0.4}
+    ok = {"mechanism": "Steering jumped at the fault, the supervisor switched at once and LQR held the lane.",
+          "mechanism_tags": ["stable_recovery", "steering_rate_limit"], "novel_tags": [], "evidence_frames_s": [42.0, 43.0]}
+    v = verify(ok, calm, clip, TAX, mode="log_grounded")
+    assert v["accepted"] and v["mode"] == "log_grounded"
+    # the result_8 failure: claiming a departure / collision the log does not have
+    assert not verify(dict(ok, mechanism_tags=["departed_before_switch"]), calm, clip, TAX, mode="log_grounded")["accepted"]
+    assert not verify(dict(ok, mechanism_tags=["collision_after_departure"]), calm, clip, TAX, mode="log_grounded")["accepted"]
+    assert not verify(dict(ok, mechanism_tags=["steering_angle_saturation"]), calm, clip, TAX, mode="log_grounded")["accepted"]
+    # evidence must sit at a given event, and a mechanism must be written
+    assert not verify(dict(ok, evidence_frames_s=[45.0]), calm, clip, TAX, mode="log_grounded")["accepted"]
+    assert not verify(dict(ok, mechanism="ok"), calm, clip, TAX, mode="log_grounded")["accepted"]
+    gone = dict(calm, lane_departure_intervals_s=[[41.5, 44.0]], first_departure_after_switch_s=42.5)
+    assert not verify(ok, gone, clip, TAX, mode="log_grounded")["accepted"]                    # stable_recovery contradicts
+    assert verify(dict(ok, mechanism_tags=["departed_before_switch"], evidence_frames_s=[41.75]), gone, clip, TAX,
+                  mode="log_grounded")["accepted"]
+
+
+def test_log_grounded_novel_tags_must_be_english_snake_case():
+    # result_11: the model wrote Chinese novel tags
+    from engine.video import Clip
+    ft = [40.0 + 0.25 * k for k in range(9)]
+    clip = Clip(None, None, [], ft, ft[0], ft[-1], 41.0, "front.mp4", "front_frames.jsonl", True)
+    tl = {"switch_time_s": 41.0, "lane_departure_intervals_s": [], "collision_times_s": []}
+    ok = {"mechanism": "The supervisor switched at the fault and LQR kept the lane without trouble.",
+          "mechanism_tags": ["stable_recovery"], "novel_tags": ["straight_road_handover"], "evidence_frames_s": [41.0]}
+    assert verify(ok, tl, clip, TAX, mode="log_grounded")["accepted"]
+    bad = dict(ok, novel_tags=["bias\u8bf1\u5bfc\u6f02\u79fb"])
+    assert not verify(bad, tl, clip, TAX, mode="log_grounded")["accepted"]

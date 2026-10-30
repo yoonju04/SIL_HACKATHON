@@ -1,0 +1,534 @@
+{
+  "gp": {
+    "target": "safety_margin",
+    "metric_id": "recovery_success",
+    "n_train": 13,
+    "units": "dimensionless safety_margin = min over the final_safe_recovery criteria of (limit - observed) / limit (lane term: lane_recovery_robustness); >= 0 <=> final_safe_recovery, 0 = at the binding limit",
+    "level": 0.0,
+    "training_std": 0.384,
+    "meaning": "safety_margin = min(lane, settle, lat_acc, lat_jerk), clipped to [-2, 1]; >= 0 exactly when the run is final_safe_recovery. lane = lane_recovery_robustness = min over the window of lane margin / (lane_width/2 - vehicle half width), dimensionless: 1 = centred, 0 = body at the lane edge, < 0 departed, collision <= -2; settle = (longest hold with |e_y| <= 0.3 m, |e_psi| <= 0.1 rad, margin >= 0 within 3 s - 1 s) / 1 s; lat_acc = (4.41 * tire_friction_scale m/s^2 - lat_acc_excess) / limit; lat_jerk = (15 m/s^3 - lat_jerk_excess) / 15. Each run reports the binding (smallest) term; observed outcomes give every term in real units (observed.safety_margin)",
+    "ranking": "acquisition_score = max(recovery level-set score in training-std units - switch_penalty * (1 - p_switch), switch-classifier level-set score); the orchestrator picks runs with the same score",
+    "unexplored_rule": "gp_uncertainty_vs_training_std >= 0.75"
+  },
+  "boundary_regions": [
+    {
+      "fault_id": "F-07",
+      "fault_mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.15,
+        "on_s": 0.9725,
+        "off_s": 0.5752
+      },
+      "route_id": "bench2drive:24206",
+      "max_speed_kmh": 40.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.011,
+      "tire_friction_scale": 0.9,
+      "predicted_safety_margin": 0.769,
+      "predicted_safety_margin_std": 0.141,
+      "p_below_level": 0.0,
+      "p_switch": 0.864,
+      "gp_uncertainty_vs_training_std": 0.37,
+      "acquisition_score": 2.04,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": true,
+        "switch_delay_s": 0.0,
+        "trigger": "steer_rate_exceeded",
+        "recovery_outcome": "safe_recovery",
+        "final_safe_recovery": true,
+        "lane_recovery_robustness": 0.883,
+        "lane_margin_min_m": 0.734,
+        "lat_acc_margin_mps2": 1.28,
+        "safety_margin": {
+          "value": 0.8,
+          "binding": "lat_jerk",
+          "failing": [],
+          "terms": {
+            "lane": {
+              "margin": 0.883,
+              "observed": 0.883,
+              "limit": 0.0,
+              "unit": "lane_recovery_robustness (dimensionless)",
+              "min_lane_margin_m": 0.734
+            },
+            "settle": {
+              "margin": 2.05,
+              "observed": 3.05,
+              "limit": 1.0,
+              "unit": "s held"
+            },
+            "lat_acc": {
+              "margin": 0.909,
+              "observed": 0.36,
+              "limit": 3.969,
+              "unit": "m/s^2 over baseline"
+            },
+            "lat_jerk": {
+              "margin": 0.8,
+              "observed": 2.998,
+              "limit": 15.0,
+              "unit": "m/s^3 over baseline"
+            }
+          }
+        }
+      }
+    },
+    {
+      "fault_id": "F-07",
+      "fault_mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.1418,
+        "on_s": 0.9548,
+        "off_s": 0.6007
+      },
+      "route_id": "bench2drive:24206",
+      "max_speed_kmh": 25.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.128,
+      "tire_friction_scale": 0.6,
+      "predicted_safety_margin": 0.807,
+      "predicted_safety_margin_std": 0.137,
+      "p_below_level": 0.0,
+      "p_switch": 0.907,
+      "gp_uncertainty_vs_training_std": 0.36,
+      "acquisition_score": 1.148,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": true,
+        "switch_delay_s": 0.0,
+        "trigger": "steer_rate_exceeded",
+        "recovery_outcome": "safe_recovery",
+        "final_safe_recovery": true,
+        "lane_recovery_robustness": 0.881,
+        "lane_margin_min_m": 0.731,
+        "lat_acc_margin_mps2": 1.57,
+        "safety_margin": {
+          "value": 0.768,
+          "binding": "lat_jerk",
+          "failing": [],
+          "terms": {
+            "lane": {
+              "margin": 0.881,
+              "observed": 0.881,
+              "limit": 0.0,
+              "unit": "lane_recovery_robustness (dimensionless)",
+              "min_lane_margin_m": 0.733
+            },
+            "settle": {
+              "margin": 2.05,
+              "observed": 3.05,
+              "limit": 1.0,
+              "unit": "s held"
+            },
+            "lat_acc": {
+              "margin": 0.912,
+              "observed": 0.234,
+              "limit": 2.646,
+              "unit": "m/s^2 over baseline"
+            },
+            "lat_jerk": {
+              "margin": 0.768,
+              "observed": 3.483,
+              "limit": 15.0,
+              "unit": "m/s^3 over baseline"
+            }
+          }
+        }
+      }
+    },
+    {
+      "fault_id": "F-06",
+      "fault_mode": "saturate",
+      "params": {
+        "duration_s": 0.672,
+        "side": "positive",
+        "magnitude": 0.7642,
+        "ramp_s": 0.0827
+      },
+      "route_id": "town10_long",
+      "max_speed_kmh": 30.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.275,
+      "tire_friction_scale": 0.7,
+      "predicted_safety_margin": 0.073,
+      "predicted_safety_margin_std": 0.253,
+      "p_below_level": 0.387,
+      "p_switch": 0.979,
+      "gp_uncertainty_vs_training_std": 0.66,
+      "acquisition_score": 1.103,
+      "ranked_by": "recovery_level_set",
+      "observed": {
+        "sim_status": "ok",
+        "switched": true,
+        "switch_delay_s": 0.0,
+        "trigger": "steer_rate_exceeded",
+        "recovery_outcome": "safe_recovery",
+        "final_safe_recovery": true,
+        "lane_recovery_robustness": 0.398,
+        "lane_margin_min_m": 0.331,
+        "lat_acc_margin_mps2": -0.38,
+        "safety_margin": {
+          "value": 0.398,
+          "binding": "lane",
+          "failing": [],
+          "terms": {
+            "lane": {
+              "margin": 0.398,
+              "observed": 0.398,
+              "limit": 0.0,
+              "unit": "lane_recovery_robustness (dimensionless)",
+              "min_lane_margin_m": 0.331
+            },
+            "settle": {
+              "margin": 0.55,
+              "observed": 1.55,
+              "limit": 1.0,
+              "unit": "s held"
+            },
+            "lat_acc": {
+              "margin": 0.831,
+              "observed": 0.521,
+              "limit": 3.087,
+              "unit": "m/s^2 over baseline"
+            },
+            "lat_jerk": {
+              "margin": 0.846,
+              "observed": 2.315,
+              "limit": 15.0,
+              "unit": "m/s^3 over baseline"
+            }
+          }
+        }
+      }
+    },
+    {
+      "fault_id": "F-07",
+      "fault_mode": "intermittent_bias",
+      "params": {
+        "magnitude_rad": 0.13,
+        "on_s": 0.85,
+        "off_s": 0.55
+      },
+      "route_id": "bench2drive:24206",
+      "max_speed_kmh": 30.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.1,
+      "tire_friction_scale": 0.8,
+      "predicted_safety_margin": 0.873,
+      "predicted_safety_margin_std": 0.138,
+      "p_below_level": 0.0,
+      "p_switch": 0.924,
+      "gp_uncertainty_vs_training_std": 0.36,
+      "acquisition_score": 0.906,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": true,
+        "switch_delay_s": 0.0,
+        "trigger": "steer_rate_exceeded",
+        "recovery_outcome": "safe_recovery",
+        "final_safe_recovery": true,
+        "lane_recovery_robustness": 0.891,
+        "lane_margin_min_m": 0.741,
+        "lat_acc_margin_mps2": 2.03,
+        "safety_margin": {
+          "value": 0.891,
+          "binding": "lane",
+          "failing": [],
+          "terms": {
+            "lane": {
+              "margin": 0.891,
+              "observed": 0.891,
+              "limit": 0.0,
+              "unit": "lane_recovery_robustness (dimensionless)",
+              "min_lane_margin_m": 0.741
+            },
+            "settle": {
+              "margin": 2.05,
+              "observed": 3.05,
+              "limit": 1.0,
+              "unit": "s held"
+            },
+            "lat_acc": {
+              "margin": 0.983,
+              "observed": 0.061,
+              "limit": 3.528,
+              "unit": "m/s^2 over baseline"
+            },
+            "lat_jerk": {
+              "margin": 0.958,
+              "observed": 0.632,
+              "limit": 15.0,
+              "unit": "m/s^3 over baseline"
+            }
+          }
+        }
+      }
+    },
+    {
+      "fault_id": "F-03",
+      "fault_mode": "output_delay",
+      "params": {
+        "delay_ticks": 1
+      },
+      "route_id": "bench2drive:28048",
+      "max_speed_kmh": 35.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.327,
+      "tire_friction_scale": 1.0,
+      "predicted_safety_margin": 0.588,
+      "predicted_safety_margin_std": 0.256,
+      "p_below_level": 0.011,
+      "p_switch": 0.088,
+      "gp_uncertainty_vs_training_std": 0.67,
+      "acquisition_score": 0.74,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": false,
+        "recovery_outcome": "no_switch",
+        "final_safe_recovery": false,
+        "lane_margin_min_m": 0.7,
+        "lat_acc_margin_mps2": -3.74,
+        "safety_margin": {
+          "value": 0.648,
+          "binding": "lane",
+          "failing": [],
+          "terms": {
+            "lane": {
+              "margin": 0.648,
+              "observed": 0.648,
+              "limit": 0.0,
+              "unit": "dimensionless",
+              "min_lane_margin_m": 0.7
+            }
+          }
+        }
+      }
+    },
+    {
+      "fault_id": "F-04",
+      "fault_mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0749
+      },
+      "route_id": "bench2drive:28154",
+      "max_speed_kmh": 10.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.522,
+      "tire_friction_scale": 0.8,
+      "predicted_safety_margin": 0.677,
+      "predicted_safety_margin_std": 0.17,
+      "p_below_level": 0.0,
+      "p_switch": 0.215,
+      "gp_uncertainty_vs_training_std": 0.44,
+      "acquisition_score": 0.602,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": false,
+        "recovery_outcome": "no_switch",
+        "final_safe_recovery": false,
+        "lane_margin_min_m": 0.425,
+        "lat_acc_margin_mps2": 3.22,
+        "safety_margin": {
+          "value": 0.511,
+          "binding": "lane",
+          "failing": [],
+          "terms": {
+            "lane": {
+              "margin": 0.511,
+              "observed": 0.511,
+              "limit": 0.0,
+              "unit": "dimensionless",
+              "min_lane_margin_m": 0.425
+            }
+          }
+        }
+      }
+    }
+  ],
+  "unexplored_regions": [
+    {
+      "fault_id": "F-05",
+      "fault_mode": "drift",
+      "params": {
+        "rate_rad_s": 0.025
+      },
+      "route_id": "town10_long",
+      "max_speed_kmh": 25.0,
+      "onset_event": "curve_exit",
+      "onset_offset_s": -0.2,
+      "tire_friction_scale": 0.6,
+      "predicted_safety_margin": -0.238,
+      "predicted_safety_margin_std": 0.388,
+      "p_below_level": 0.73,
+      "p_switch": 0.976,
+      "gp_uncertainty_vs_training_std": 1.01,
+      "acquisition_score": 1.362,
+      "ranked_by": "recovery_level_set",
+      "observed": {
+        "sim_status": "invalid",
+        "switched": true,
+        "switch_delay_s": 14.55,
+        "trigger": "tracking_divergence",
+        "recovery_outcome": "simulation_invalid",
+        "lane_margin_min_m": 0.425,
+        "lat_acc_margin_mps2": -0.28
+      }
+    },
+    {
+      "fault_id": "F-04",
+      "fault_mode": "bias",
+      "params": {
+        "magnitude_rad": 0.04
+      },
+      "route_id": "bench2drive:28154",
+      "max_speed_kmh": 15.0,
+      "onset_event": "curve_entry",
+      "onset_offset_s": 0.3,
+      "tire_friction_scale": 0.8,
+      "predicted_safety_margin": 0.526,
+      "predicted_safety_margin_std": 0.297,
+      "p_below_level": 0.039,
+      "p_switch": 0.108,
+      "gp_uncertainty_vs_training_std": 0.77,
+      "acquisition_score": 1.286,
+      "ranked_by": "switch_uncertainty",
+      "observed": {
+        "sim_status": "ok",
+        "switched": false,
+        "recovery_outcome": "no_switch",
+        "final_safe_recovery": false,
+        "lane_margin_min_m": 0.469,
+        "lat_acc_margin_mps2": 3.04,
+        "safety_margin": {
+          "value": 0.563,
+          "binding": "lane",
+          "failing": [],
+          "terms": {
+            "lane": {
+              "margin": 0.563,
+              "observed": 0.563,
+              "limit": 0.0,
+              "unit": "dimensionless",
+              "min_lane_margin_m": 0.469
+            }
+          }
+        }
+      }
+    },
+    {
+      "fault_id": "F-04",
+      "fault_mode": "bias",
+      "params": {
+        "magnitude_rad": 0.0205
+      },
+      "route_id": "town10_long",
+      "max_speed_kmh": 15.0,
+      "onset_event": "curve_apex",
+      "onset_offset_s": -0.341,
+      "tire_friction_scale": 0.7,
+      "predicted_safety_margin": 0.326,
+      "predicted_safety_margin_std": 0.454,
+      "p_below_level": 0.237,
+      "p_switch": 0.1,
+      "gp_uncertainty_vs_training_std": 1.18,
+      "acquisition_score": 1.468,
+      "ranked_by": "recovery_level_set",
+      "observed": {
+        "sim_status": "ok",
+        "switched": false,
+        "recovery_outcome": "no_switch",
+        "final_safe_recovery": false,
+        "lane_margin_min_m": 0.345,
+        "lat_acc_margin_mps2": 1.41,
+        "safety_margin": {
+          "value": 0.414,
+          "binding": "lane",
+          "failing": [],
+          "terms": {
+            "lane": {
+              "margin": 0.414,
+              "observed": 0.414,
+              "limit": 0.0,
+              "unit": "dimensionless",
+              "min_lane_margin_m": 0.345
+            }
+          }
+        }
+      }
+    }
+  ],
+  "recent_outcomes_by_fault_mode": {
+    "intermittent_bias": {
+      "n": 4,
+      "switched": 4,
+      "never_switched": 0,
+      "recovered": 4,
+      "failed": 0,
+      "unlabelled": 0,
+      "invalid": 0,
+      "status": "recovered_whenever_switched"
+    },
+    "output_delay": {
+      "n": 2,
+      "switched": 0,
+      "never_switched": 2,
+      "recovered": 0,
+      "failed": 0,
+      "unlabelled": 0,
+      "invalid": 0,
+      "status": "never_switched"
+    },
+    "bias": {
+      "n": 3,
+      "switched": 0,
+      "never_switched": 3,
+      "recovered": 0,
+      "failed": 0,
+      "unlabelled": 0,
+      "invalid": 0,
+      "status": "never_switched"
+    },
+    "drift": {
+      "n": 2,
+      "switched": 1,
+      "never_switched": 0,
+      "recovered": 0,
+      "failed": 1,
+      "unlabelled": 0,
+      "invalid": 1,
+      "failed_reasons": {
+        "recovered_after_departure": 1
+      },
+      "status": "failed_whenever_switched"
+    },
+    "saturate": {
+      "n": 2,
+      "switched": 2,
+      "never_switched": 0,
+      "recovered": 1,
+      "failed": 1,
+      "unlabelled": 0,
+      "invalid": 0,
+      "failed_reasons": {
+        "unsettled": 1
+      },
+      "status": "mixed"
+    },
+    "stale": {
+      "n": 1,
+      "switched": 1,
+      "never_switched": 0,
+      "recovered": 1,
+      "failed": 0,
+      "unlabelled": 0,
+      "invalid": 0,
+      "status": "recovered_whenever_switched"
+    }
+  }
+}

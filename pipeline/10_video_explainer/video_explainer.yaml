@@ -9,7 +9,11 @@ meta:
   never_sets_safety_labels: true
 
 select_runs:                            # 어떤 런을 해설할지
-  failed: true                          # 전환했고 final_safe_recovery == false, 또는 전환 없이 P-01 < 0 / P-03 위반
+  failed: true                          # 실패 런 해설
+  # integration4: visible (기본) = 차선 이탈·충돌(SR4), 늦은/없는 전환(F1), 이탈 후 복귀/복구 실패만.
+  #   횡가속도·저크만 넘은 런(result_8 '실패'의 대부분, 차선 유지)은 영상에 볼 게 없어 뺀다. any = 예전 is_failure
+  #   경계 근처 런도 판정 여유의 가장 빠듯한 기준이 저크·횡가속도면 뺀다.
+  failed_rule: visible
   boundary_near_abs_robustness: 0.15    # |GP 타깃| < 0.15 (integration3 #9: safety_margin; --gp-target lrr 이면 lane_recovery_robustness) (PROVISIONAL)
   max_per_round: 4                      # 비용 상한
 
@@ -29,7 +33,8 @@ clip:
 verification:
   time_tolerance_s: 0.5                 # 주장한 사건 시각과 모니터 로그 차이 허용치 (configurable)
   visible_departure_margin_m: 0.10      # BUG-020: 차선 밖으로 0.10 m 이상 나간 프레임만 "보이는 이탈"로 요구 (그보다 얕으면 null도 정답)
-  check: [switch_time_s, departure_time_s, evidence_frames_s_in_clip, tags_in_taxonomy]
+  check: [switch_time_s, departure_time_s, evidence_frames_s_in_clip, tags_in_taxonomy]   # pixel_check 모드
+  check_log_grounded: [tags_in_taxonomy, tags_consistent_with_log, evidence_frames_s_in_clip, evidence_at_given_events, mechanism_written]
   accept_rule: all_checkable_claims_pass
   hallucination_metric: rejected / explained
 
@@ -52,6 +57,12 @@ feedback:
   counterfactual_queue: {enabled: true, max_per_round: 2}
 
 prompt:
+  # integration4: mode log_grounded (기본) = 모니터의 차선 이탈·충돌·오프셋·포화를 사실로 주고 '왜'만 묻는다.
+  #   result_8: 24건 중 23건이 departure_time_s로 탈락 - 24런 모두 모니터상 이탈 0인데 모델이 23건에서 이탈을 주장
+  #   (12건은 전환 시각 그대로). 전방 카메라로는 바퀴와 차선이 안 보인다. 검증은 태그가 로그와 모순되지 않는지,
+  #   근거 프레임이 주어진 사건(전환·이탈 구간·충돌)에 있는지로 바뀐다 (engine/explainer.py verify_grounded).
+  #   pixel_check = 예전 방식 (아래 visible_timeline_keys만 주고 이탈·충돌을 영상에서 맞히게 함)
+  mode: log_grounded
   # 역할 분리: 해설기는 '맥락'(고장·트리거·전환 시각)만 받고, 영상에서 봐야 하는 값(차선 이탈·충돌·오프셋·포화·최종 판정)은 숨긴다.
   # verify()는 숨긴 monitor 값과 비교하므로 프롬프트를 베껴서는 통과할 수 없다. (engine/explainer.py VISIBLE_TIMELINE_KEYS)
   visible_timeline_keys: [fault_mode, fault_magnitude, planned_fault_onset_s, actual_fault_onset_s,

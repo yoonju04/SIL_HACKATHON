@@ -77,7 +77,7 @@ objective_acquisition:
     #   "전환 여부가 불확실하거나 OR 복구가 경계 근처"인 점을 고른다. 예전 방식은 acquisition: straddle (legacy).
     acquisition: level_set                      # level_set (기본) | straddle (legacy: run.switch_aware_score) | lower_confidence_bound
     level: 0.0                                  # h: 판정 경계. safety_margin(#9) >= 0 <=> final_safe_recovery (무차원, 가장 빠듯한 기준의 (한계-관측)/한계). lrr이면 0 = 차체가 차선 경계. z로 바꿔 씀
-    switch_penalty: 1.0                         # 전환 가능성이 낮은 곳의 복구 점수 감점 (정규화 단위)
+    switch_penalty: 0.0                         # integration4: was 1.0. Never-switched runs now have a target (lane-only safety_margin), and the bias boundary (undetected-harmless vs late) lies where P(switch) is low
     beta: 1.96                                  # PROVISIONAL
   default:
     acquisition: lower_confidence_bound         # 위 acquisition 섹션 (최악 사례 탐색 목적)

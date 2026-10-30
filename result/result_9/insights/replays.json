@@ -1,0 +1,35 @@
+{
+  "R00-0001-bias": {
+    "run_id": "R00-0001-bias",
+    "clip": "clips/51ea812158b8bd344d8d.mp4",
+    "start_s": 5.3,
+    "end_s": 12.85,
+    "event_s": 9.85,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "d7f44e21a9d82c5d2950fed5d56dd4d9ec8d85ad3fb1ca3751ad16cc558d854b"
+  },
+  "R00-0003-drift": {
+    "run_id": "R00-0003-drift",
+    "clip": "clips/701d8b7018c11330dc02.mp4",
+    "start_s": 30.0,
+    "end_s": 37.4,
+    "event_s": 34.4,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "e0a8de1f2a7c28bb970e2b5fb9348d229f84a0046cd6682c320b78c7c3dd073f"
+  },
+  "R00-0010-drift": {
+    "run_id": "R00-0010-drift",
+    "clip": "clips/4ede50d82622e3638d65.mp4",
+    "start_s": 34.15,
+    "end_s": 40.55,
+    "event_s": 37.55,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "544750d8256cf576e45eeb570dc9cf079b2e0031c218a5f76d11fdfccdf6a300"
+  }
+}

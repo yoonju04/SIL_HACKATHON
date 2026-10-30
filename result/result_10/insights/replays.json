@@ -1,0 +1,35 @@
+{
+  "R00-0006-drift": {
+    "run_id": "R00-0006-drift",
+    "clip": "clips/ab13452de1bcda0dc84d.mp4",
+    "start_s": 37.05,
+    "end_s": 44.1,
+    "event_s": 41.1,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "211b9f51edc1f022c6ba11c6c2e7928a6e2337430e61c3a01fc9d20b09a60cfc"
+  },
+  "R01-0012-drift": {
+    "run_id": "R01-0012-drift",
+    "clip": "clips/64aafa0fda33ad41b116.mp4",
+    "start_s": 37.05,
+    "end_s": 43.95,
+    "event_s": 40.95,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "33791c4e8095e8e229a10419d5f88903167baa49346079b7564e2b89d93bd5e2"
+  },
+  "R01-0013-bias": {
+    "run_id": "R01-0013-bias",
+    "clip": "clips/296bae224cbe5053048b.mp4",
+    "start_s": 34.25,
+    "end_s": 42.65,
+    "event_s": 39.65,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "07dfc40b715bd45953fe218dfb2861f15799b52a984633883f2baee5e401feba"
+  }
+}

@@ -1,0 +1,53 @@
+
+[1m========= Preparing RouteScenario_28154 (repetition 0) =========[0m
+[1m> Loading the world[0m
+[tire-friction] scale 0.80 applied: {'scale': 0.8, 'applied': True, 'before': [3.5, 3.5, 3.5, 3.5], 'after': [2.799999952316284, 2.799999952316284, 2.799999952316284, 2.799999952316284]}
+[1m> Setting up the agent[0m
+[av_stack] PDM-Lite + supervised steering | max speed 15 km/h | comfort pedals on | traffic lights normal
+[1m> Running the route[0m
+Sparse Waypoints: 5
+Dense Waypoints: 159
+[1m> Stopping the route[0m
+
+[1m========= Results of RouteScenario_28154 (repetition 0) ------ [91mFAILURE[0m [1m=========[0m
+
+╒═══════════════════════╤═════════════════════╕
+│ Start Time            │ 2026-10-29 06:04:56 │
+├───────────────────────┼─────────────────────┤
+│ End Time              │ 2026-10-29 06:05:44 │
+├───────────────────────┼─────────────────────┤
+│ System Time           │ 47.4s               │
+├───────────────────────┼─────────────────────┤
+│ Game Time             │ 42.3s               │
+├───────────────────────┼─────────────────────┤
+│ Ratio (Game / System) │ 0.892               │
+╘═══════════════════════╧═════════════════════╛
+
+╒═══════════════════════╤═════════╤═════════╕
+│ Criterion             │ Result  │ Value   │
+├───────────────────────┼─────────┼─────────┤
+│ RouteCompletionTest   │ [92mSUCCESS[0m │ 100 %   │
+├───────────────────────┼─────────┼─────────┤
+│ OutsideRouteLanesTest │ [92mSUCCESS[0m │ 0 %     │
+├───────────────────────┼─────────┼─────────┤
+│ CollisionTest         │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ RunningRedLightTest   │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ RunningStopTest       │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ MinSpeedTest          │ [91mFAILURE[0m │ 90.12 % │
+├───────────────────────┼─────────┼─────────┤
+│ InRouteTest           │ [92mSUCCESS[0m │         │
+├───────────────────────┼─────────┼─────────┤
+│ AgentBlockedTest      │ [92mSUCCESS[0m │         │
+├───────────────────────┼─────────┼─────────┤
+│ ScenarioTimeoutTest   │ [92mSUCCESS[0m │ 0 times │
+├───────────────────────┼─────────┼─────────┤
+│ Timeout               │ [92mSUCCESS[0m │         │
+╘═══════════════════════╧═════════╧═════════╛
+
+[1m> Registering the route statistics[0m
+INFO:  Found the required file in cache!  Carla/Maps/Nav/Town10HD_Opt.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town10HD_Opt.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town10HD.bin 

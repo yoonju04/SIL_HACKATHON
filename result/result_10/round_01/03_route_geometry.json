@@ -1,0 +1,433 @@
+{
+  "columns": [
+    "max_speed_kmh",
+    "t_s",
+    "kappa_per_m",
+    "speed_mps",
+    "v2kappa_mps2",
+    "latest_onset_offset_s_for_V03"
+  ],
+  "rules": {
+    "V03": "onset = max(0.5, t_s + onset_offset_s); rejected when route_end_s - onset < 5 s, i.e. onset_offset_s must be <= latest_onset_offset_s_for_V03 (null row = event not detected on that baseline = rejected); events_gradable_at_kmh lists the probed speeds with room for some allowed offset",
+    "friction_demand": "v2kappa_mps2 = speed^2 * |kappa| is the nominal lateral demand; the P-02 limit is 4.41 * tire_friction_scale m/s^2. DF-06 friction_utilization = v2kappa / (0.9 * tire_friction_scale * 9.81): near 1 the tyres are close to the grip limit and LQR has little margin left to recover; v2kappa above the P-02 limit only tags stress_test",
+    "speed": "speed_mps is the baseline speed at the event (the car may be slower than max_speed_kmh in curves); it scales roughly with max_speed_kmh, the event times shift with speed"
+  },
+  "routes": {
+    "bench2drive:28035": {
+      "town": "Town01",
+      "baseline_tire_friction_scale": 1.0,
+      "route_end_s_by_kmh": {
+        "35": 51.55
+      },
+      "events": {
+        "straight": [
+          [
+            35.0,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "curve_entry": [
+          [
+            35.0,
+            46.7,
+            -0.0198,
+            5.16,
+            0.53,
+            -0.15
+          ]
+        ],
+        "curve_apex": [
+          [
+            35.0,
+            47.9,
+            -0.1184,
+            9.72,
+            11.19,
+            -1.35
+          ]
+        ],
+        "curve_exit": [
+          [
+            35.0,
+            48.9,
+            -0.0215,
+            9.33,
+            1.87,
+            -2.35
+          ]
+        ]
+      },
+      "events_gradable_at_kmh": {
+        "straight": [],
+        "curve_entry": [
+          35.0
+        ],
+        "curve_apex": [],
+        "curve_exit": []
+      }
+    },
+    "town10_long": {
+      "town": "Town10HD",
+      "baseline_tire_friction_scale": [
+        0.6,
+        0.7
+      ],
+      "route_end_s_by_kmh": {
+        "10": 199.95,
+        "30": 124.6,
+        "40": 122.15
+      },
+      "events": {
+        "straight": [
+          [
+            10.0,
+            8.05,
+            -0.0,
+            2.62,
+            0.0,
+            186.9
+          ],
+          [
+            30.0,
+            16.55,
+            -0.0,
+            8.23,
+            0.0,
+            103.05
+          ],
+          [
+            40.0,
+            16.4,
+            -0.0,
+            9.68,
+            0.0,
+            100.75
+          ]
+        ],
+        "curve_entry": [
+          [
+            10.0,
+            48.15,
+            -0.0172,
+            2.51,
+            0.11,
+            146.8
+          ],
+          [
+            30.0,
+            34.95,
+            -0.0195,
+            6.4,
+            0.8,
+            84.65
+          ],
+          [
+            40.0,
+            35.45,
+            -0.0201,
+            5.18,
+            0.54,
+            81.7
+          ]
+        ],
+        "curve_apex": [
+          [
+            10.0,
+            54.75,
+            -0.1089,
+            2.46,
+            0.66,
+            140.2
+          ],
+          [
+            30.0,
+            37.5,
+            -0.1002,
+            6.17,
+            3.81,
+            82.1
+          ],
+          [
+            40.0,
+            37.05,
+            -0.0833,
+            5.24,
+            2.29,
+            80.1
+          ]
+        ],
+        "curve_exit": [
+          [
+            10.0,
+            57.15,
+            -0.0169,
+            2.74,
+            0.13,
+            137.8
+          ],
+          [
+            30.0,
+            38.4,
+            -0.0437,
+            4.2,
+            0.77,
+            81.2
+          ],
+          [
+            40.0,
+            37.05,
+            -0.0833,
+            5.24,
+            2.29,
+            80.1
+          ]
+        ]
+      },
+      "events_gradable_at_kmh": {
+        "straight": [
+          10.0,
+          30.0,
+          40.0
+        ],
+        "curve_entry": [
+          10.0,
+          30.0,
+          40.0
+        ],
+        "curve_apex": [
+          10.0,
+          30.0,
+          40.0
+        ],
+        "curve_exit": [
+          10.0,
+          30.0,
+          40.0
+        ]
+      }
+    },
+    "bench2drive:24206": {
+      "town": "Town03",
+      "baseline_tire_friction_scale": [
+        0.4,
+        0.7,
+        0.8
+      ],
+      "route_end_s_by_kmh": {
+        "25": 36.5,
+        "35": 36.55
+      },
+      "events": {
+        "straight": [
+          [
+            25.0,
+            22.1,
+            0.0,
+            6.72,
+            0.0,
+            9.65
+          ],
+          [
+            25.0,
+            22.0,
+            -0.0,
+            6.75,
+            0.0,
+            9.5
+          ],
+          [
+            35.0,
+            17.3,
+            -0.0,
+            9.58,
+            0.0,
+            14.25
+          ]
+        ],
+        "curve_entry": [
+          [
+            25.0,
+            7.05,
+            0.0201,
+            3.68,
+            0.27,
+            24.7
+          ],
+          [
+            25.0,
+            7.05,
+            0.0201,
+            3.7,
+            0.27,
+            24.45
+          ],
+          [
+            35.0,
+            7.1,
+            0.018,
+            5.01,
+            0.45,
+            24.45
+          ]
+        ],
+        "curve_apex": [
+          [
+            25.0,
+            8.35,
+            0.0249,
+            4.04,
+            0.41,
+            23.4
+          ],
+          [
+            25.0,
+            8.35,
+            0.0248,
+            4.06,
+            0.41,
+            23.15
+          ],
+          [
+            35.0,
+            9.0,
+            0.0224,
+            8.94,
+            1.79,
+            22.55
+          ]
+        ],
+        "curve_exit": [
+          [
+            25.0,
+            8.35,
+            0.0249,
+            4.04,
+            0.41,
+            23.4
+          ],
+          [
+            25.0,
+            8.35,
+            0.0248,
+            4.06,
+            0.41,
+            23.15
+          ],
+          [
+            35.0,
+            10.85,
+            0.0171,
+            8.8,
+            1.33,
+            20.7
+          ]
+        ]
+      },
+      "events_gradable_at_kmh": {
+        "straight": [
+          25.0,
+          25.0,
+          35.0
+        ],
+        "curve_entry": [
+          25.0,
+          25.0,
+          35.0
+        ],
+        "curve_apex": [
+          25.0,
+          25.0,
+          35.0
+        ],
+        "curve_exit": [
+          25.0,
+          25.0,
+          35.0
+        ]
+      }
+    },
+    "bench2drive:28048": {
+      "town": "Town02",
+      "baseline_tire_friction_scale": 0.4,
+      "route_end_s_by_kmh": {
+        "15": 45.55
+      },
+      "events": {
+        "straight": [
+          [
+            15.0,
+            42.25,
+            -0.0005,
+            4.08,
+            0.01,
+            -1.7
+          ]
+        ],
+        "curve_entry": [
+          [
+            15.0,
+            32.1,
+            0.0178,
+            3.81,
+            0.26,
+            8.45
+          ]
+        ],
+        "curve_apex": [
+          [
+            15.0,
+            36.0,
+            0.0861,
+            3.84,
+            1.27,
+            4.55
+          ]
+        ],
+        "curve_exit": [
+          [
+            15.0,
+            37.95,
+            0.0174,
+            3.9,
+            0.27,
+            2.6
+          ]
+        ]
+      },
+      "events_gradable_at_kmh": {
+        "straight": [],
+        "curve_entry": [
+          15.0
+        ],
+        "curve_apex": [
+          15.0
+        ],
+        "curve_exit": [
+          15.0
+        ]
+      }
+    },
+    "bench2drive:28154": {
+      "town": "Town10HD",
+      "baseline_tire_friction_scale": [],
+      "route_end_s_by_kmh": {},
+      "events": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "events_gradable_at_kmh": {
+        "straight": [],
+        "curve_entry": [],
+        "curve_apex": [],
+        "curve_exit": []
+      },
+      "note": "no completed baseline yet: geometry unknown, V-03 decided after the baseline run"
+    }
+  }
+}

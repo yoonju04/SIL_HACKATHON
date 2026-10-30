@@ -1,0 +1,59 @@
+
+[1m========= Preparing RouteScenario_24206 (repetition 0) =========[0m
+[1m> Loading the world[0m
+[tire-friction] scale 0.80 applied: {'scale': 0.8, 'applied': True, 'before': [3.5, 3.5, 3.5, 3.5], 'after': [2.799999952316284, 2.799999952316284, 2.799999952316284, 2.799999952316284]}
+[1m> Setting up the agent[0m
+[av_stack] PDM-Lite + supervised steering | max speed 30 km/h | comfort pedals on | traffic lights normal
+[1m> Running the route[0m
+Sparse Waypoints: 4
+Dense Waypoints: 132
+[supervisor] t=7.85s MPC -> LQR reason=tracking_divergence
+
+============================================================================
+  [SUPERVISOR] fault detected -> steering switched MPC -> LQR   (t=7.85 s)
+    detected : vehicle diverging from the path (|e_y| > 1.0 m or |e_psi| > 0.6 rad for 0.25 s)
+    when     : no fault injected
+    state    : e_y=+1.82 m, e_psi=+23.0 deg, v=24.7 km/h
+============================================================================
+
+[1m> Stopping the route[0m
+
+[1m========= Results of RouteScenario_24206 (repetition 0) ------ [91mFAILURE[0m [1m=========[0m
+
+╒═══════════════════════╤═════════════════════╕
+│ Start Time            │ 2026-10-28 22:42:36 │
+├───────────────────────┼─────────────────────┤
+│ End Time              │ 2026-10-28 22:43:01 │
+├───────────────────────┼─────────────────────┤
+│ System Time           │ 25.25s              │
+├───────────────────────┼─────────────────────┤
+│ Game Time             │ 22.0s               │
+├───────────────────────┼─────────────────────┤
+│ Ratio (Game / System) │ 0.871               │
+╘═══════════════════════╧═════════════════════╛
+
+╒═══════════════════════╤═════════╤══════════╕
+│ Criterion             │ Result  │ Value    │
+├───────────────────────┼─────────┼──────────┤
+│ RouteCompletionTest   │ [91mFAILURE[0m │ 26.62 %  │
+├───────────────────────┼─────────┼──────────┤
+│ OutsideRouteLanesTest │ [91mFAILURE[0m │ 5.86 %   │
+├───────────────────────┼─────────┼──────────┤
+│ CollisionTest         │ [91mFAILURE[0m │ 1 times  │
+├───────────────────────┼─────────┼──────────┤
+│ RunningRedLightTest   │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ RunningStopTest       │ [92mSUCCESS[0m │ 0 times  │
+├───────────────────────┼─────────┼──────────┤
+│ MinSpeedTest          │ [91mFAILURE[0m │ 122.98 % │
+├───────────────────────┼─────────┼──────────┤
+│ InRouteTest           │ [92mSUCCESS[0m │          │
+├───────────────────────┼─────────┼──────────┤
+│ AgentBlockedTest      │ [92mSUCCESS[0m │          │
+├───────────────────────┼─────────┼──────────┤
+│ Timeout               │ [92mSUCCESS[0m │          │
+╘═══════════════════════╧═════════╧══════════╛
+
+[1m> Registering the route statistics[0m
+INFO:  Found the required file in cache!  Carla/Maps/Nav/Town03.bin 
+INFO:  Found the required file in cache!  Carla/Maps/TM/Town03.bin 

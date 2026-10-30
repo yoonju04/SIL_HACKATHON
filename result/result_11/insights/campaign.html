@@ -1,0 +1,170 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><noscript><meta http-equiv="refresh" content="5"></noscript><title>전환 안전성 검증</title><style>
+:root{--bg:#eef1f4;--panel:#fff;--line:#d9dee4;--soft:#f6f8fa;--fg:#1c2530;--mut:#66727f;
+--ok:#1a7f37;--okbg:#e6f4ea;--bad:#c4271c;--badbg:#fdecea;--acc:#1f5fbf}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:14px/1.5 "Segoe UI","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif}
+.num{font-variant-numeric:tabular-nums}.mut{color:var(--mut)}.ok{color:var(--ok)}.bad{color:var(--bad)}
+header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0}header .sp{flex:1}header span{font-size:12px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:minmax(400px,7fr) 5fr;gap:16px;padding:16px 20px;align-items:start}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:4px;min-width:0}
+.run td{overflow-wrap:anywhere}
+.col>h2{margin:0;padding:10px 16px;font-size:13px;color:var(--mut);font-weight:600;border-bottom:1px solid var(--line);
+display:flex;align-items:center;gap:8px}
+.col>h2 button{margin-left:auto;font:inherit;font-size:12px;border:1px solid var(--line);background:var(--soft);
+border-radius:3px;padding:2px 8px;cursor:pointer;color:var(--fg)}
+.col>h2.section-title{padding:17px 18px 8px;font-size:24px;line-height:1.35;font-weight:700;color:var(--fg);border-bottom:0;flex-wrap:wrap}
+.section-label{font-size:11px;letter-spacing:.06em;color:var(--mut);padding:16px 18px 0;font-weight:600}
+.section-subtitle{font-size:12px;color:var(--mut);padding:0 18px 12px}
+.switch-sequence{list-style:none;display:flex;align-items:center;gap:8px;margin:0 18px 14px;padding:0;font-size:12px;color:var(--mut)}
+.switch-sequence li{padding:7px 10px;background:var(--soft);border:1px solid var(--line);border-radius:3px}
+.switch-sequence .handover{font-weight:700;color:var(--acc);background:#edf3fc;border-color:#cfdef5}
+.scenario-heading{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:12px;color:var(--mut);background:var(--soft);border-block:1px solid var(--line)}
+.scenario-heading button{margin-left:auto;border:1px solid var(--line);background:var(--panel);font:inherit;padding:2px 8px;cursor:pointer;border-radius:3px}
+.hypothesis-card{padding:16px 18px;border-bottom:1px solid var(--line)}.hypothesis-card:last-child{border-bottom:0}
+.hypothesis-meta{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--mut)}
+.hypothesis-card h3{font-size:18px;line-height:1.5;color:var(--fg);margin:8px 0 12px}
+.group-definitions{display:grid;grid-template-columns:45px 1fr;gap:5px 10px;font-size:12px;margin:0 0 16px}
+.group-definitions dt{color:var(--mut)}.group-definitions dd{margin:0;overflow-wrap:anywhere}
+.stat-heading{font-size:12px;font-weight:600;margin:0 0 5px}.hypothesis-stats{font-size:13px}
+.observed-effect{display:flex;align-items:baseline;gap:8px;margin-top:12px;font-size:13px}
+.observed-effect b{font-size:22px;color:var(--acc)}.observed-effect span{font-size:11px;color:var(--mut)}
+.stat-note{font-size:12px;color:var(--mut);line-height:1.6;margin:6px 0 0}
+.hypothesis-area{border-top:1px solid var(--line)}
+.col>h2.record-title{font-size:18px;font-weight:700;color:var(--fg);padding:16px 16px 8px;border-bottom:0}
+.model-credit{font-size:12px;font-weight:600;color:var(--acc);background:#edf3fc;border-radius:3px;padding:4px 7px;margin-left:auto;white-space:nowrap}
+.col>h2.insight-title{gap:12px;flex-wrap:wrap}
+.record-summary{padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--mut)}
+.record-summary strong{font-weight:600;color:var(--fg)}
+
+.col>h2.insight-title{font-size:24px;font-weight:700;color:var(--fg);padding:16px 18px 8px;border-bottom:0}
+.insights{padding:0 18px 16px!important}
+.insight-item{padding:16px 0;border-top:1px solid var(--line)}
+.insight-item:first-of-type{border-top:0;padding-top:10px}
+.insight-item h3{font-size:19px;line-height:1.45;font-weight:700;color:var(--acc);margin:0 0 7px}
+.insight-item p{font-size:14px;line-height:1.75;margin:0;color:var(--fg)}
+.insight-meta{font-size:11px;color:var(--mut);margin-bottom:4px}
+.analysis-details,.hypothesis-details{font-size:12px;color:var(--mut);border-top:1px solid var(--line);padding-top:10px;margin-top:8px}
+.analysis-details summary,.hypothesis-details summary{cursor:pointer;color:var(--mut);font-size:12px}
+.analysis-details h4{font-size:12px;margin:14px 0 4px;color:var(--fg)}
+.analysis-details p{overflow-wrap:anywhere}.analysis-details ul{padding-left:18px;line-height:1.7}
+.hypothesis-details{margin:0 18px 16px}.hypothesis-details .hrow{padding:12px 0}
+.eventline{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 0;border-bottom:1px solid var(--line);font-size:12px;color:var(--mut)}
+.eventline b{display:block;color:var(--fg);font-size:14px}
+@media(max-width:600px){.switch-sequence{flex-wrap:wrap}.observed-effect{flex-wrap:wrap}}
+.run,.insights{padding:14px 16px}.run[hidden]{display:none}
+.title{font-size:18px;font-weight:700}.where{font-size:12px;color:var(--mut);margin-bottom:12px}
+.result{border-left:4px solid var(--mut);background:var(--soft);padding:10px 12px;margin-bottom:14px}
+.result.ok{border-color:var(--ok);background:var(--okbg)}.result.bad{border-color:var(--bad);background:var(--badbg)}
+.result b{font-size:16px;display:block;color:var(--fg)}.result p{margin:2px 0 0;font-size:13px;color:var(--fg)}
+.blk{margin-top:14px}.blk h3{font-size:12px;color:var(--mut);margin:0 0 6px;font-weight:600}
+table{width:100%;border-collapse:collapse}
+td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--mut);font-weight:600;background:var(--soft);white-space:nowrap}
+.kv td:first-child{width:90px;color:var(--mut)}
+.mark{font-weight:700;width:22px}
+.counts{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.counts div{flex:1 1 90px;padding:10px 14px;border-right:1px solid var(--line)}.counts div:last-child{border-right:0}
+.counts b{display:block;font-size:22px}.counts span{font-size:12px;color:var(--mut)}
+.list tr{cursor:pointer}.list tbody tr:hover td{background:var(--soft)}
+.list tr.sel td{background:#e8f0fb}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:0 6px;border-radius:3px;white-space:nowrap}
+.tag.ok{background:var(--okbg)}.tag.bad{background:var(--badbg)}.tag.mut{background:var(--soft);color:var(--mut)}
+.empty{padding:20px 16px;color:var(--mut)}
+.wrapx{overflow-x:auto}
+.clip{width:100%;display:block;background:#000;border-radius:3px;margin:0 0 4px}
+.cap{font-size:12px;color:var(--mut);margin-bottom:12px}
+.ai{border:1px solid var(--line);border-radius:4px;padding:10px 12px;margin-bottom:6px}
+.ai .src{display:block;font-size:11px;color:var(--mut);margin-bottom:2px}
+.ai .sum{font-weight:600;margin:2px 0 6px}.ai ul{margin:0 0 6px 18px;padding:0;font-size:13px}
+.ai .why{font-size:13px}.ai .warn{margin-top:8px;padding:6px 8px;background:#fff6e0;border-left:3px solid #c98a00;font-size:12px}
+.ai.wait{color:var(--mut);font-size:13px}
+.ai h4{margin:0 0 6px;font-size:12px;color:var(--mut);font-weight:600}
+.sev{display:inline-block;font-weight:700;padding:1px 8px;border-radius:3px;font-size:13px}
+.sev0{background:var(--okbg);color:var(--ok)}.sev1{background:#eef3e2;color:#4d6b16}
+.sev2{background:#fff1d6;color:#8a5a00}.sev3{background:var(--badbg);color:var(--bad)}
+.facts{display:grid;grid-template-columns:72px 1fr;gap:3px 8px;font-size:13px;margin-top:8px}.facts span:nth-child(odd){color:var(--mut)}
+.agree{margin-top:8px;font-size:12px;padding:5px 8px;border-radius:3px;background:var(--soft)}
+.agree.dis{background:#fff6e0;border-left:3px solid #c98a00}
+.vtag{font-size:11px;color:var(--acc);margin-left:4px}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.hrow{padding:10px 16px;border-bottom:1px solid var(--line)}.hrow:last-child{border-bottom:0}
+.hrow .h1{display:flex;align-items:center;gap:8px}.hrow .h1 b{font-size:14px}.hrow .h1 .tag{margin-left:auto}
+.hrow .what{margin:2px 0 6px;font-size:13px}.hrow .meta{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12px;color:var(--mut)}
+.hrow .meta b{color:var(--fg);font-weight:600}
+.list td{white-space:nowrap;padding:5px;font-size:12px}.list th{padding:6px 6px}.listbox{max-height:320px;overflow:auto}
+.listbox thead th{position:sticky;top:0;z-index:1}
+.bar{display:inline-block;width:60px;height:5px;background:var(--line);border-radius:3px;vertical-align:middle;margin-right:6px}
+.bar i{display:block;height:100%;background:var(--acc);border-radius:3px}
+@media (max-width:860px){.grid{grid-template-columns:1fr;padding:12px}header{padding:10px 12px;flex-wrap:wrap;gap:4px}
+.kv td:first-child{width:70px}}
+</style></head><body data-latest="R00-0007-output_delay" data-refresh="5"><header><h1>MPC → LQR 안전성 검증</h1><span class="sp"></span>
+<span>03:11:46 갱신</span></header>
+<div class="grid">
+<div class="stack" id="focus-column">
+<section class="col" id="switch-section">
+<div class="section-label">검증 대상</div>
+<h2 class="section-title">제어기 전환 순간<span class="model-credit">안전성 판정</span></h2>
+<div class="section-subtitle">검증 대상: MPC → LQR 전환 및 전환 직후 안정성</div>
+<div class="scenario-heading"><span id="lefttitle">최근 시나리오 결과</span><button id="back" hidden>최신으로</button></div><div class="run" id="run-R00-0000-bias" hidden><div class="title">SC-19db6b4fd7 <span class="mut" style="font-size:13px;font-weight:400">R00-0000-bias</span></div><div class="where">라운드 0</div><div class="result ok"><b>통과</b><p>제때 전환했고, 전환 후에도 안정적으로 주행함</p></div><div class="eventline"><span>고장 주입 <b>7.10 s</b></span><span>제어권 인계 <b>–</b></span><span>고장 → 인계 <b>–</b></span></div><div class="blk"><h3>고장</h3><table class="kv">
+<tr><td>종류</td><td><b>bias</b></td></tr>
+<tr><td>시점</td><td>직선 <span class="mut num">· 7.10 s</span></td></tr>
+</table></div><div class="blk"><h3>전환</h3><table class="kv"><tr><td>결과</td><td><span class="mut">– 해당 없음</span></td></tr></table></div><div class="blk"><h3>전환 후 운행 안정성</h3><table><tr><td class="mark mut">–</td><td>전환 순간 조향 튐</td><td class="num">전환 안 함</td><td class="mut">– °/s 이하 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>차선 유지 (차체 기준)</td><td class="num">선까지 0.63 m</td><td class="mut">선 안쪽</td></tr><tr><td class="mark ok">✓</td><td>충돌</td><td class="num">없음</td><td class="mut">없음</td></tr><tr><td class="mark mut">–</td><td>회복 (참고)</td><td class="num">전환 안 함</td><td class="mut">– s 안에 중심 복귀 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>조향 한계</td><td class="num">7° · 52 °/s</td><td class="mut">설정 한계 · 90 °/s</td></tr></table></div></div><div class="run" id="run-R00-0001-saturate" hidden><div class="title">SC-91f5e31bdc <span class="mut" style="font-size:13px;font-weight:400">R00-0001-saturate</span></div><div class="where">라운드 0</div><div class="result ok"><b>통과</b><p>제때 전환했고, 전환 후에도 안정적으로 주행함</p></div><div class="eventline"><span>고장 주입 <b>37.10 s</b></span><span>제어권 인계 <b>37.15 s</b></span><span>고장 → 인계 <b>0.05 s</b></span></div><div class="blk"><h3>고장</h3><table class="kv">
+<tr><td>종류</td><td><b>saturate</b></td></tr>
+<tr><td>시점</td><td>곡선 진입 <span class="mut num">· 37.10 s</span></td></tr>
+</table></div><div class="blk"><h3>전환</h3><table class="kv"><tr><td>결과</td><td><span class="ok">✓ 전환 성공</span> — 고장 후 0.05 s 만에 LQR로 넘어감 (한계 0.50 s)</td></tr></table></div><div class="blk"><h3>전환 후 운행 안정성</h3><table><tr><td class="mark ok">✓</td><td>전환 순간 조향 튐</td><td class="num">57 °/s</td><td class="mut">90 °/s 이하 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>차선 유지 (차체 기준)</td><td class="num">선까지 0.34 m</td><td class="mut">선 안쪽</td></tr><tr><td class="mark ok">✓</td><td>충돌</td><td class="num">없음</td><td class="mut">없음</td></tr><tr><td class="mark ok">✓</td><td>회복 (참고)</td><td class="num">0.0 s</td><td class="mut">3.0 s 안에 중심 복귀 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>조향 한계</td><td class="num">20° · 57 °/s</td><td class="mut">설정 한계 · 90 °/s</td></tr></table></div></div><div class="run" id="run-R00-0002-bias" hidden><div class="title">SC-bf541aa038 <span class="mut" style="font-size:13px;font-weight:400">R00-0002-bias</span></div><div class="where">라운드 0</div><div class="result bad"><b>F1 전환 실패·지연</b><p>위험한 고장인데 LQR로 전환을 못 했거나 너무 늦게 함</p></div><div class="blk"><h3>실패 순간 리플레이 · 고장 → 전환 → 안전 위반</h3><video class="clip" src="clips/6a0f098db21d6af57827.mp4" controls muted playsinline preload="metadata"></video><div class="cap">t=37.45–42.45 s · 주목 이벤트 t=39.45 s · front.mp4</div></div><div class="eventline"><span>고장 주입 <b>38.45 s</b></span><span>제어권 인계 <b>39.50 s</b></span><span>고장 → 인계 <b>1.05 s</b></span></div><div class="blk"><h3>고장</h3><table class="kv">
+<tr><td>종류</td><td><b>bias</b></td></tr>
+<tr><td>시점</td><td>곡선 탈출 <span class="mut num">· 38.45 s</span></td></tr>
+</table></div><div class="blk"><h3>전환</h3><table class="kv"><tr><td>결과</td><td><span class="bad">✗ 늦게 전환</span> — 고장 후 1.05 s 만에 LQR로 넘어감 (한계 0.50 s)</td></tr></table></div><div class="blk"><h3>전환 후 운행 안정성</h3><table><tr><td class="mark ok">✓</td><td>전환 순간 조향 튐</td><td class="num">90 °/s</td><td class="mut">90 °/s 이하 (설정값)</td></tr><tr><td class="mark bad">✗</td><td>차선 유지 (차체 기준)</td><td class="num">선 넘음 0.04 m</td><td class="mut">선 안쪽</td></tr><tr><td class="mark ok">✓</td><td>충돌</td><td class="num">없음</td><td class="mut">없음</td></tr><tr><td class="mark ok">✓</td><td>회복 (참고)</td><td class="num">0.6 s</td><td class="mut">3.0 s 안에 중심 복귀 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>조향 한계</td><td class="num">19° · 90 °/s</td><td class="mut">설정 한계 · 90 °/s</td></tr></table></div></div><div class="run" id="run-R00-0003-drift" hidden><div class="title">SC-074a9d210c <span class="mut" style="font-size:13px;font-weight:400">R00-0003-drift</span></div><div class="where">라운드 0</div><div class="result bad"><b>F1 전환 실패·지연</b><p>위험한 고장인데 LQR로 전환을 못 했거나 너무 늦게 함</p></div><div class="blk"><h3>실패 순간 리플레이 · 고장 → 전환 → 안전 위반</h3><video class="clip" src="clips/701d8b7018c11330dc02.mp4" controls muted playsinline preload="metadata"></video><div class="cap">t=53.50–64.48 s · 주목 이벤트 t=61.85 s · front.mp4</div></div><div class="eventline"><span>고장 주입 <b>54.50 s</b></span><span>제어권 인계 <b>61.85 s</b></span><span>고장 → 인계 <b>7.35 s</b></span></div><div class="blk"><h3>고장</h3><table class="kv">
+<tr><td>종류</td><td><b>drift</b></td></tr>
+<tr><td>시점</td><td>곡선 정점 <span class="mut num">· 54.50 s</span></td></tr>
+</table></div><div class="blk"><h3>전환</h3><table class="kv"><tr><td>결과</td><td><span class="bad">✗ 늦게 전환</span> — 고장 후 7.35 s 만에 LQR로 넘어감 (한계 0.50 s)</td></tr></table></div><div class="blk"><h3>전환 후 운행 안정성</h3><table><tr><td class="mark ok">✓</td><td>전환 순간 조향 튐</td><td class="num">90 °/s</td><td class="mut">90 °/s 이하 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>차선 유지 (차체 기준)</td><td class="num">선까지 0.12 m</td><td class="mut">선 안쪽</td></tr><tr><td class="mark ok">✓</td><td>충돌</td><td class="num">없음</td><td class="mut">없음</td></tr><tr><td class="mark ok">✓</td><td>회복 (참고)</td><td class="num">0.9 s</td><td class="mut">3.0 s 안에 중심 복귀 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>조향 한계</td><td class="num">22° · 90 °/s</td><td class="mut">설정 한계 · 90 °/s</td></tr></table></div></div><div class="run" id="run-R00-0004-saturate" hidden><div class="title">SC-7efbc60fc4 <span class="mut" style="font-size:13px;font-weight:400">R00-0004-saturate</span></div><div class="where">라운드 0</div><div class="result ok"><b>통과</b><p>제때 전환했고, 전환 후에도 안정적으로 주행함</p></div><div class="eventline"><span>고장 주입 <b>41.55 s</b></span><span>제어권 인계 <b>41.55 s</b></span><span>고장 → 인계 <b>0.00 s</b></span></div><div class="blk"><h3>고장</h3><table class="kv">
+<tr><td>종류</td><td><b>saturate</b></td></tr>
+<tr><td>시점</td><td>곡선 탈출 <span class="mut num">· 41.55 s</span></td></tr>
+</table></div><div class="blk"><h3>전환</h3><table class="kv"><tr><td>결과</td><td><span class="ok">✓ 전환 성공</span> — 고장 후 0.00 s 만에 LQR로 넘어감 (한계 0.50 s)</td></tr></table></div><div class="blk"><h3>전환 후 운행 안정성</h3><table><tr><td class="mark ok">✓</td><td>전환 순간 조향 튐</td><td class="num">39 °/s</td><td class="mut">90 °/s 이하 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>차선 유지 (차체 기준)</td><td class="num">선까지 0.68 m</td><td class="mut">선 안쪽</td></tr><tr><td class="mark ok">✓</td><td>충돌</td><td class="num">없음</td><td class="mut">없음</td></tr><tr><td class="mark ok">✓</td><td>회복 (참고)</td><td class="num">0.0 s</td><td class="mut">3.0 s 안에 중심 복귀 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>조향 한계</td><td class="num">2° · 39 °/s</td><td class="mut">설정 한계 · 90 °/s</td></tr></table></div></div><div class="run" id="run-R00-0005-intermittent_bias" hidden><div class="title">SC-39ded56505 <span class="mut" style="font-size:13px;font-weight:400">R00-0005-intermittent_bias</span></div><div class="where">라운드 0</div><div class="result ok"><b>통과</b><p>제때 전환했고, 전환 후에도 안정적으로 주행함</p></div><div class="eventline"><span>고장 주입 <b>17.50 s</b></span><span>제어권 인계 <b>–</b></span><span>고장 → 인계 <b>–</b></span></div><div class="blk"><h3>고장</h3><table class="kv">
+<tr><td>종류</td><td><b>intermittent_bias</b></td></tr>
+<tr><td>시점</td><td>직선 <span class="mut num">· 17.50 s</span></td></tr>
+</table></div><div class="blk"><h3>전환</h3><table class="kv"><tr><td>결과</td><td><span class="mut">– 해당 없음</span></td></tr></table></div><div class="blk"><h3>전환 후 운행 안정성</h3><table><tr><td class="mark mut">–</td><td>전환 순간 조향 튐</td><td class="num">전환 안 함</td><td class="mut">– °/s 이하 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>차선 유지 (차체 기준)</td><td class="num">선까지 0.54 m</td><td class="mut">선 안쪽</td></tr><tr><td class="mark ok">✓</td><td>충돌</td><td class="num">없음</td><td class="mut">없음</td></tr><tr><td class="mark mut">–</td><td>회복 (참고)</td><td class="num">전환 안 함</td><td class="mut">– s 안에 중심 복귀 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>조향 한계</td><td class="num">4° · 85 °/s</td><td class="mut">설정 한계 · 90 °/s</td></tr></table></div></div><div class="run" id="run-R00-0006-solver_fail" hidden><div class="title">SC-2c471460e4 <span class="mut" style="font-size:13px;font-weight:400">R00-0006-solver_fail</span></div><div class="where">라운드 0</div><div class="result ok"><b>통과</b><p>제때 전환했고, 전환 후에도 안정적으로 주행함</p></div><div class="eventline"><span>고장 주입 <b>8.95 s</b></span><span>제어권 인계 <b>8.95 s</b></span><span>고장 → 인계 <b>0.00 s</b></span></div><div class="blk"><h3>고장</h3><table class="kv">
+<tr><td>종류</td><td><b>solver_fail</b></td></tr>
+<tr><td>시점</td><td>곡선 정점 <span class="mut num">· 8.95 s</span></td></tr>
+</table></div><div class="blk"><h3>전환</h3><table class="kv"><tr><td>결과</td><td><span class="ok">✓ 전환 성공</span> — 고장 후 0.00 s 만에 LQR로 넘어감 (한계 0.50 s)</td></tr></table></div><div class="blk"><h3>전환 후 운행 안정성</h3><table><tr><td class="mark ok">✓</td><td>전환 순간 조향 튐</td><td class="num">18 °/s</td><td class="mut">90 °/s 이하 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>차선 유지 (차체 기준)</td><td class="num">선까지 0.73 m</td><td class="mut">선 안쪽</td></tr><tr><td class="mark ok">✓</td><td>충돌</td><td class="num">없음</td><td class="mut">없음</td></tr><tr><td class="mark ok">✓</td><td>회복 (참고)</td><td class="num">0.0 s</td><td class="mut">3.0 s 안에 중심 복귀 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>조향 한계</td><td class="num">5° · 20 °/s</td><td class="mut">설정 한계 · 90 °/s</td></tr></table></div></div><div class="run" id="run-R00-0007-output_delay"><div class="title">SC-b23d972fec <span class="mut" style="font-size:13px;font-weight:400">R00-0007-output_delay</span></div><div class="where">라운드 0</div><div class="result ok"><b>통과</b><p>제때 전환했고, 전환 후에도 안정적으로 주행함</p></div><div class="eventline"><span>고장 주입 <b>35.90 s</b></span><span>제어권 인계 <b>–</b></span><span>고장 → 인계 <b>–</b></span></div><div class="blk"><h3>고장</h3><table class="kv">
+<tr><td>종류</td><td><b>output_delay</b></td></tr>
+<tr><td>시점</td><td>곡선 정점 <span class="mut num">· 35.90 s</span></td></tr>
+</table></div><div class="blk"><h3>전환</h3><table class="kv"><tr><td>결과</td><td><span class="mut">– 해당 없음</span></td></tr></table></div><div class="blk"><h3>전환 후 운행 안정성</h3><table><tr><td class="mark mut">–</td><td>전환 순간 조향 튐</td><td class="num">전환 안 함</td><td class="mut">– °/s 이하 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>차선 유지 (차체 기준)</td><td class="num">선까지 0.70 m</td><td class="mut">선 안쪽</td></tr><tr><td class="mark ok">✓</td><td>충돌</td><td class="num">없음</td><td class="mut">없음</td></tr><tr><td class="mark mut">–</td><td>회복 (참고)</td><td class="num">전환 안 함</td><td class="mut">– s 안에 중심 복귀 (설정값)</td></tr><tr><td class="mark ok">✓</td><td>조향 한계</td><td class="num">15° · 39 °/s</td><td class="mut">설정 한계 · 90 °/s</td></tr></table></div></div></section>
+<section class="col" id="nemotron-section">
+<div class="section-label">NEMOTRON</div>
+<h2 class="section-title">취약 가설 · 통계 검증</h2>
+<div class="hypothesis-area"><div class="empty">연결된 취약 가설이 없습니다.</div></div></section>
+</div>
+<div class="stack" id="results-column">
+<section class="col" id="verdict-section"><h2 class="record-title">전환 판정</h2><div class="record-summary"><strong>8건</strong> · 통과 6 · 전환 실패 2 · 제외 0</div><div class="wrapx listbox"><table class="list"><thead><tr><th>런</th><th>시나리오</th><th>고장</th><th>시점</th><th>전환</th><th>운행 안정성</th><th>가설</th><th>결과</th></tr></thead><tbody><tr data-id="R00-0007-output_delay"><td class="num mut">R00-0007-output_delay</td><td>SC-b23d972fec</td><td>output_delay</td><td>곡선 정점</td><td class="num"><span class="mut">–</span></td><td><span class="ok">✓</span></td><td><span class="mut">탐색</span></td><td><span class="tag ok">통과</span></td></tr><tr data-id="R00-0006-solver_fail"><td class="num mut">R00-0006-solver_fail</td><td>SC-2c471460e4</td><td>solver_fail</td><td>곡선 정점</td><td class="num"><span class="ok">✓ 0.00 s</span></td><td><span class="ok">✓</span></td><td><span class="mut">탐색</span></td><td><span class="tag ok">통과</span></td></tr><tr data-id="R00-0005-intermittent_bias"><td class="num mut">R00-0005-intermittent_bias</td><td>SC-39ded56505</td><td>intermittent_bias</td><td>직선</td><td class="num"><span class="mut">–</span></td><td><span class="ok">✓</span></td><td><span class="mut">탐색</span></td><td><span class="tag ok">통과</span></td></tr><tr data-id="R00-0004-saturate"><td class="num mut">R00-0004-saturate</td><td>SC-7efbc60fc4</td><td>saturate</td><td>곡선 탈출</td><td class="num"><span class="ok">✓ 0.00 s</span></td><td><span class="ok">✓</span></td><td><span class="mut">탐색</span></td><td><span class="tag ok">통과</span></td></tr><tr data-id="R00-0003-drift"><td class="num mut">R00-0003-drift</td><td>SC-074a9d210c</td><td>drift</td><td>곡선 정점</td><td class="num"><span class="bad">✗ 늦음 7.35 s</span></td><td><span class="ok">✓</span></td><td><span class="mut">탐색</span></td><td><span class="tag bad">F1 전환 실패·지연</span></td></tr><tr data-id="R00-0002-bias"><td class="num mut">R00-0002-bias</td><td>SC-bf541aa038</td><td>bias</td><td>곡선 탈출</td><td class="num"><span class="bad">✗ 늦음 1.05 s</span></td><td><span class="bad">✗ 차선</span></td><td><span class="mut">탐색</span></td><td><span class="tag bad">F1 전환 실패·지연</span></td></tr><tr data-id="R00-0001-saturate"><td class="num mut">R00-0001-saturate</td><td>SC-91f5e31bdc</td><td>saturate</td><td>곡선 진입</td><td class="num"><span class="ok">✓ 0.05 s</span></td><td><span class="ok">✓</span></td><td><span class="mut">탐색</span></td><td><span class="tag ok">통과</span></td></tr><tr data-id="R00-0000-bias"><td class="num mut">R00-0000-bias</td><td>SC-19db6b4fd7</td><td>bias</td><td>직선</td><td class="num"><span class="mut">–</span></td><td><span class="ok">✓</span></td><td><span class="mut">탐색</span></td><td><span class="tag ok">통과</span></td></tr></tbody></table></div></section>
+<section class="col" id="insight-section"><h2 class="insight-title">인사이트<span class="model-credit">Cosmos Reason 분석 결과</span></h2><div class="insights"><div class="insight-meta">Cosmos Reason이 모니터 판정 수치에서 도출한 해석</div><article class="insight-item"><h3>실패 런의 지연 감지와 높은 가속도 과잉</h3><p>지연 감지는 고장이 커브 진입/출구에서 발생했을 때 제어기가 충분한 회복 시간을 가지지 못했음을 시사한다. 높은 lat_jerk_excess는 급격한 스티어링 변화로 인한 차량 동적 불안정성을 나타낸다.</p></article><article class="insight-item"><h3>고장 유형별 성공률 차이</h3><p>bias와 drift는 지속적인 오차를 유발하여 회복이 어렵지만, saturate와 solver_fail는 단일 이벤트로 제어기가 회복할 수 있는 경우가 많다.</p></article><article class="insight-item"><h3>고장 발생 시점의 영향</h3><p>커브 진입/출구에서는 측방 가속도가 증가하여 고장에 대한 회복 여력이 줄어든다.</p></article><details class="analysis-details"><summary>분석 상세</summary><p>총 8개의 런이 포함된 데이터셋으로, 6개는 monitor_outcome pass, 2개는 F1_no_or_late_switch 실패 판정을 받았다. 고장 유형은 bias, drift, intermittent_bias, output_delay, saturate, solver_fail로 6종류이며, 각각 2, 1, 1, 1, 2, 1개의 런이 있다. 실패 런은 curve_apex와 curve_exit에서 발생했으며, 실패율은 25%이다. 실패 런의 평균 detection_latency_s는 4.2s로, pass 런의 0.017s보다 훨씬 길다. 실패 런의 평균 lat_jerk_excess_mps3는 14.895로, pass 런의 3.815보다 높다.</p><h4>실패 런의 지연 감지와 높은 가속도 과잉</h4><p>실패 런(R00-0002-bias, R00-0003-drift)은 평균 detection_latency_s 4.2s와 평균 lat_jerk_excess_mps3 14.895를 보였다. 이는 pass 런의 0.017s와 3.815에 비해 현저히 높다.</p><p>근거: R00-0002-bias · metrics.detection_latency_s = 1.05; R00-0003-drift · metrics.detection_latency_s = 7.35; R00-0002-bias · metrics.lat_jerk_excess_mps3 = 24.245; R00-0003-drift · metrics.lat_jerk_excess_mps3 = 5.544</p><p>모델 확신: high</p><h4>고장 유형별 성공률 차이</h4><p>saturate와 intermittent_bias, output_delay, solver_fail는 모두 pass를 기록했으나, bias와 drift는 각각 1개의 실패를 포함했다.</p><p>근거: R00-0001-saturate · monitor_outcome = pass; R00-0002-bias · monitor_outcome = F1_no_or_late_switch; R00-0003-drift · monitor_outcome = F1_no_or_late_switch; R00-0005-intermittent_bias · monitor_outcome = pass</p><p>모델 확신: medium</p><h4>고장 발생 시점의 영향</h4><p>실패 런은 curve_apex와 curve_exit에서 발생했으며, 이 시점에서는 차량의 동적 응답이 복잡해진다.</p><p>근거: R00-0002-bias · fault_plan.onset_event = curve_exit; R00-0003-drift · fault_plan.onset_event = curve_apex</p><p>모델 확신: medium</p><h4>다음 실험</h4><ul><li>커브 진입/출구에서의 고장 발생 시험을 추가로 수행 — 실패 런이 curve_apex와 curve_exit에서 집중적으로 발생했음을 고려하여, 이 시점에서의 회복 성능을 검증한다.</li><li>고장 지연 시간을 증가시켜 감지 성능 평가 — 실패 런의 detection_latency_s가 4.2s로 높은 것을 고려하여, 지연 시간을 조정하여 감지 알고리즘의 한계를 파악한다.</li><li>tire_friction_scale를 감소시켜 회복 성능 평가 — 실패 런의 tire_friction_scale이 0.75로 낮은 것을 고려하여, 마찰 계수를 더 낮추어 회복 여력을 검증한다.</li><li>고장 강도를 증가시켜 회복 한계 평가 — 실패 런의 고장 강도가 상대적으로 낮은 경우가 많으므로, 강도를 증가시켜 제어기의 회복 한계를 파악한다.</li><li>다양한 경로에서의 고장 발생 시험 — 현재 데이터셋은 4개의 경로만 포함하고 있으므로, 다른 경로에서의 고장 발생을 통해 일반화 성능을 평가한다.</li></ul><h4>분석 한계</h4><ul><li>실패 런이 2개로 표본 수가 부족하여 통계적 유의성을 확보하기 어렵다.</li><li>고장 유형별 실패율이 균일하지 않아 혼동 변수의 영향을 배제하기 어렵다.</li><li>실패 런의 고장 발생 시점이 curve_apex와 curve_exit에 집중되어 있어 일반화에 한계가 있다.</li></ul></details></div></section>
+</div>
+</div><script>
+(function(){
+ var KEY='sel:'+location.pathname, latest=document.body.dataset.latest;
+ function get(){try{return sessionStorage.getItem(KEY)}catch(e){return null}}
+ function put(v){try{v?sessionStorage.setItem(KEY,v):sessionStorage.removeItem(KEY)}catch(e){}}
+ function show(id){
+  var runs=document.querySelectorAll('.run'), found=false;
+  runs.forEach(function(el){var on=el.id==='run-'+id;el.hidden=!on;found=found||on});
+  if(!found&&latest){id=latest;var l=document.getElementById('run-'+latest);if(l)l.hidden=false}
+  document.querySelectorAll('.list tr[data-id]').forEach(function(tr){tr.classList.toggle('sel',tr.dataset.id===id)});
+  var h=document.getElementById('lefttitle'), b=document.getElementById('back');
+  if(h)h.textContent=(id===latest)?'최근 시나리오 결과':'선택한 시나리오 결과';
+  if(b)b.hidden=(id===latest);
+ }
+ document.querySelectorAll('.list tr[data-id]').forEach(function(tr){
+  tr.addEventListener('click',function(){var id=tr.dataset.id;put(id===latest?null:id);show(id)})});
+ var b=document.getElementById('back');if(b)b.addEventListener('click',function(){put(null);show(latest)});
+ show(get()||latest);
+ // reload for new results, but never while a video is playing
+ var every=+(document.body.dataset.refresh||5)*1000;
+ setInterval(function(){
+  var playing=[].some.call(document.querySelectorAll('video'),function(v){return !v.paused&&!v.ended});
+  if(!playing)location.reload();
+ },every);
+ try{var y=sessionStorage.getItem('y:'+location.pathname);if(y)scrollTo(0,+y);
+  addEventListener('beforeunload',function(){sessionStorage.setItem('y:'+location.pathname,scrollY)})}catch(e){}
+})();
+</script></body></html>

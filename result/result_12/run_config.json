@@ -1,0 +1,21 @@
+{
+  "mode": "real",
+  "ablation": "X-5",
+  "flags": {
+    "name": "full_code_aware",
+    "use_a": true,
+    "use_gp": true,
+    "use_df": true,
+    "use_b": true
+  },
+  "video_explainer": true,
+  "seed": 0,
+  "cold_start": 8,
+  "supervisor": "tight",
+  "gp_target": "safety_margin",
+  "batch_size": 6,
+  "rounds": 4,
+  "synthetic": false,
+  "scenario_space": "C:\\Users\\dongh\\Desktop\\junwoo\\SIL_HACKATHON\\pipeline\\04_feasibility_expansion\\scenario_space_av_stack.yaml",
+  "av_stack": "C:\\Users\\dongh\\Desktop\\junwoo\\SIL_HACKATHON\\pipeline\\08_carla_paired_run\\av_stack"
+}

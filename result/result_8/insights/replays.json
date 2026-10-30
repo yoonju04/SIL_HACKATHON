@@ -1,0 +1,145 @@
+{
+  "R00-0004-drift": {
+    "run_id": "R00-0004-drift",
+    "clip": "clips/ce59d30a23e3751369d6.mp4",
+    "start_s": 38.45,
+    "end_s": 44.35,
+    "event_s": 41.35,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "c28b2db8c86d4d3ad43ce8db60b8e345caa34ba2861c44d0558c1b4a8a0d2371"
+  },
+  "R00-0008-bias": {
+    "run_id": "R00-0008-bias",
+    "clip": "clips/e285b1f00b4786b37711.mp4",
+    "start_s": 33.45,
+    "end_s": 38.5,
+    "event_s": 35.5,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "c027f4bfe7517f5172f8f83e8e9166735f3a71f92ade294d3334203e9ae36cc0"
+  },
+  "R00-0009-drift": {
+    "run_id": "R00-0009-drift",
+    "clip": "clips/45d87921c9daebdd5376.mp4",
+    "start_s": 37.95,
+    "end_s": 48.25,
+    "event_s": 45.25,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "f9dd081045cdec5c308395f97aec1f1c74a321fd77385f020eaeefa854e4753a"
+  },
+  "R02-0019-bias": {
+    "run_id": "R02-0019-bias",
+    "clip": "clips/8498ae0df6bd5335a9b9.mp4",
+    "start_s": 34.0,
+    "end_s": 39.2,
+    "event_s": 36.2,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "2896737c3c36d920a71b1672cded3a36b7409d742ebd2f9d18a6c728403bce16"
+  },
+  "R02-0021-drift": {
+    "run_id": "R02-0021-drift",
+    "clip": "clips/6efa6f7927bf2865880f.mp4",
+    "start_s": 34.75,
+    "end_s": 41.8,
+    "event_s": 38.8,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "6b676689b39cfd874c64c4869d2d935fd12058570f2c578b788f0555699bfa28"
+  },
+  "R03-0027-drift": {
+    "run_id": "R03-0027-drift",
+    "clip": "clips/d0099dfe9eebe66fd88c.mp4",
+    "start_s": 35.15,
+    "end_s": 43.75,
+    "event_s": 40.75,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "d5e9f006628bc7311440150ef64b3a461c04a964374b7674fb10836d09dd60ef"
+  },
+  "R04-0032-drift": {
+    "run_id": "R04-0032-drift",
+    "clip": "clips/953f88ea9c90abd696cb.mp4",
+    "start_s": 35.9,
+    "end_s": 43.55,
+    "event_s": 40.55,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "ffda7bcc7697a4ff8791aa956fc5622a1e580acc0cd5a9b4a2277ee8e2e5516d"
+  },
+  "R06-0043-bias": {
+    "run_id": "R06-0043-bias",
+    "clip": "clips/ebc7cd676e60ae133baf.mp4",
+    "start_s": 33.4,
+    "end_s": 38.9,
+    "event_s": 35.9,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "1bf567d52f1b0f05d6d9162cd55f954896dbde7337fa03f6372c7f9d6086a2cd"
+  },
+  "R06-0046-bias": {
+    "run_id": "R06-0046-bias",
+    "clip": "clips/eedd1720289b4d2c5b3d.mp4",
+    "start_s": 9.2,
+    "end_s": 20.18,
+    "event_s": 17.4,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "d673354716cc0d1241d633d0843568259f342d8d37d57e9cc159c07986ba2f10"
+  },
+  "R08-0055-bias": {
+    "run_id": "R08-0055-bias",
+    "clip": "clips/4aa61bc396d5e166399f.mp4",
+    "start_s": 33.0,
+    "end_s": 38.05,
+    "event_s": 35.05,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "f5a5d7450683ff3b76d29302a9c4b5b00dbae1ab984d2e2649fb90788e05447c"
+  },
+  "R10-0066-bias": {
+    "run_id": "R10-0066-bias",
+    "clip": "clips/790745ccebc0cce50587.mp4",
+    "start_s": 33.8,
+    "end_s": 38.75,
+    "event_s": 35.75,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "83aa9269aec2cc315462d1e79ddb4d64d6548673816bcaf023c609c34d55c077"
+  },
+  "R10-0071-intermittent_bias": {
+    "run_id": "R10-0071-intermittent_bias",
+    "clip": "clips/3fe96d6149326dbbb51b.mp4",
+    "start_s": 33.9,
+    "end_s": 41.05,
+    "event_s": 38.05,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "1e4105db7ce6df04df8d9e2f7b58ff69bcfc683b71ec93013bfb18bc6afd8e7a"
+  },
+  "R11-0073-intermittent_bias": {
+    "run_id": "R11-0073-intermittent_bias",
+    "clip": "clips/0e23269f9a518094123c.mp4",
+    "start_s": 34.25,
+    "end_s": 40.05,
+    "event_s": 37.05,
+    "source": "front.mp4",
+    "exact_timing": true,
+    "error": null,
+    "source_stamp": "ad5f43da44d8d5b69aa62c0b3446b57f61cb41f3414c5a71c57d472dc1e67d2a"
+  }
+}

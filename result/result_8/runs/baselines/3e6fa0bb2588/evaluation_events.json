@@ -1,0 +1,134 @@
+[
+  {
+    "criterion": "RouteCompletionTest",
+    "frame": 0,
+    "event_type": "ROUTE_COMPLETION",
+    "message": "Agent has completed 100 of the route"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 342760,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 325.81% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 342913,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 200.67% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343014,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 195.34% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343225,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 50.55% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343338,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 123.47% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343440,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 245.34% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343543,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 360.07% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343644,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 186.14% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343746,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 143.79% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343846,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 203.61% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 343950,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 95.19% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 344051,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 100.63% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 344317,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 47.45% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 344423,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 85.62% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 344698,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 95.69% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 344800,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 133.93% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 345102,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 85.65% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 345202,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 141.3% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 345303,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 148.8% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 345346,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 161.47% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 345346,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 161.47% of the surrounding traffic's one"
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "benchmark": "Bench2Drive 0.0.3",
+  "evaluation_scope": "single published route subset",
+  "full_benchmark_score": false,
+  "route_id": "0",
+  "town": "Town10HD_Opt",
+  "source_commit": "48e6a6dbcb133220333bd65e242fbc2b492bb15b",
+  "routes_file": "C:\\Users\\dongh\\Desktop\\junwoo\\SIL_HACKATHON\\pipeline\\08_carla_paired_run\\av_stack\\scenarios\\town10_long.xml",
+  "routes_sha256": "c263a8bc52545efb8d5ec96c7354e4cd01e1d9a2784975f09286271d72958bc1",
+  "scenario_types": [
+    "HardBreakRoute",
+    "HardBreakRoute",
+    "BlockedIntersection"
+  ],
+  "controller": "supervised",
+  "planner": "pdm",
+  "seed": 17,
+  "tire_friction_scale": 0.9
+}

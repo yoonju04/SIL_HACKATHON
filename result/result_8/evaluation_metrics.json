@@ -1,0 +1,257 @@
+{
+  "n_runs": 84,
+  "n_valid": 82,
+  "n_switched": 50,
+  "n_final_safe_recovery": 25,
+  "n_failures": 25,
+  "both_sides_observed": true,
+  "boundary_band_runs": 6,
+  "boundary_band": 0.2,
+  "failures_per_simulation": 0.2976190476190476,
+  "simulations_to_first_failure": 5,
+  "unique_failure_conditions": 16,
+  "outcome_counts": {
+    "safe_recovery": 48,
+    "no_switch": 32,
+    "simulation_invalid": 2,
+    "unsettled": 2
+  },
+  "trigger_counts": {
+    "steer_rate_exceeded": 33,
+    "solver_failure": 5,
+    "None": 32,
+    "tracking_divergence": 13,
+    "stale_sequence": 1
+  },
+  "sr_outcome_counts": {
+    "pass": 69,
+    "F1_no_or_late_switch": 13,
+    "invalid": 2
+  },
+  "explanations": 24,
+  "explanations_accepted": 1,
+  "explanation_acceptance_rate": 0.041666666666666664,
+  "hallucination_rate": 0.9583333333333334,
+  "boundary_metrics": {
+    "band": 0.2,
+    "boundary_band_runs": 6,
+    "boundary_band_runs_0.5": 11,
+    "n_lrr": 50,
+    "per_fault_mode": {
+      "intermittent_bias": {
+        "n": 21,
+        "outcomes": {
+          "safe_recovery": 15,
+          "no_switch": 6
+        },
+        "final_safe": 10,
+        "mixed": true
+      },
+      "solver_fail": {
+        "n": 5,
+        "outcomes": {
+          "safe_recovery": 5
+        },
+        "final_safe": 4,
+        "mixed": true
+      },
+      "output_delay": {
+        "n": 11,
+        "outcomes": {
+          "no_switch": 11
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "bias": {
+        "n": 27,
+        "outcomes": {
+          "safe_recovery": 10,
+          "unsettled": 2,
+          "no_switch": 15
+        },
+        "final_safe": 5,
+        "mixed": true
+      },
+      "drift": {
+        "n": 5,
+        "outcomes": {
+          "safe_recovery": 5
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "saturate": {
+        "n": 12,
+        "outcomes": {
+          "safe_recovery": 12
+        },
+        "final_safe": 5,
+        "mixed": true
+      },
+      "stale": {
+        "n": 1,
+        "outcomes": {
+          "safe_recovery": 1
+        },
+        "final_safe": 1,
+        "mixed": false
+      }
+    },
+    "modes_with_mixed_outcome": [
+      "bias",
+      "intermittent_bias",
+      "saturate",
+      "solver_fail"
+    ],
+    "gp_prediction_diversity": {
+      "recovery_success": {
+        "n": 72,
+        "distinct": 72,
+        "min": 8e-06,
+        "max": 9.747856,
+        "std": 3.5470940161648183
+      },
+      "switched_indicator": {
+        "n": 72,
+        "distinct": 69,
+        "min": 0.14915,
+        "max": 0.952473,
+        "std": 0.16495998020748961
+      }
+    },
+    "selection_sources": {
+      "space_filling": 31,
+      "nemotron_a_refine": 4,
+      "nemotron_a": 27,
+      "perturbation": 22
+    },
+    "nemotron_a_share": 0.36904761904761907
+  },
+  "gp_boundary_sign_accuracy": {
+    "n": 50,
+    "accuracy": 1.0,
+    "truth": "leave-one-out on observed runs",
+    "truth_safe_fraction": 1.0,
+    "majority_baseline": 1.0,
+    "balanced_accuracy": null,
+    "predicted_safe_fraction": 1.0
+  },
+  "a_schema_valid_items": 178,
+  "a_items_returned": 178,
+  "rejected_candidates": 39,
+  "nemotron_a": {
+    "proposals_in_pool": 31,
+    "executed": 31,
+    "share_of_executed_runs": 0.36904761904761907,
+    "share_after_cold_start": 0.4305555555555556,
+    "proposals_with_range_extreme": 5,
+    "proposals_extreme_unjustified": 4,
+    "mean_edge_distance": 0.17594086021505376,
+    "expected_side": {
+      "boundary": 31
+    }
+  },
+  "nemotron_b": {
+    "b_hallucination_rate": 0.12631578947368421,
+    "b_code_agreement_rate": 0.8,
+    "b_checked_answers": 95,
+    "b_hallucinated_answers": 12,
+    "b_unknown_when_code_decides": 7,
+    "citation_valid_rate": 0.9963369963369964,
+    "citation_relevant_rate": 0.9963369963369964,
+    "per_question": {
+      "Q-B2": {
+        "asked": 1,
+        "checked": 1,
+        "hallucinated": 0,
+        "distinct_answers": 1,
+        "answers": {
+          "no": 1
+        }
+      },
+      "Q-B3": {
+        "asked": 1,
+        "checked": 1,
+        "hallucinated": 0,
+        "distinct_answers": 1,
+        "answers": {
+          "no": 1
+        }
+      },
+      "Q-B1": {
+        "asked": 31,
+        "checked": 31,
+        "hallucinated": 12,
+        "distinct_answers": 4,
+        "answers": {
+          "lqr_early": 16,
+          "stale_mpc": 3,
+          "corrupted_mpc": 9,
+          "unknown": 3
+        }
+      },
+      "Q-B4": {
+        "asked": 31,
+        "checked": 31,
+        "hallucinated": 0,
+        "distinct_answers": 6,
+        "answers": {
+          "steer_rate_exceeded": 15,
+          "solver_failure": 2,
+          "none_during_fault": 7,
+          "unknown": 4,
+          "stale_sequence": 2,
+          "tracking_divergence": 1
+        }
+      },
+      "Q-B5": {
+        "asked": 31,
+        "checked": 31,
+        "hallucinated": 0,
+        "distinct_answers": 4,
+        "answers": {
+          "steer_value_only": 23,
+          "ok_flag": 2,
+          "steer_and_reported_state": 4,
+          "sequence_or_stamp": 2
+        }
+      }
+    },
+    "note": "hallucinated = majority answer outside expected_from_code (not 'unknown'); one row per b_key + static",
+    "gp_b_columns": 18,
+    "gp_b_constant_columns": 8,
+    "gp_b_constant_fraction": 0.4444444444444444,
+    "gp_b_questions": [
+      "Q-B1",
+      "Q-B4"
+    ],
+    "b_keys": 31
+  },
+  "llm_usage": {
+    "A": {
+      "calls": 13,
+      "prompt_tokens": 253584,
+      "completion_tokens": 35579,
+      "stub": false
+    },
+    "B": {
+      "calls": 96,
+      "prompt_tokens": 2063262,
+      "completion_tokens": 616588,
+      "stub": false
+    },
+    "C": {
+      "calls": 26,
+      "prompt_tokens": 172536,
+      "completion_tokens": 37854,
+      "stub": false
+    },
+    "A_refine": {
+      "calls": 12,
+      "prompt_tokens": 182415,
+      "completion_tokens": 165429,
+      "stub": false
+    }
+  }
+}

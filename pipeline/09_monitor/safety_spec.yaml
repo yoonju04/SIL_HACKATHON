@@ -27,7 +27,11 @@ safety_specification:
     - id: P-04
       description: "횡 저크 한계 (라벨)"
       robustness: "lateral_jerk_threshold - max_over_window(abs(movavg_0.5s(d a_y/dt)))"
-      lateral_jerk_threshold_mps3: 5.0         # PROVISIONAL. 사용자 제공 참고값 ISO 11270:2014 (E-01)
+      lateral_jerk_threshold_mps3: 15.0        # PROVISIONAL, data-based (integration4, 2026-10-29). Was 5.0 = user reference ISO 11270:2014 (E-01)
+      # 5.0 is below normal curve driving: fault-free baselines (result_8..10, n=91) reach |jerk| p90 9.5, max 18.2 m/s^3 in the
+      # 10 s window. Among 70 switched tight-supervisor runs, prompt switches had excess <= ~13 (13 of the 18 over 5 were in
+      # curves where the baseline itself was over 5) and late tracking_divergence switches 11..25 (LQR pulling the car back).
+      # 15 keeps the late, harsh recoveries and drops the curve noise; it decides both lat_jerk_excess and the GP safety_margin.
       role: label_not_failure
       primary: baseline_relative
       secondary: total

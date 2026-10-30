@@ -1,0 +1,1 @@
+{"map": "Town03", "route_id": "bench2drive:24206", "initial_state": null, "seed": 17, "weather": null, "traffic": null, "speed_mps": null, "tire_friction_scale": 0.5, "vehicle_mass_scale": null, "maneuver": null, "velocity_disturbance": null, "steering_disturbance": null, "max_speed_kmh": 25.0, "planner": "pdm"}

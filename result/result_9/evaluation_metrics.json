@@ -1,0 +1,264 @@
+{
+  "n_runs": 16,
+  "n_valid": 15,
+  "n_switched": 9,
+  "n_final_safe_recovery": 3,
+  "n_failures": 6,
+  "both_sides_observed": true,
+  "boundary_band_runs": 2,
+  "boundary_band": 0.2,
+  "boundary_target": "safety_margin",
+  "boundary_band_runs_lrr": 1,
+  "target_negative_runs": 6,
+  "failures_per_simulation": 0.375,
+  "simulations_to_first_failure": 1,
+  "unique_failure_conditions": 6,
+  "outcome_counts": {
+    "safe_recovery": 9,
+    "no_switch": 6,
+    "simulation_invalid": 1
+  },
+  "trigger_counts": {
+    "steer_rate_exceeded": 5,
+    "tracking_divergence": 4,
+    "None": 6,
+    "solver_failure": 1
+  },
+  "sr_outcome_counts": {
+    "pass": 12,
+    "F1_no_or_late_switch": 3,
+    "invalid": 1
+  },
+  "explanations": 4,
+  "explanations_accepted": 1,
+  "explanation_acceptance_rate": 0.25,
+  "hallucination_rate": 0.75,
+  "boundary_metrics": {
+    "band": 0.2,
+    "target": "safety_margin",
+    "boundary_band_runs": 2,
+    "boundary_band_runs_0.5": 4,
+    "n_target": 9,
+    "target_negative": 6,
+    "safety_margin_binding": {
+      "lat_jerk": 9
+    },
+    "boundary_band_runs_lrr": 1,
+    "n_lrr": 9,
+    "per_fault_mode": {
+      "saturate": {
+        "n": 3,
+        "outcomes": {
+          "safe_recovery": 3
+        },
+        "final_safe": 2,
+        "mixed": true
+      },
+      "bias": {
+        "n": 6,
+        "outcomes": {
+          "safe_recovery": 1,
+          "no_switch": 5
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "drift": {
+        "n": 2,
+        "outcomes": {
+          "safe_recovery": 2
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "intermittent_bias": {
+        "n": 2,
+        "outcomes": {
+          "safe_recovery": 2
+        },
+        "final_safe": 1,
+        "mixed": true
+      },
+      "solver_fail": {
+        "n": 1,
+        "outcomes": {
+          "safe_recovery": 1
+        },
+        "final_safe": 0,
+        "mixed": false
+      },
+      "output_delay": {
+        "n": 1,
+        "outcomes": {
+          "no_switch": 1
+        },
+        "final_safe": 0,
+        "mixed": false
+      }
+    },
+    "modes_with_mixed_outcome": [
+      "intermittent_bias",
+      "saturate"
+    ],
+    "gp_prediction_diversity": {
+      "recovery_success": {
+        "n": 4,
+        "distinct": 4,
+        "min": -17.697048,
+        "max": -10.543861,
+        "std": 2.590515038209716
+      },
+      "switched_indicator": {
+        "n": 4,
+        "distinct": 4,
+        "min": 0.359395,
+        "max": 0.422105,
+        "std": 0.027722095483566897
+      }
+    },
+    "selection_sources": {
+      "nemotron_a": 5,
+      "space_filling": 8,
+      "nemotron_a_refine": 1,
+      "perturbation": 2
+    },
+    "nemotron_a_share": 0.375
+  },
+  "gp_boundary_sign_accuracy": {
+    "n": 9,
+    "accuracy": 0.6666666666666666,
+    "truth": "leave-one-out on observed runs",
+    "truth_safe_fraction": 0.3333333333333333,
+    "majority_baseline": 0.6666666666666666,
+    "balanced_accuracy": 0.6666666666666666,
+    "predicted_safe_fraction": 0.4444444444444444,
+    "vs_final_safe": {
+      "n": 9,
+      "accuracy": 0.6666666666666666,
+      "truth_safe_fraction": 0.3333333333333333,
+      "majority_baseline": 0.6666666666666666,
+      "balanced_accuracy": 0.6666666666666666,
+      "predicted_safe_fraction": 0.4444444444444444
+    }
+  },
+  "a_schema_valid_items": 21,
+  "a_items_returned": 21,
+  "rejected_candidates": 5,
+  "nemotron_a": {
+    "proposals_in_pool": 6,
+    "executed": 6,
+    "share_of_executed_runs": 0.375,
+    "share_after_cold_start": 0.5,
+    "proposals_with_range_extreme": 2,
+    "proposals_extreme_unjustified": 2,
+    "mean_edge_distance": 0.0986111111111111,
+    "expected_side": {
+      "boundary": 6
+    }
+  },
+  "nemotron_b": {
+    "b_hallucination_rate": 0.0963855421686747,
+    "b_code_agreement_rate": 0.7469879518072289,
+    "b_checked_answers": 83,
+    "b_hallucinated_answers": 8,
+    "b_unknown_when_code_decides": 13,
+    "citation_valid_rate": 0.8458333333333333,
+    "citation_relevant_rate": 0.6208333333333333,
+    "per_question": {
+      "Q-B2": {
+        "asked": 1,
+        "checked": 1,
+        "hallucinated": 0,
+        "distinct_answers": 1,
+        "answers": {
+          "no": 1
+        }
+      },
+      "Q-B3": {
+        "asked": 1,
+        "checked": 1,
+        "hallucinated": 0,
+        "distinct_answers": 1,
+        "answers": {
+          "no": 1
+        }
+      },
+      "Q-B1": {
+        "asked": 27,
+        "checked": 27,
+        "hallucinated": 6,
+        "distinct_answers": 5,
+        "answers": {
+          "lqr_early": 4,
+          "corrupted_mpc": 14,
+          "unknown": 3,
+          "stale_mpc": 5,
+          "hold_last": 1
+        }
+      },
+      "Q-B4": {
+        "asked": 27,
+        "checked": 27,
+        "hallucinated": 1,
+        "distinct_answers": 7,
+        "answers": {
+          "steer_rate_exceeded": 6,
+          "unknown": 9,
+          "none_during_fault": 6,
+          "solver_failure": 2,
+          "tracking_divergence": 1,
+          "steer_out_of_range": 1,
+          "stale_sequence": 2
+        }
+      },
+      "Q-B5": {
+        "asked": 27,
+        "checked": 27,
+        "hallucinated": 1,
+        "distinct_answers": 5,
+        "answers": {
+          "steer_value_only": 19,
+          "ok_flag": 2,
+          "steer_and_reported_state": 2,
+          "sequence_or_stamp": 3,
+          "unknown": 1
+        }
+      }
+    },
+    "note": "hallucinated = majority answer outside expected_from_code (not 'unknown'); one row per b_key + static",
+    "gp_b_columns": 18,
+    "gp_b_constant_columns": 10,
+    "gp_b_constant_fraction": 0.5555555555555556,
+    "gp_b_questions": [
+      "Q-B1",
+      "Q-B4"
+    ],
+    "b_keys": 27
+  },
+  "llm_usage": {
+    "A": {
+      "calls": 2,
+      "prompt_tokens": 27076,
+      "completion_tokens": 5305,
+      "stub": false
+    },
+    "B": {
+      "calls": 84,
+      "prompt_tokens": 1804899,
+      "completion_tokens": 465904,
+      "stub": false
+    },
+    "C": {
+      "calls": 5,
+      "prompt_tokens": 30084,
+      "completion_tokens": 9321,
+      "stub": false
+    },
+    "A_refine": {
+      "calls": 1,
+      "prompt_tokens": 13801,
+      "completion_tokens": 13617,
+      "stub": false
+    }
+  }
+}

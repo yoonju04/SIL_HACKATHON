@@ -1,0 +1,441 @@
+{
+  "a_calls": [
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 956,
+        "prompt_tokens": 7323,
+        "total_tokens": 8279,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 7323
+      },
+      "schema_error_examples": [],
+      "items_returned": 4,
+      "items_valid": 4,
+      "round": 0,
+      "requested": 4,
+      "boundary_regions_given": 0,
+      "range_extreme_unjustified": 1
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 1192,
+        "prompt_tokens": 15418,
+        "total_tokens": 16610,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 15418
+      },
+      "schema_error_examples": [],
+      "items_returned": 5,
+      "items_valid": 5,
+      "round": 1,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 1
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 10841,
+        "prompt_tokens": 10775,
+        "total_tokens": 21616,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 10319,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 10775
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 1,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2586,
+        "prompt_tokens": 19503,
+        "total_tokens": 22089,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 19503
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 2,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 5
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": "network error: ReadTimeout",
+      "truncated": false,
+      "response_format": "json_schema",
+      "round": 2,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2367,
+        "prompt_tokens": 21807,
+        "total_tokens": 24174,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 4192
+        },
+        "prompt_cache_hit_tokens": 4192,
+        "prompt_cache_miss_tokens": 17615
+      },
+      "schema_error_examples": [],
+      "items_returned": 12,
+      "items_valid": 12,
+      "round": 3,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 3
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": "nvidia/Nemotron-3_5-Lightning: finish_reason=length (raise max_tokens or disable thinking)",
+      "truncated": true,
+      "response_format": "json_schema",
+      "round": 3,
+      "requested": 3,
+      "refine": true
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 2361,
+        "prompt_tokens": 23205,
+        "total_tokens": 25566,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 4192
+        },
+        "prompt_cache_hit_tokens": 4192,
+        "prompt_cache_miss_tokens": 19013
+      },
+      "schema_error_examples": [],
+      "items_returned": 13,
+      "items_valid": 13,
+      "round": 4,
+      "requested": 15,
+      "boundary_regions_given": 6,
+      "range_extreme_unjustified": 2
+    },
+    {
+      "schema_errors": 0,
+      "parse_error": null,
+      "truncated": false,
+      "response_format": "json_schema",
+      "usage": {
+        "completion_tokens": 11742,
+        "prompt_tokens": 15422,
+        "total_tokens": 27164,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": null,
+          "reasoning_tokens": 11205,
+          "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": null,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 15422
+      },
+      "schema_error_examples": [],
+      "items_returned": 3,
+      "items_valid": 3,
+      "round": 4,
+      "requested": 3,
+      "refine": true
+    }
+  ],
+  "rejected": [
+    {
+      "scenario_id": "SC-94820cf73d",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28035 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-8c19d7f326",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28035 at 35.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-88f9325952",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_apex excluded on bench2drive:28035 at 35.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-dad82f5610",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28035 at 35.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-b473b2a2f1",
+      "tags": [
+        "G-04_reject"
+      ],
+      "problems": [
+        "baseline failed"
+      ]
+    },
+    {
+      "scenario_id": "SC-d2c63822a6",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28035 at 30.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    },
+    {
+      "scenario_id": "SC-a5b45ac0b6",
+      "source": "nemotron_a",
+      "tags": [
+        "G-02_reject"
+      ],
+      "problems": [
+        "onset_event curve_entry excluded on bench2drive:28154 at 25.0 km/h (route_onset_exclusions: < 6 s left after the event, V-03)"
+      ]
+    }
+  ],
+  "llm_errors": [],
+  "gp_history": {
+    "files": [
+      "result/result_10/run_records.jsonl",
+      "result/result_11/run_records.jsonl",
+      "result/result_8/run_records.jsonl",
+      "result/result_9/run_records.jsonl"
+    ],
+    "loaded": 119,
+    "skipped": {
+      "not sim_status ok": 3,
+      "safety_margin: unsettled run without settle_hold_max_s (logged before #9)": 2
+    },
+    "gp_target": "safety_margin"
+  },
+  "nemotron_b": {
+    "b_hallucination_rate": 0.10869565217391304,
+    "b_code_agreement_rate": 0.8260869565217391,
+    "b_checked_answers": 92,
+    "b_hallucinated_answers": 10,
+    "b_unknown_when_code_decides": 6,
+    "citation_valid_rate": 0.9927536231884058,
+    "citation_relevant_rate": 0.9927536231884058,
+    "per_question": {
+      "Q-B2": {
+        "asked": 1,
+        "checked": 1,
+        "matched": 1,
+        "hallucinated": 0,
+        "unknown_when_decided": 0,
+        "answers": {
+          "no": 1
+        },
+        "citations": 3,
+        "citations_valid": 3,
+        "citations_judged": 3,
+        "citations_relevant": 3,
+        "distinct_answers": 1,
+        "hallucination_rate": 0.0
+      },
+      "Q-B3": {
+        "asked": 1,
+        "checked": 1,
+        "matched": 1,
+        "hallucinated": 0,
+        "unknown_when_decided": 0,
+        "answers": {
+          "no": 1
+        },
+        "citations": 3,
+        "citations_valid": 3,
+        "citations_judged": 3,
+        "citations_relevant": 3,
+        "distinct_answers": 1,
+        "hallucination_rate": 0.0
+      },
+      "Q-B1": {
+        "asked": 30,
+        "checked": 30,
+        "matched": 20,
+        "hallucinated": 10,
+        "unknown_when_decided": 0,
+        "answers": {
+          "lqr_early": 14,
+          "stale_mpc": 3,
+          "corrupted_mpc": 13
+        },
+        "citations": 90,
+        "citations_valid": 90,
+        "citations_judged": 90,
+        "citations_relevant": 90,
+        "distinct_answers": 3,
+        "hallucination_rate": 0.3333333333333333
+      },
+      "Q-B4": {
+        "asked": 30,
+        "checked": 30,
+        "matched": 24,
+        "hallucinated": 0,
+        "unknown_when_decided": 6,
+        "answers": {
+          "steer_rate_exceeded": 15,
+          "solver_failure": 2,
+          "none_during_fault": 5,
+          "unknown": 6,
+          "stale_sequence": 2
+        },
+        "citations": 90,
+        "citations_valid": 89,
+        "citations_judged": 90,
+        "citations_relevant": 89,
+        "distinct_answers": 5,
+        "hallucination_rate": 0.0
+      },
+      "Q-B5": {
+        "asked": 30,
+        "checked": 30,
+        "matched": 30,
+        "hallucinated": 0,
+        "unknown_when_decided": 0,
+        "answers": {
+          "steer_value_only": 22,
+          "ok_flag": 2,
+          "steer_and_reported_state": 4,
+          "sequence_or_stamp": 2
+        },
+        "citations": 90,
+        "citations_valid": 89,
+        "citations_judged": 90,
+        "citations_relevant": 89,
+        "distinct_answers": 4,
+        "hallucination_rate": 0.0
+      }
+    },
+    "note": "hallucinated = majority answer outside expected_from_code (not 'unknown'); one row per b_key + static"
+  },
+  "b_hallucination_rate": 0.10869565217391304,
+  "gp_train_counts": [
+    {
+      "round": 1,
+      "recovery_success": 123,
+      "switched_indicator": 127,
+      "rows": 127,
+      "own_runs": 8,
+      "history_runs": 119,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 2,
+      "recovery_success": 127,
+      "switched_indicator": 132,
+      "rows": 132,
+      "own_runs": 13,
+      "history_runs": 119,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 3,
+      "recovery_success": 132,
+      "switched_indicator": 138,
+      "rows": 138,
+      "own_runs": 19,
+      "history_runs": 119,
+      "gp_acquisition_active": true
+    },
+    {
+      "round": 4,
+      "recovery_success": 137,
+      "switched_indicator": 144,
+      "rows": 144,
+      "own_runs": 25,
+      "history_runs": 119,
+      "gp_acquisition_active": true
+    }
+  ]
+}

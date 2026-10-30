@@ -1,0 +1,138 @@
+{
+    "_checkpoint": {
+        "global_record": {
+            "index": -1,
+            "route_id": -1,
+            "status": "Failed",
+            "infractions": {
+                "collisions_layout": 0.0,
+                "collisions_pedestrian": 0.0,
+                "collisions_vehicle": 0.0,
+                "red_light": 0.0,
+                "stop_infraction": 0.0,
+                "outside_route_lanes": 0.0,
+                "min_speed_infractions": 117.702,
+                "yield_emergency_vehicle_infractions": 0.0,
+                "scenario_timeouts": 0.0,
+                "route_dev": 0.0,
+                "vehicle_blocked": 0.0,
+                "route_timeout": 0.0
+            },
+            "scores_mean": {
+                "score_composed": 55.03,
+                "score_route": 55.03,
+                "score_penalty": 1.0
+            },
+            "scores_std_dev": {
+                "score_composed": 0,
+                "score_route": 0,
+                "score_penalty": 0
+            },
+            "meta": {
+                "total_length": 154.389,
+                "duration_game": 22.65,
+                "duration_system": 25.194,
+                "exceptions": [
+                    [
+                        "RouteScenario_28154_rep0",
+                        0,
+                        "Failed"
+                    ]
+                ]
+            }
+        },
+        "progress": [
+            1,
+            1
+        ],
+        "records": [
+            {
+                "index": 0,
+                "route_id": "RouteScenario_28154_rep0",
+                "scenario_name": "T_Junction_1",
+                "weather_id": "6",
+                "save_name": "RouteScenario_28154_rep0_Town10HD_T_Junction_1_6_10_29_05_18_32",
+                "status": "Failed",
+                "num_infractions": 10,
+                "infractions": {
+                    "collisions_layout": [],
+                    "collisions_pedestrian": [],
+                    "collisions_vehicle": [],
+                    "red_light": [],
+                    "stop_infraction": [],
+                    "outside_route_lanes": [],
+                    "min_speed_infractions": [
+                        "Average speed is 86.68% of the surrounding traffic's one",
+                        "Average speed is 87.57% of the surrounding traffic's one",
+                        "Average speed is 98.28% of the surrounding traffic's one",
+                        "Average speed is 119.51% of the surrounding traffic's one",
+                        "Average speed is 137.92% of the surrounding traffic's one",
+                        "Average speed is 199.09% of the surrounding traffic's one",
+                        "Average speed is 46.27% of the surrounding traffic's one",
+                        "Average speed is 227.28% of the surrounding traffic's one",
+                        "Average speed is 141.39% of the surrounding traffic's one",
+                        "Average speed is 169.22% of the surrounding traffic's one"
+                    ],
+                    "yield_emergency_vehicle_infractions": [],
+                    "scenario_timeouts": [],
+                    "route_dev": [],
+                    "vehicle_blocked": [],
+                    "route_timeout": []
+                },
+                "scores": {
+                    "score_route": 55.03,
+                    "score_penalty": 1.0,
+                    "score_composed": 55.03
+                },
+                "meta": {
+                    "route_length": 154.389,
+                    "duration_game": 22.65,
+                    "duration_system": 25.194
+                },
+                "town_name": "Town10HD"
+            }
+        ]
+    },
+    "entry_status": "Finished",
+    "eligible": true,
+    "sensors": [
+        "carla_opendrive_map",
+        "carla_imu",
+        "carla_speedometer",
+        "carla_camera"
+    ],
+    "values": [
+        "55.03",
+        "55.03",
+        "1.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "0.0",
+        "117.702"
+    ],
+    "labels": [
+        "Avg. driving score",
+        "Avg. route completion",
+        "Avg. infraction penalty",
+        "Collisions with pedestrians",
+        "Collisions with vehicles",
+        "Collisions with layout",
+        "Red lights infractions",
+        "Stop sign infractions",
+        "Off-road infractions",
+        "Route deviations",
+        "Route timeouts",
+        "Agent blocked",
+        "Yield emergency vehicles infractions",
+        "Scenario timeouts",
+        "Min speed infractions"
+    ]
+}

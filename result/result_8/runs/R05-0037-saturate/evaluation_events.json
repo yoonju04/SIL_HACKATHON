@@ -1,0 +1,68 @@
+[
+  {
+    "criterion": "RouteCompletionTest",
+    "frame": 0,
+    "event_type": "ROUTE_COMPLETION",
+    "message": "Agent has completed 49.59 of the route"
+  },
+  {
+    "criterion": "RunningStopTest",
+    "frame": 1115101,
+    "event_type": "STOP_INFRACTION",
+    "message": "Agent ran a stop with id=5796 at (x=57.45, y=61.15, z=0.15)"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115072,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 297.74% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115173,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 348.93% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115231,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 346.95% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115541,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 45.44% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115708,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 83.34% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115780,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 245.01% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115837,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 330.92% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115896,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 402.69% of the surrounding traffic's one"
+  },
+  {
+    "criterion": "MinSpeedTest",
+    "frame": 1115954,
+    "event_type": "MIN_SPEED_INFRACTION",
+    "message": "Average speed is 221.51% of the surrounding traffic's one"
+  }
+]

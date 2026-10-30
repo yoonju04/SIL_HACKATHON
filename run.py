@@ -40,8 +40,9 @@ from engine import scenarios as SC
 from engine.carla_runner import CarlaRunner, MockRunner, carla_reachable
 from engine.config import (REPO_ROOT, load_stage_configs, load_yaml, resolve_av_stack,
                                     resolve_scenario_space)
-from engine.explainer import explain, stub_explanation, verify
+from engine.explainer import GROUNDED_TIMELINE_KEYS, explain, stub_explanation, verify
 from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure, outcome_examples, tried_view,
+                             visible_failure,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
 from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
 from engine.monitor import (compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline,
@@ -290,6 +291,13 @@ class Loop:
             self.jev_questions, self.jev_meta = JDG.judge_questions(self.questions, jc, JDG.state_views(jc, self.judge_b))
             self.jev_client, self.jev_backend = JDG.make_client(self.judge_b, jc, self.mode, self.questions, self.jev_meta,
                                                                 seed=self.seed, log_path=self.llm_log, llm_cfg=llm_cfg)
+            if self.mode != "mock" and getattr(self.jev_client, "stub", False):
+                bar = "!" * 100
+                msg = (f"{bar}\nWARNING: 05b judge backend '{self.judge_b}' is NOT live ({self.jev_backend}).\n"
+                       f"The judges run as a deterministic SYNTHETIC stub: B features, B proposals and judge metrics are "
+                       f"NOT real.\nUse --judge-b nemotron (needs NEBIUS_API_KEY) or start laya-serve.\n{bar}")
+                print(msg, file=sys.stderr, flush=True)
+                self.stats.setdefault("warnings", []).append(f"05b judge {self.judge_b} fell back to stub: {self.jev_backend}")
 
     def _setup_runner(self) -> None:
         rc = self.runner_cfg
@@ -818,6 +826,15 @@ class Loop:
         re-scored is excluded with the reason. Never-switched runs keep only the switch label (target undefined)."""
         tg = {k: v for k, v in (r.get("gp_targets") or {}).items() if k not in self.metric_rules}
         metrics = dict(r.get("metrics") or {})
+        sm_rule = any((rule.get("gp") or {}).get("target") == "safety_margin" for rule in self.metric_rules.values())
+        if r.get("switch_time") is None and sm_rule:
+            # integration4: never-switched runs carry a lane-only safety margin (judgment.rescore_no_switch)
+            sm, why = J.rescore_safety_margin(r, self.th)
+            if sm is not None:
+                metrics["safety_margin"] = sm["value"]
+                has_fault = (((r.get("parameters") or {}).get("fault") or {}).get("mode") or "none") != "none"
+                tg.update(J.gp_targets(self.metric_rules, metrics, r.get("baseline_metrics"), has_fault))
+            return tg, None
         if r.get("switch_time") is not None:
             for name, rule in self.metric_rules.items():
                 if (rule.get("gp") or {}).get("target") == "safety_margin":
@@ -1156,12 +1173,17 @@ class Loop:
         if not self.video_on:
             return
         sel = self.vcfg["select_runs"]
+        # integration4: failed_rule visible (default) = lane departure / collision / late switch only; any = old is_failure
+        failed = visible_failure if sel.get("failed_rule", "visible") == "visible" else is_failure
+        mode = (self.vcfg.get("prompt") or {}).get("mode", "log_grounded")
         picks = []
         for r in new:
             y = recovery_target_value(r, self.target_name())     # #9: the GP target (safety_margin by default)
             near = y is not None and abs(y) < float(sel["boundary_near_abs_robustness"])
-            if (sel["failed"] and is_failure(r)) or near:
-                picks.append((0 if is_failure(r) else 1, r))
+            if near and failed is visible_failure and (r.get("metrics") or {}).get("safety_margin_binding") in ("lat_jerk", "lat_acc"):
+                near = False                                     # boundary set by jerk / lateral accel.: nothing to see
+            if (sel["failed"] and failed(r)) or near:
+                picks.append((0 if failed(r) else 1, r))
         picks = [r for _, r in sorted(picks, key=lambda p: p[0])][: int(sel["max_per_round"])]
         clip_cfg = self.vcfg["clip"]
         tol = float(self.vcfg["verification"]["time_tolerance_s"])
@@ -1199,15 +1221,20 @@ class Loop:
                         result = {"explanation": expl, "media_used": "video", "model": "stub/explainer (SYNTHETIC)", "errors": []}
                     else:
                         vis = tuple((self.vcfg.get("prompt") or {}).get("visible_timeline_keys") or ())
-                        result = explain(self.client_c, self.c_settings, clip, timeline, self.taxonomy, tag="C", visible_keys=vis or None) \
+                        if mode == "log_grounded":    # the monitor's events are given (prompt.grounded_timeline_keys overrides)
+                            vis = tuple((self.vcfg.get("prompt") or {}).get("grounded_timeline_keys") or GROUNDED_TIMELINE_KEYS)
+                        result = explain(self.client_c, self.c_settings, clip, timeline, self.taxonomy, tag="C", visible_keys=vis or None,
+                                         mode=mode) \
                             if cosmos_ok else {"explanation": None, "errors": ["cosmos endpoint not ready (--cosmos-power auto)"]}
                         if result["explanation"] is None and self.c_settings is not self.c_fallback:
                             fb = TokenFactoryClient.from_config(self.cfg["llm"], self.llm_log)
-                            result = {**explain(fb, self.c_fallback, clip, timeline, self.taxonomy, tag="C_fallback", visible_keys=vis or None),
+                            result = {**explain(fb, self.c_fallback, clip, timeline, self.taxonomy, tag="C_fallback", visible_keys=vis or None,
+                                                mode=mode),
                                       "primary_errors": result["errors"]}
                     entry.update(result)
                     entry["verification"] = verify(entry.get("explanation"), timeline, clip, self.taxonomy, tol,
-                                                   float(self.vcfg["verification"].get("visible_departure_margin_m", 0.0)))
+                                                   float(self.vcfg["verification"].get("visible_departure_margin_m", 0.0)),
+                                                   mode=mode)
                 assert entry["monitor_labels_snapshot"]["recovery_outcome"] == r["recovery_outcome"]  # explainer never edits labels
                 self.explanations[r["run_id"]] = entry
                 append_jsonl(self.out / "explanations.jsonl", entry)
@@ -1734,7 +1761,8 @@ def load_dotenv(path: Path = REPO_ROOT / ".env") -> None:
             os.environ[k] = v
 
 
-def campaign_insights(out: Path, mode: str, cfg: dict, cosmos: CosmosGuard | None = None) -> dict | None:
+def campaign_insights(out: Path, mode: str, cfg: dict, cosmos: CosmosGuard | None = None,
+                      history: list[str] | None = None) -> dict | None:
     """09 monitor Cosmos campaign insights (pipeline/09_monitor/explain.py) after the loop -> out/insights/.
     Text-only (monitor numbers, no video). mock: no network. Never fails the run."""
     if mode != "mock" and cosmos is not None and cosmos.power is not None:
@@ -1743,7 +1771,7 @@ def campaign_insights(out: Path, mode: str, cfg: dict, cosmos: CosmosGuard | Non
                 log("campaign insights skipped: Cosmos endpoint not ready (--cosmos-power auto); "
                     "later: python -m engine.insights " + str(out))
                 return None
-            return campaign_insights(out, mode, cfg, None)
+            return campaign_insights(out, mode, cfg, None, history)
     try:
         from engine.insights import run_insights
         res = run_insights(out, mode=mode, llm_cfg=cfg["llm"])
@@ -1760,6 +1788,14 @@ def campaign_insights(out: Path, mode: str, cfg: dict, cosmos: CosmosGuard | Non
                      f"- 결과: `insights/insights.json`, 화면: `insights/campaign.html` (SR 모니터 기준 판정, 참고용)\n")
     except OSError as e:
         log(f"report.md insights line not written: {e}")
+    # integration4: which faults are critical and where their boundaries are (code table + Cosmos reading of it);
+    # after the insights lines so publish() can put its section into report.md, insights.json and both pages
+    try:
+        from engine.boundaries import run_boundaries
+        bnd = run_boundaries(out, history=history, mode=mode, cfg=cfg)
+        log(f"boundaries: {bnd['status']}, {bnd['n_points']} runs, ranking {bnd['ranking']} -> {bnd['path']}")
+    except Exception as e:  # noqa: BLE001 - a report add-on; run results are already written
+        log(f"boundaries failed (run results unaffected): {type(e).__name__}: {e}")
     return res
 
 
@@ -1844,7 +1880,7 @@ def main(argv: list[str] | None = None) -> int:
         m = loop.run()
         if args.insights == "on":
             loop.screen("캠페인 인사이트 만드는 중")
-        ins = campaign_insights(out, mode, loop.cfg, loop.cosmos) if args.insights == "on" else None
+        ins = campaign_insights(out, mode, loop.cfg, loop.cosmos, history=loop.gp_history) if args.insights == "on" else None
     except BaseException:
         loop.screen("중단됨 (오류 또는 Ctrl+C)")
         raise

@@ -10,7 +10,7 @@ def _rec():
 
 
 def _insight(title, conf):
-    return {"title": title, "finding": f"{title} 관측", "interpretation": "i", "confidence": conf,
+    return {"title": title, "finding": f"{title} observed", "interpretation": "i", "confidence": conf,
             "evidence": [{"run_id": "R00-0000-saturate", "metric": "metrics.margin_delta_m", "value": -7.384}]}
 
 
@@ -19,39 +19,36 @@ def test_main_screen_renders_compact_insight_panel(tmp_path):
     (tmp_path / "insights").mkdir()
     (tmp_path / "insights" / "campaign.html").write_text("x", encoding="utf-8")
     (tmp_path / "insights" / "insights.json").write_text(json.dumps({
-        "status": "complete", "summary": "요약 <b>", "model": "m",
+        "status": "complete", "summary": "summary <b>", "model": "m",
         "statistics": {"failure_rate": 0.5, "graded_triggered_runs": 2, "failure_count": 1},
-        "insights": [_insight("낮은 것", "low"), _insight("중간 것", "medium"), _insight("포화 고장", "high"),
-                     _insight("두번째 높음", "high")],
-        "next_experiments": [{"proposal": "직선 비교", "rationale": "r", "run_ids": ["R00-0000-saturate"]}],
-        "limitations": ["표본 부족"]}, ensure_ascii=False), encoding="utf-8")
+        "insights": [_insight("low one", "low"), _insight("medium one", "medium"), _insight("first high", "high"),
+                     _insight("second high", "high")],
+        "next_experiments": [{"proposal": "compare straight", "rationale": "r", "run_ids": ["R00-0000-saturate"]}],
+        "limitations": ["small sample"]}, ensure_ascii=False), encoding="utf-8")
     page = D.refresh(tmp_path / "run_records.jsonl", tmp_path / "screen", spec={}).read_text(encoding="utf-8")
     panel = page[page.index('id="ins"'):]
-    big = panel[:panel.index("<details>")]
-    assert "실패율 50.0%" in big
-    assert big.index("포화 고장") < big.index("두번째 높음") < big.index("중간 것")   # high confidence first
-    assert "낮은 것" not in big                                                      # only top 3 are big
-    details = panel[panel.index("<details>"):panel.index("</details>")]
-    assert "직선 비교" in details and "표본 부족" in details and "요약 &lt;b&gt;" in details
-    assert "../insights/campaign.html" in details
-    assert 'id="insfold"' in panel and "position:fixed" not in page
-    # a normal card in the right column, directly after the scenario list card
-    right = page[page.index("지금까지 돌린 시나리오"):]
+    assert "Insights" in panel
+    assert "Failure rate" in panel and "50.0%" in panel
+    assert panel.index("first high") < panel.index("second high") < panel.index("medium one")   # high confidence first
+    assert "low one" not in panel                                                      # only top 3
+    assert "<details" not in panel
+    assert "position:fixed" not in page
+    right = page[page.index("Scenarios Run ("):]
     assert right.index("</section>") < right.index('id="ins"') and right.index('id="ins"') < right.index("</div>\n</div>")
 
 
 def test_main_screen_without_insights_shows_small_badge(tmp_path):
     (tmp_path / "run_records.jsonl").write_text(json.dumps(_rec()) + "\n", encoding="utf-8")
     page = D.refresh(tmp_path / "run_records.jsonl", tmp_path / "screen", spec={}).read_text(encoding="utf-8")
-    assert 'class="insbadge"' in page and "아직 없음" in page
-    assert 'id="ins"' not in page and page.index("지금까지 돌린 시나리오") < page.index('id="insbadge"')
+    assert 'class="insbadge"' in page and "Not available yet" in page
+    assert 'id="ins"' not in page and page.index("Scenarios Run (") < page.index('id="insbadge"')
 
 
 def test_live_status_shown_in_header(tmp_path):
     from engine import dashboard as D
-    page = D.refresh(tmp_path / "none.jsonl", tmp_path / "screen", status="라운드 0: 시뮬레이션 중")
+    page = D.refresh(tmp_path / "none.jsonl", tmp_path / "screen", status="Round 0: simulating")
     html = page.read_text(encoding="utf-8")
-    assert '<span class="live">라운드 0: 시뮬레이션 중</span>' in html
+    assert '<span class="live">Round 0: simulating</span>' in html
     assert "location.reload" in html          # self-reload (works on file:// pages)
 
 
@@ -78,7 +75,7 @@ def test_method_card_counts_a_hypotheses(tmp_path):
     assert m["n_obs"] == 25 and m["n_props"] == 2 and m["b_files"] == ["lqr_controller/lqr.py"]
     assert [(x["run_id"], x["hit"]) for x in m["tests"]] == [("R1", True), ("R2", None)]
     html = D.render_method(camp / "screen")
-    assert "A 가설 적중 1/1" in html and "전환 안 돼 시험 못 함 1" in html and "lqr.py" in html
+    assert "Prediction hits 1/1" in html and "no switch 1" in html and "lqr.py" in html
 
 
 def test_stability_short_no_switch_is_held_not_green():
@@ -86,11 +83,11 @@ def test_stability_short_no_switch_is_held_not_green():
     base = {"display_outcome": "fail", "recovery_outcome": "no_switch", "failed_requirements": ["SR5"],
             "sr": {"SR4": {"pass": True, "collision": False}}}
     s = D._stability_short(base)
-    assert "판정 보류" in s and "✓" not in s and 'class="mut"' in s
+    assert "held" in s and "✓" not in s and 'class="mut"' in s
     lane = dict(base, failed_requirements=["SR4", "SR5"], sr={"SR4": {"pass": False, "collision": False}})
-    assert "✗" in D._stability_short(lane) and "차선" in D._stability_short(lane)
+    assert "✗" in D._stability_short(lane) and "Lane" in D._stability_short(lane)
     hit = dict(base, failed_requirements=["SR4"], sr={"SR4": {"pass": False, "collision": True}})
-    assert "충돌" in D._stability_short(hit)
+    assert "Collision" in D._stability_short(hit)
     ok = {"display_outcome": "pass", "recovery_outcome": "safe_recovery", "failed_requirements": [],
           "sr": {"SR4": {"pass": True}}}
     assert "✓" in D._stability_short(ok)
@@ -109,3 +106,25 @@ def test_checks_no_switch_rows_have_no_green_but_keep_lane_and_collision():
     assert all(ok is None for _, ok, _, _ in D._checks(clean, lim))
     sw = dict(clean, recovery_outcome="safe_recovery", switch_time=10.0)
     assert True in [ok for _, ok, _, _ in D._checks(sw, lim)]
+
+
+def test_boundary_table_replaces_the_findings_with_critical_faults(tmp_path):
+    # integration4: with insights/boundaries.json the panel shows critical faults + their boundary values
+    from engine import boundaries as B
+    (tmp_path / "run_records.jsonl").write_text(json.dumps(_rec()) + "\n", encoding="utf-8")
+    (tmp_path / "insights").mkdir()
+    table = {"modes": {"drift": {"fault_id": "F-05", "runs": 4, "harmful_runs": 2, "late_or_missed_runs": 4, "switched_runs": 4,
+                                 "harmful_rate": 0.5, "late_rate": 1.0, "worst_margin": -0.9, "worst_run": "r1", "detected_by": {},
+                                 "parameters": {"rate_rad_s": {"space_range": [0.005, 0.05], "unit": "rad/s", "groups": {
+                                     "all conditions": {"harm": B.bracket([(0.01, False), (0.03, True)]),
+                                                        "detection": B.bracket([(0.01, True)]), "runs": []}}}}},
+                       "solver_fail": {"fault_id": "F-01", "runs": 3, "harmful_runs": 0, "late_or_missed_runs": 0,
+                                       "switched_runs": 3, "harmful_rate": 0.0, "late_rate": 0.0, "worst_margin": 0.3,
+                                       "worst_run": "r2", "detected_by": {}, "parameters": {}}},
+             "critical_ranking": ["drift", "solver_fail"]}
+    (tmp_path / "insights" / "boundaries.json").write_text(json.dumps({
+        "meta": {"n_points": 7, "n_campaign": 7}, "table": table, "summary": [], "cosmos": None}), encoding="utf-8")
+    page = D.refresh(tmp_path / "run_records.jsonl", tmp_path / "screen", spec={}).read_text(encoding="utf-8")
+    panel = page[page.index('id="ins"'):]
+    assert "Cosmos Insights" in panel and "Ramp Bias / Drift" in panel and "unsafe <b>50%</b>" in panel
+    assert "<b>0.01–0.03</b> rad/s" in panel and "no unsafe run: Solver Failure" in panel
