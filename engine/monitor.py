@@ -242,8 +242,10 @@ def compute_events(run: RunData, th: dict[str, float] | None = None) -> dict[str
     ev["switch_count"] = max(counts) if counts else (1 if sw_row else 0)
     stop_row = next((r for r in ticks if r.get("active_controller") == "safe_stop"), None)
     ev["safe_stop_time"] = stop_row["t"] if stop_row else None
-    # lane departures over the whole run
-    margins = [J.lane_margin_m(r["lane_width_m"], r["lane_offset_m"], r["bbox_half_width_m"])
+    # lane departures over the whole run. integration4: vehicle footprint (4 corners incl. heading error), the same
+    # definition as SR4 / P-01; the centre-line margin (no heading) let result_10's drift runs read "no departure"
+    # while SR4 had the corner 0.04 m over the line.
+    margins = [footprint_margin_m(r)
                if all(_finite(r.get(k)) for k in ("lane_width_m", "lane_offset_m", "bbox_half_width_m")) else float("nan")
                for r in ticks]
     intervals, start = [], None
@@ -335,8 +337,8 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
     if invalid_reason is None and not lane_ok:
         invalid_reason = "lane_width_nan"
 
-    def margins_of(rows):
-        return [J.lane_margin_m(r["lane_width_m"], r["lane_offset_m"], r["bbox_half_width_m"]) for r in rows]
+    def margins_of(rows):   # integration4: footprint margin, as SR4 / P-01 and the departure intervals
+        return [footprint_margin_m(r) for r in rows]
 
     margins = margins_of(win) if lane_ok else []
     e_y = [float(r["lane_offset_m"]) for r in win] if lane_ok else []
@@ -392,6 +394,16 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
     eval_end = eval_start + th.get("eval_window_s", 10.0)
     ewin = _window(ticks, eval_start, min(end_t, eval_end))
     em = [footprint_margin_m(r) for r in ewin if all(_finite(r.get(k)) for k in ("lane_width_m", "lane_offset_m", "bbox_half_width_m"))]
+    # integration4: a triggered run that never switched gets a lane-only safety margin over the evaluation window, so
+    # the GP also learns "undetected but harmless" vs "undetected / late and out of the lane" (result_9/10: the bias
+    # boundary 0.035 -> 0.045..0.055 rad sits exactly there; before, those runs had no target)
+    if sm is None and not switched and triggered and invalid_reason is None and em:
+        erows = [r for r in ewin if all(_finite(r.get(k)) for k in ("lane_width_m", "lane_offset_m", "bbox_half_width_m"))]
+        col_e = any(_finite(c.get("t")) and eval_start - 1e-9 <= c["t"] <= eval_end + 1e-9 for c in run.collisions)
+        sm = J.no_switch_safety_margin(margins=em, lane_widths=[float(r["lane_width_m"]) for r in erows],
+                                       bbox_half_width_m=float(erows[0]["bbox_half_width_m"]), collision=col_e,
+                                       penalty=th["collision_penalty"],
+                                       clip=(th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)))
     p01 = J.robustness_p01(em) if em else None
     p02 = J.robustness_p02([r["_ay_f"] for r in ewin], th["lat_acc_threshold_mps2"]) if ewin else None
     p03 = not any(_finite(c.get("t")) and eval_start - 1e-9 <= c["t"] <= eval_end + 1e-9 for c in run.collisions)

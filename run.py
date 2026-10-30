@@ -705,6 +705,15 @@ class Loop:
         re-scored is excluded with the reason. Never-switched runs keep only the switch label (target undefined)."""
         tg = {k: v for k, v in (r.get("gp_targets") or {}).items() if k not in self.metric_rules}
         metrics = dict(r.get("metrics") or {})
+        sm_rule = any((rule.get("gp") or {}).get("target") == "safety_margin" for rule in self.metric_rules.values())
+        if r.get("switch_time") is None and sm_rule:
+            # integration4: never-switched runs carry a lane-only safety margin (judgment.rescore_no_switch)
+            sm, why = J.rescore_safety_margin(r, self.th)
+            if sm is not None:
+                metrics["safety_margin"] = sm["value"]
+                has_fault = (((r.get("parameters") or {}).get("fault") or {}).get("mode") or "none") != "none"
+                tg.update(J.gp_targets(self.metric_rules, metrics, r.get("baseline_metrics"), has_fault))
+            return tg, None
         if r.get("switch_time") is not None:
             for name, rule in self.metric_rules.items():
                 if (rule.get("gp") or {}).get("target") == "safety_margin":

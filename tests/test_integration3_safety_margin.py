@@ -26,7 +26,7 @@ def labels(acc, jerk, acc_lim=LIM_A):
 
 
 def test_thresholds_are_the_judgment_config():
-    assert LIM_J == 5.0 and NEED == 1.0          # safety_spec.yaml P-04 / recovery_judgment (PROVISIONAL)
+    assert LIM_J == 15.0 and NEED == 1.0         # safety_spec.yaml P-04 (integration4: 5 -> 15, data-based) / recovery_judgment
 
 
 @pytest.mark.parametrize("acc,jerk,hold,lrr,outcome", [
@@ -50,12 +50,12 @@ def test_sign_equals_final_safe(acc, jerk, hold, lrr, outcome):
 
 
 def test_terms_and_units():
-    m = sm(lrr=0.6, acc=1.0, jerk=6.0, hold=1.5)
-    assert m["terms"]["lat_jerk"] == pytest.approx((LIM_J - 6.0) / LIM_J)
+    m = sm(lrr=0.6, acc=1.0, jerk=LIM_J + 1.0, hold=1.5)
+    assert m["terms"]["lat_jerk"] == pytest.approx(-1.0 / LIM_J)
     assert m["terms"]["lat_acc"] == pytest.approx((LIM_A - 1.0) / LIM_A)
     assert m["terms"]["settle"] == pytest.approx((1.5 - NEED) / NEED)
     assert m["binding"] == "lat_jerk" and m["failing"] == ["lat_jerk"]
-    assert m["observed"]["lat_jerk"] == {"value": 6.0, "unit": "m/s^3 over baseline", "limit": LIM_J}
+    assert m["observed"]["lat_jerk"] == {"value": LIM_J + 1.0, "unit": "m/s^3 over baseline", "limit": LIM_J}
 
 
 def test_collision_binding_and_clip():
@@ -85,19 +85,28 @@ def test_rescore_reasons():
     ok, why = J.rescore_safety_margin(_rec(), TH)
     assert why is None and ok["value"] > 0 and ok["rescored_from_record"] and "settle" not in ok["terms"]
     assert J.rescore_safety_margin(_rec(sim_status="error"), TH) == (None, "not sim_status ok")
-    assert J.rescore_safety_margin(_rec(switch_time=None), TH) == (None, "no switch (target undefined)")
+    # integration4: a never-switched run is re-scored from its SR4 record (lane-only margin)
+    assert J.rescore_safety_margin(_rec(switch_time=None), TH) == (None, "no switch: SR4 margin not logged")
+    ns, why = J.rescore_safety_margin(_rec(switch_time=None, trigger_time=19.0, sr_checks={"sr": {"SR4": {
+        "margin_m": -0.1, "nominal_margin_m": 0.8, "collision": False}}}), TH)
+    assert why is None and ns["kind"] == "no_switch_lane" and ns["value"] == pytest.approx(-0.125) and ns["binding"] == "lane"
     assert J.rescore_safety_margin(_rec(recovery_outcome="unsettled", final_safe_recovery=False), TH)[1].startswith("unsettled")
     assert J.rescore_safety_margin(_rec(metrics={"lat_jerk_excess_mps3": None}), TH)[1].startswith("missing")
     assert J.rescore_safety_margin(_rec(final_safe_recovery=None), TH)[1] == "final_safe_recovery is None"
-    assert J.rescore_safety_margin(_rec(final_safe_recovery=False), TH)[1].startswith("rescored margin sign")
-    bad, why = J.rescore_safety_margin(_rec(final_safe_recovery=False, metrics={"lat_jerk_excess_mps3": 7.0}), TH)
+    # the logged label is re-derived with the current thresholds (P-04 5 -> 15 turns logged jerk failures safe)
+    relab, why = J.rescore_safety_margin(_rec(final_safe_recovery=False, metrics={"lat_jerk_excess_mps3": 7.0}), TH)
+    assert why is None and relab["value"] > 0
+    # a contradictory record (safe_recovery with a negative lane term) is still excluded
+    assert J.rescore_safety_margin(_rec(final_safe_recovery=False, lane_recovery_robustness=-0.3), TH)[1].startswith("rescored margin sign")
+    bad, why = J.rescore_safety_margin(_rec(final_safe_recovery=False, metrics={"lat_jerk_excess_mps3": LIM_J + 2.0}), TH)
     assert why is None and bad["binding"] == "lat_jerk" and bad["value"] < 0
     # friction-scaled limit when p02 threshold was not logged
     r = _rec(metrics={"p02_lat_acc_threshold_mps2": None, "tire_friction_scale": 0.5, "lat_acc_excess_mps2": 0.3})
     assert J.rescore_safety_margin(r, TH)[0]["observed"]["lat_acc"]["limit"] == pytest.approx(LIM_A * 0.5)
-    # already-logged margin is used as is
-    d = sm()
-    assert J.rescore_safety_margin(_rec(metrics={"safety_margin": d["value"], "safety_margin_detail": d}), TH) == (d, None)
+    # an already-logged margin is recomputed (thresholds may have changed since it was written)
+    d = sm(jerk=LIM_J + 3.0)
+    again, _ = J.rescore_safety_margin(_rec(metrics={"safety_margin": d["value"], "safety_margin_detail": d}), TH)
+    assert again["value"] == pytest.approx(ok["value"])
 
 
 def test_monitor_writes_margin_matching_final_safe(tmp_path):
@@ -109,7 +118,10 @@ def test_monitor_writes_margin_matching_final_safe(tmp_path):
                              fault=dict(mode="bias", start=20.0, duration=500.0, magnitude=mag), record_front=False)
         r = evaluate(d, baseline_dir=base)
         m = r["metrics"]
-        if r.get("switch_time") is None or r.get("final_safe_recovery") is None:
+        if r.get("switch_time") is None:   # integration4: lane-only margin when the fault was effective
+            assert m["safety_margin"] is None or m["safety_margin_detail"]["kind"] == "no_switch_lane"
+            continue
+        if r.get("final_safe_recovery") is None:
             assert m["safety_margin"] is None
             continue
         seen += 1
@@ -158,12 +170,12 @@ def test_history_rescoring(tmp_path):
 def test_nemotron_a_views_carry_margin_in_real_units():
     from engine import feedback as FB
     from engine import nemotron as NM
-    d = sm(jerk=7.0)
+    d = sm(jerk=LIM_J + 2.0)
     r = _rec(final_safe_recovery=False, metrics={"safety_margin": d["value"], "safety_margin_binding": d["binding"],
-                                                 "safety_margin_detail": d, "lat_jerk_excess_mps3": 7.0})
+                                                 "safety_margin_detail": d, "lat_jerk_excess_mps3": LIM_J + 2.0})
     v = FB.outcome_view(r)
     assert v["safety_margin"]["binding"] == "lat_jerk" and v["failed_criteria"] == ["lat_jerk"]
-    assert v["safety_margin"]["terms"]["lat_jerk"] == {"margin": round(d["terms"]["lat_jerk"], 3), "observed": 7.0,
+    assert v["safety_margin"]["terms"]["lat_jerk"] == {"margin": round(d["terms"]["lat_jerk"], 3), "observed": LIM_J + 2.0,
                                                        "limit": LIM_J, "unit": "m/s^3 over baseline"}
     assert "safety_margin_detail" not in v
     c = {"scenario_id": "s", "fault": {"fault_id": "F-04", "mode": "bias", "params": {}}, "route_id": "r",
@@ -172,3 +184,17 @@ def test_nemotron_a_views_carry_margin_in_real_units():
     it = NM.region_item(c, {}, metric="recovery_success", native=lambda m, s: (m, s),
                         y_scale=0.1, level_z=0.0, target="safety_margin")
     assert it["predicted_safety_margin"] == 0.0 and "predicted_lane_recovery_robustness" not in it
+
+
+def test_no_switch_margin_and_footprint_departure():
+    # integration4: never-switched runs get a lane-only target; departures use the vehicle footprint (as SR4)
+    m = J.no_switch_safety_margin(margins=[0.4, -0.05], lane_widths=[3.5, 3.5], bbox_half_width_m=0.95, collision=False,
+                                  penalty=TH["collision_penalty"], clip=(TH["robustness_clip_min"], TH["robustness_clip_max"]))
+    assert m["kind"] == "no_switch_lane" and m["value"] == pytest.approx(-0.05 / 0.8) and m["failing"] == ["lane"]
+    c = J.no_switch_safety_margin(margins=[0.4], lane_widths=[3.5], bbox_half_width_m=0.95, collision=True,
+                                  penalty=TH["collision_penalty"], clip=(TH["robustness_clip_min"], TH["robustness_clip_max"]))
+    assert c["binding"] == "collision" and c["value"] <= TH["collision_penalty"]
+    from engine.monitor import footprint_margin_m
+    row = {"lane_width_m": 3.5, "lane_offset_m": 0.7, "bbox_half_width_m": 0.92, "bbox_half_length_m": 2.45,
+           "lane_heading_err_rad": 0.08}
+    assert J.lane_margin_m(3.5, 0.7, 0.92) > 0 > footprint_margin_m(row)    # centre-line says in, a corner is out

@@ -288,7 +288,7 @@ def robustness_p02(lateral_acc_values: list[float], threshold_mps2: float) -> fl
 # 팀원 기준 (junwoo/sim-eval a5242b2): window 3 s (SR5 within_s), 횡가속도 0.5*0.9*9.81 = 4.41, 충돌 -2, clip [-2, 1].
 PROVISIONAL_RECOVERY = {
     "e_settle_m": 0.3, "psi_settle_rad": 0.1, "settle_hold_s": 1.0, "window_s": 3.0,
-    "lat_acc_threshold_mps2": 4.41, "lat_jerk_threshold_mps3": 5.0, "filter_s": 0.5,
+    "lat_acc_threshold_mps2": 4.41, "lat_jerk_threshold_mps3": 15.0, "filter_s": 0.5,
     "collision_penalty": -2.0, "robustness_clip_min": -2.0, "robustness_clip_max": 1.0,
 }
 
@@ -463,6 +463,34 @@ def safety_margin(*, lrr: float | None, collision: bool, acc_excess: float | Non
             "terms": terms, "observed": {k: observed[k] for k in terms}}
 
 
+def no_switch_safety_margin(*, margins: list[float], lane_widths: list[float], bbox_half_width_m: float, collision: bool,
+                            penalty: float, clip: tuple[float, float] | None = None) -> dict[str, Any]:
+    """integration4: GP target of a triggered run that never switched - the lane term only (min footprint margin /
+    (lane_width/2 - half width) over the evaluation window, collision <= penalty). No handover, so no settle / lat_acc /
+    lat_jerk terms; >= 0 = the undetected fault stayed harmless, < 0 = it left the lane or crashed."""
+    value = lane_recovery_robustness(margins, lane_widths, bbox_half_width_m, collision, penalty, clip)
+    return {"value": value, "binding": "collision" if collision else "lane", "failing": (["collision" if collision else "lane"]
+            if value < 0 else []), "terms": {"lane": value}, "kind": "no_switch_lane",
+            "observed": {"lane": {"value": value, "min_lane_margin_m": min(margins), "unit": "dimensionless", "limit": 0.0}}}
+
+
+def rescore_no_switch(record: dict[str, Any], th: dict[str, float]) -> tuple[dict[str, Any] | None, str | None]:
+    """--gp-history: lane-only safety margin of a never-switched run from its SR4 record (footprint margin over the same
+    evaluation window, nominal margin = lane_width/2 - half width)."""
+    sr4 = ((record.get("sr_checks") or {}).get("sr") or {}).get("SR4") or {}
+    m, nom = sr4.get("margin_m"), sr4.get("nominal_margin_m")
+    if not isinstance(m, (int, float)) or not isinstance(nom, (int, float)) or nom <= 0:
+        return None, "no switch: SR4 margin not logged"
+    if record.get("trigger_time") is None:
+        return None, "no switch: fault never effective"
+    lo, hi = th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)
+    col = bool(sr4.get("collision"))
+    value = min(float(m) / float(nom), th["collision_penalty"]) if col else float(m) / float(nom)
+    value = max(lo, min(hi, value))
+    return {"value": value, "binding": "collision" if col else "lane", "terms": {"lane": value}, "kind": "no_switch_lane",
+            "rescored_from_record": True}, None
+
+
 def rescore_safety_margin(record: dict[str, Any], th: dict[str, float]) -> tuple[dict[str, Any] | None, str | None]:
     """--gp-history: the safety margin of a run_record written before #9, from its logged fields only.
 
@@ -474,10 +502,8 @@ def rescore_safety_margin(record: dict[str, Any], th: dict[str, float]) -> tuple
     if record.get("sim_status") != "ok":
         return None, "not sim_status ok"
     if record.get("switch_time") is None:
-        return None, "no switch (target undefined)"
+        return rescore_no_switch(record, th)
     m = record.get("metrics") or {}
-    if m.get("safety_margin") is not None and isinstance(m.get("safety_margin_detail"), dict):
-        return m["safety_margin_detail"], None
     lim = m.get("p02_lat_acc_threshold_mps2")
     if lim is None:
         fs = m.get("tire_friction_scale")
@@ -501,8 +527,12 @@ def rescore_safety_margin(record: dict[str, Any], th: dict[str, float]) -> tuple
     fsr = record.get("final_safe_recovery")
     if fsr is None:
         return None, "final_safe_recovery is None"
-    if (sm["value"] >= 0) != bool(fsr):
-        return None, "rescored margin sign != logged final_safe_recovery"
+    # the logged label used the thresholds of its own run; recompute it with the current ones before comparing
+    # (integration4: P-04 5 -> 15 m/s^3 turns many logged 'not final safe' runs safe)
+    fsr_now = (outcome == "safe_recovery" and m.get("lat_acc_excess_mps2") is not None and m.get("lat_jerk_excess_mps3") is not None
+               and float(m["lat_acc_excess_mps2"]) <= lim and float(m["lat_jerk_excess_mps3"]) <= th["lat_jerk_threshold_mps3"])
+    if (sm["value"] >= 0) != fsr_now:
+        return None, "rescored margin sign != final_safe_recovery under the current thresholds"
     sm["rescored_from_record"] = True
     return sm, None
 

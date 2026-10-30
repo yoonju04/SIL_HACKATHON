@@ -43,3 +43,36 @@ Mock check (`run.py --mock --ablation X-6`, SYNTHETIC stub): the two rejections 
 contradictions (`collision_after_departure` without a collision).
 
 Not measured yet: how Cosmos does with the new prompt on real clips (needs a real run with the endpoint on).
+
+## Judgment fixes after result_9 / result_10
+
+Three changes, checked by re-grading result_8..10 (113 valid runs, 70 switched, tight supervisor; no CARLA).
+
+1. **P-04 lateral-jerk limit 5 -> 15 m/s^3** (`pipeline/09_monitor/safety_spec.yaml`; decides both `lat_jerk_excess` /
+   `final_safe_recovery` and the GP `safety_margin`). Every switched run of result_9/10 had `lat_jerk` as the binding
+   term (bias/drift at -2.0, even a normal solver_fail at -1.17), so the GP learnt "how abrupt the handover was".
+   Measured: fault-free baselines reach |jerk| p90 9.5 and max 18.2 m/s^3 in curves (n = 91), so 5 (ISO 11270
+   reference, E-01) is below normal driving. Pre-onset excess (fault and baseline identical there) is ~0 (median 0.1),
+   so the distance alignment is fine. Prompt switches: excess mostly <= 5, up to ~13 in curves where the baseline
+   itself was over 5 (13 of 18). Late `tracking_divergence` switches (bias/drift): 11..25 for all 17 - LQR pulling a
+   car that is already 0.6-0.7 m off back to the path. 15 keeps the latter and drops the curve noise.
+2. **Never-switched runs get a GP target** (`judgment.no_switch_safety_margin`, `rescore_no_switch` for
+   `--gp-history`): lane term only = min footprint margin / (lane_width/2 - half width) over the evaluation window,
+   collision <= penalty. Before, they had none, so result_9 round 1 (4/4 no switch) added nothing to the target GP,
+   while the bias boundary (0.035 rad undetected and harmless vs 0.045..0.055 rad late) lies exactly there.
+   `orchestrator.yaml switch_penalty` 1.0 -> 0.0 for the same reason. History re-scoring always recomputes (the
+   stored margin and label may use older thresholds) and checks the sign against the label re-derived now.
+3. **One lane-departure definition** (`engine/monitor.py`): departure intervals, recovery margins and
+   `lane_recovery_robustness` use the vehicle footprint (4 corners incl. heading error), as SR4 / P-01. Before, the
+   centre-line margin (no heading) gave result_10's drift runs "no departure" in the timeline while SR4 had a
+   corner 0.04 m over the line, and the video explanation said "did not cross the lane line" and passed.
+
+Re-grade result_8 + result_9 + result_10:
+* final_safe_recovery 35 -> 56 of 70 switched runs.
+* GP target defined for 20 -> 113 runs (43 never-switched runs now included; none of them left the lane).
+* Switched runs with margin < 0: only bias (8) and drift (6) - lane 6, lane+settle 2, lane+lat_acc 1,
+  lat_acc+lat_jerk 2, lat_jerk only 3. No control fault, saturate or intermittent-bias run fails any more.
+* SR4 "out of the lane" and the timeline departure now agree in 9 of 9 runs.
+
+Tests: `tests/test_integration3_safety_margin.py` updated (limit 15, no-switch re-scoring, re-derived labels) plus
+`test_no_switch_margin_and_footprint_departure`.
