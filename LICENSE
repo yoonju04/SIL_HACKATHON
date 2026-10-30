@@ -19,10 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----------------------------------------------------------------------------
-Third-party code is NOT covered by this license and keeps its own license:
-CARLA, CARLA Garage / PDM-Lite, Bench2Drive and the other components fetched
-into pipeline/08_carla_paired_run/av_stack/third_party are listed in
-pipeline/08_carla_paired_run/av_stack/THIRD_PARTY_NOTICES.md. NVIDIA models
-(Nemotron, Cosmos) are used through Nebius Token Factory under their own terms.
