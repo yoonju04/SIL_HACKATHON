@@ -298,3 +298,26 @@ def acquisition_score(c: dict, objective_cfg: dict, beta: float) -> float | None
     if objective_cfg.get("acquisition") in ("straddle", "level_set"):
         return straddle(mu, sd, objective_cfg.get("beta", 1.96))
     return -J.lcb(mu, sd, beta)  # maximise -LCB == minimise LCB
+
+
+def enforce_diversity(selected: list[dict], reserve: list[dict], ran: list[list[float]], n: int, feat_of,
+                      min_distance_to_run: float, max_fault_share: float) -> list[dict]:
+    """laya-judge acquisition diversity: drop selected candidates closer than min_distance_to_run (normalized
+    feature distance) to an already-run point (counterfactual reruns included) or to an earlier pick, and keep at most
+    ceil(max_fault_share * n) per fault mode; refill from `reserve` (acquisition order) under the same rules."""
+    cap = max(1, math.ceil(max_fault_share * n)) if max_fault_share and max_fault_share > 0 else n
+    out, per_mode, feats = [], {}, []
+    for c in list(selected) + [c for c in reserve if c not in selected]:
+        if len(out) >= n:
+            break
+        x = feat_of(c)
+        mode = (c.get("fault") or {}).get("mode")
+        if min_distance_to_run > 0 and any(math.dist(x, r) < min_distance_to_run for r in ran + feats):
+            c.setdefault("tags", []).append("near_already_run")
+            continue
+        if per_mode.get(mode, 0) >= cap:
+            continue
+        if c not in selected:
+            c["selected_by"] = "diversity_refill"
+        out.append(c); feats.append(x); per_mode[mode] = per_mode.get(mode, 0) + 1
+    return out

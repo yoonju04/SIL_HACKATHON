@@ -126,6 +126,12 @@ regression:                                     # 원래 질문마다 판정자 
   low_confidence: 0.5                           # (K·pmax−1)/(K−1) < 0.5 → low_confidence 표시
   ece_bins: 10
 
+proposals:                                      # B 시나리오 제안: J1 이 사각지대·편차 누적이라 본 상태 근처의 위험 후보 (source B)
+  enabled: true
+  per_round: 2                                  # 라운드당 최대 개수 (04 gate 로 scenario space 검사)
+  min_prob: 0.4                                 # p(no_dedicated_check) + p(deviation_accumulation) 하한
+  below_rate_check_frac: 0.9                    # bias/intermittent: 크기를 속도 검사 한 틱 (0.0785 rad) 의 이 비율로
+  speed_step_kmh: 5.0
 gp_features:
   questions_from_bank: gp_feature               # 질문 은행의 gp_feature true (J1 J3 J4 J7 J2 J5 J6) 만 GP 입력
   encoding: probability                         # 보기별 회귀 확률 (one-hot 대신 연속값)

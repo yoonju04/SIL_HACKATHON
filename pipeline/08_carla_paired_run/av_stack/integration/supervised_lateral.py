@@ -92,6 +92,7 @@ class SupervisionRecord(TypedDict):
     primary_elapsed_ms: float | None
     fault_injected: bool
     safe_stop: bool
+    lqr_unclipped_steer_rad: float | None   # LQR command before the takeover rate clip (logging L-1)
 
 
 class SupervisedLateral:
@@ -116,6 +117,7 @@ class SupervisedLateral:
         self.last = LateralResult(0.0, 0.0, 0.0, 0.0, 0.0, True, 'initial', None, None)
         self.t = 0.0
         self.fault_effective = False
+        self.lqr_unclipped: float | None = None
 
     def set_reference(self, trajectory: Trajectory, speed_cap: float,
                       lqr_trajectory: Trajectory | None = None) -> None:
@@ -127,6 +129,7 @@ class SupervisedLateral:
         self.t = t
         result = None
         self.fault_effective = False  # only an MPC call in this tick can carry the fault
+        self.lqr_unclipped = None
         if self.active == 'mpc':
             started = time.perf_counter()
             try:
@@ -163,6 +166,7 @@ class SupervisedLateral:
                 print('[supervisor] t=%.2fs LQR invalid -> safe stop' % t, flush=True)
             else:
                 limit = math.radians(self.rate_dps) * self.dt
+                self.lqr_unclipped = float(result.steer)
                 steer = float(np.clip(result.steer, self.last.steer - limit, self.last.steer + limit))
                 result = replace(result, steer=steer)
         if self.stop_required:
@@ -175,4 +179,5 @@ class SupervisedLateral:
         return SupervisionRecord(active_controller=self.active, supervisor_reason=self.reason,
                                  switched_at_s=self.switched_at, switch_count=self.switch_count,
                                  primary_status=self.primary_status, primary_elapsed_ms=self.elapsed_ms,
-                                 fault_injected=self.injector.config.active(self.t), safe_stop=self.stop_required)
+                                 fault_injected=self.injector.config.active(self.t), safe_stop=self.stop_required,
+                                 lqr_unclipped_steer_rad=self.lqr_unclipped)

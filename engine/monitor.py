@@ -34,6 +34,8 @@ from . import judgment as J
 REQUIRED_FILES = ("steps.jsonl", "behavior.jsonl", "monitor_probe.jsonl")
 
 
+LQR_TAKEOVER_RATE_DPS = 60.0   # av_stack SupervisedLateral.rate_dps (LQR clip relative to the last applied steer)
+
 def _jsonl(path: Path) -> list[dict]:
     if not path.is_file():
         return []
@@ -388,6 +390,23 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
                              jerk_limit=th["lat_jerk_threshold_mps3"], settle_hold_s=hold, settle_need_s=need_s,
                              clip=(th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)),
                              detail={"lane": {"min_lane_margin_m": min(margins)}})
+    # laya-judge label rescue: a run cut by the route end before the post-switch window closed is not dropped when the
+    # observed part already violates a criterion (lane / lat_acc / lat_jerk / collision; settle needs the full window,
+    # so it is not judged here). It becomes a failure flagged truncated_window; with no violation it stays invalid.
+    truncated_window = False
+    if invalid_reason == "route_ended_before_window_end" and switched and margins:
+        lrr_t = J.lane_recovery_robustness(margins, [float(r["lane_width_m"]) for r in win], float(win[0]["bbox_half_width_m"]),
+                                           bool(col_in), th["collision_penalty"],
+                                           (th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)))
+        sm_t = J.safety_margin(lrr=lrr_t, collision=bool(col_in), acc_excess=acc_excess, acc_limit=th["lat_acc_threshold_mps2"],
+                               jerk_excess=jerk_excess, jerk_limit=th["lat_jerk_threshold_mps3"], settle_hold_s=None,
+                               settle_need_s=None, clip=(th.get("robustness_clip_min", -2.0), th.get("robustness_clip_max", 1.0)),
+                               detail={"lane": {"min_lane_margin_m": min(margins)}})
+        bad = [k for k in ("lane", "lat_acc", "lat_jerk", "collision") if k in (sm_t.get("failing") or [])]
+        if bad:
+            truncated_window, invalid_reason, outcome, final, lrr = True, None, "truncated_window_failure", False, lrr_t
+            sm = dict(sm_t, truncated_window=True, failing=bad)
+            category = J.classify_outcome(simulation_invalid=False, triggered=triggered, switched=switched, final_safe=False)
     # P-01..03 over the evaluation window (planned onset .. onset + eval_window_s, as the SR monitor; BUG-022)
     eval_end = eval_start + th.get("eval_window_s", 10.0)
     ewin = _window(ticks, eval_start, min(end_t, eval_end))
@@ -434,6 +453,15 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
             prev = next((r for r in reversed(ticks) if r["t"] < t_sw - 1e-9 and _finite(r.get("ctrl_steer"))), None)
             if prev is not None:
                 command_jump = abs(steer[0] - prev["ctrl_steer"]) * max_steer
+            # logging L-1 (laya-judge): av_stack SupervisedLateral now logs the LQR command before the takeover clip
+            first_lqr = next((r for r in hw if _finite(r.get("lqr_unclipped_steer_rad"))), None)
+            if first_lqr is not None:
+                u = float(first_lqr["lqr_unclipped_steer_rad"])
+                handover["first_lqr_command_unclipped_rad"] = u
+                if prev is not None:
+                    step = math.radians(LQR_TAKEOVER_RATE_DPS) * dt
+                    handover["predicted_first_lqr_command_ratio"] = abs(u - prev["ctrl_steer"] * max_steer) / step
+                handover["note"] = "first_lqr_command_unclipped_rad from av_stack lqr_unclipped_steer_rad (L-1)"
             max_rate = math.degrees(max(rates)) if rates else None
     pre_sw = _window(ticks, ev["actual_fault_onset"] if ev["actual_fault_onset"] is not None else eval_start,
                      t_sw if switched else end_t)
@@ -459,6 +487,7 @@ def compute_run_record(run: RunData, baseline: RunData | None = None, *, candida
         "safety_margin": None if sm is None else sm["value"],
         "safety_margin_binding": None if sm is None else sm["binding"],
         "safety_margin_detail": sm,
+        "truncated_window": truncated_window,     # laya-judge label rescue (route ended, violation already observed)
     }
     baseline_metrics = None
     if baseline is not None and base_win:

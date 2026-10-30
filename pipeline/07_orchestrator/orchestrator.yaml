@@ -48,6 +48,8 @@ acquisition:
   diversity:
     min_normalized_distance: 0.1                # 예시
     max_per_seed: 2
+    min_distance_to_run: 0.05                   # laya-judge: 이미 돌린 점 (counterfactual 재실행 포함) 과 정규화 거리 이 미만이면 제외
+    max_fault_share: 0.5                        # laya-judge: 한 라운드 batch 에서 한 고장 모드 비율 상한
   hypothesis_coverage:
     ensure_each_testing_hypothesis_gets_control_runs: true
 

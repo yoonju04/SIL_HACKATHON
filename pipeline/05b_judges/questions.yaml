@@ -27,6 +27,10 @@ question_bank:
     scope: per_scenario
     label_source: code
     gp_feature: true
+    gp_names:                             # GP 가 모르는 정보: 감지 사각지대 + 어느 검사가 먼저 걸리는지 (3 그룹)
+      no_dedicated_check: B_blind_spot
+      immediate_check: B_first_check_immediate
+      deviation_accumulation: B_first_check_accumulated
     question: "감독기는 이 고장을 어떤 경로로 잡는가? 출력 자체를 보는 즉시 검사(조향 속도·solver·stale 등)로 첫 고장 틱에 잡는가, 추적 오차가 쌓인 뒤에만 잡는가, 이 고장을 겨냥한 검사가 없는가?"
     question_en: "How does the supervisor catch this fault: by an immediate check on the output itself (steer rate, solver flag, stale sequence, ...) on the first fault tick, only after tracking error has accumulated, or is there no check aimed at this fault at all?"
     answer: ['immediate_check', 'deviation_accumulation', 'no_dedicated_check', 'unknown']

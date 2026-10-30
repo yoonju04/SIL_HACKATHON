@@ -153,3 +153,19 @@ takes ~73 s per request on this CPU; fine-tuning on this bank would be needed. R
 AUC: c03dd95 0.76 / 0.859; this branch without DF-07..09 0.74 / 0.848; with DF-07..09 0.80 / 0.893. Round-ordered
 (train on earlier rounds, n 42): 0.741 / 0.807 without vs 0.716 / 0.793 with. LOO improves, the forward-in-time check
 does not; with 50 runs the difference is a few runs, so the gain is not established.
+
+## B 가 GP 에 주는 정보 (laya-judge, 2026-10-30)
+
+- **감지 사각지대·먼저 걸리는 검사:** J1 의 회귀 확률이 GP 열 `B_blind_spot` (어느 검사도 겨냥하지 않음, 예: output_delay), `B_first_check_immediate` (속도·solver·stale), `B_first_check_accumulated` (추적 편차 누적) 세 개로 들어갑니다. 고장 크기만으로는 모르는, 코드를 읽어야 아는 정보입니다.
+- **B 시나리오 제안:** J1 이 사각지대·편차 누적이라 본 상태 근처에서, 속도 검사 한 틱(0.0785 rad) 바로 아래 크기와 더 높은 속도의 후보를 라운드당 최대 2개 (`judges.yaml proposals`) 만들고, 코드 근거를 `expected_mechanism` 에 적어 source `B` 로 후보 풀에 넣습니다 (04 gate 로 scenario space 검사). 자유 생성 LLM 호출이 아니라 B 의 답에서 만드는 규칙 기반 제안입니다.
+- **라벨 구제:** `route_ended_before_window_end` 로 잘린 전환 런은 관측된 구간에서 이미 lane / lat_acc / lat_jerk / 충돌 기준을 넘었으면 실패(`truncated_window`)로 남깁니다. settle 은 창이 다 있어야 판정할 수 있어 제외했습니다. 넘은 기준이 없으면 그대로 invalid 입니다.
+- **탐색 다양성:** 이미 돌린 점(counterfactual 재실행 포함)과 정규화 거리 0.05 미만인 후보는 빼고, 한 라운드에서 한 고장 모드는 50% 이하 (`orchestrator.yaml diversity`).
+- **LQR 첫 명령:** av_stack `SupervisedLateral` 이 클립 전 LQR 명령 `lqr_unclipped_steer_rad` 를 기록하고, 모니터가 `first_lqr_command_unclipped_rad` 와 `predicted_first_lqr_command_ratio` 를 채웁니다. 새로 돌린 CARLA 런부터 적용됩니다.
+
+**EN.** J1's regressed probabilities enter the GP as `B_blind_spot`, `B_first_check_immediate` and
+`B_first_check_accumulated`. B proposes up to 2 code-grounded risky neighbours per round (just under one rate-check
+tick, higher speed; source `B`, gated by 04; rule-based from B's answers, not a free-form LLM call). Switched runs cut by
+the route end keep a failure label (`truncated_window`) when the observed part already violates lane / lat_acc /
+lat_jerk / collision (settle needs the full window). Acquisition drops candidates within 0.05 normalized distance of a
+run point and caps one fault mode at 50% of a batch. av_stack now logs the LQR command before the takeover clip
+(`lqr_unclipped_steer_rad`), so `first_lqr_command_unclipped_rad` is filled for new CARLA runs.

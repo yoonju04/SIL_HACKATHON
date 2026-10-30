@@ -46,7 +46,8 @@ from engine.feedback import (counterfactual_candidates, failure_table, few_shot,
 from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
 from engine.monitor import (compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline,
                             scale_thresholds_for_friction, thresholds_from_config)
-from engine.surrogate import MetricGPs, acquisition_score, boundary_score, boundary_score_parts, select_batch_scored
+from engine.surrogate import (MetricGPs, acquisition_score, boundary_score, boundary_score_parts, enforce_diversity,
+                              select_batch_scored)
 from engine.dashboard import refresh as refresh_dashboard
 from engine.video import cover_times, extract_clip, ffmpeg_exe, key_times
 from engine.prior_tools.prior_tools import make_nemotron_payload
@@ -713,20 +714,30 @@ class Loop:
         from engine.fixtures.synthetic_sim import SUPERVISOR_PROFILES
         jc = self.cfg["judges"]
         prof = SUPERVISOR_PROFILES.get(self.supervisor)
+        todo = {}
         for c in cands:
             k = self.b_key(c)
-            if k in self.jev_raw:
-                continue
-            ctx = self.judge_ctx(c)
+            if k not in self.jev_raw and k not in todo:
+                todo[k] = self.judge_ctx(c)
+
+        def ask(k, ctx):
             state = JDG.make_state(jc, self.judge_b, self.av_stack, ctx, prof)
             qs_req = JDG.questions_for(self.jev_questions, self.jev_meta, self.questions, ctx["fault_mode"])
-            try:
-                resp = self.jev_client.system_one(state, qs_req, tag=f"B_judge:{k}")
-            except JDG.JevError as e:
-                self.stats["llm_errors"].append({"role": "B_judge", "key": k, "error": str(e)[:200]})
-                continue
-            self.jev_raw[k] = {"parsed": JDG.parse_answers(resp, self.jev_meta), "context": ctx,
-                               "model": resp.get("model"), "usage": resp.get("usage")}
+            return self.jev_client.system_one(state, qs_req, tag=f"B_judge:{k}")
+
+        # laya-judge: one request per judge key, `parallel` at a time (Nemotron / Jev are remote; Laya / stub = 1)
+        par = max(1, int((jc["backends"].get(self.judge_b) or {}).get("parallel", 1))) if not self.jev_client.stub else 1
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=par) as ex:
+            futs = {k: ex.submit(ask, k, ctx) for k, ctx in todo.items()}
+            for k, f in futs.items():
+                try:
+                    resp = f.result()
+                except JDG.JevError as e:
+                    self.stats["llm_errors"].append({"role": "B_judge", "key": k, "error": str(e)[:200]})
+                    continue
+                self.jev_raw[k] = {"parsed": JDG.parse_answers(resp, self.jev_meta), "context": todo[k],
+                                   "model": resp.get("model"), "usage": resp.get("usage")}
         qs = {q["id"]: q for q in self.questions}
         variants_of = {qid: list(v) for qid, v in jc["judges"].items()}
         options_of = {qid: [str(o) for o in qs[qid]["answer"]] for qid in variants_of}
@@ -938,7 +949,39 @@ class Loop:
                                         rng=self.rng, maximize=True)
         for c in forced:
             c["selected_by"] = "counterfactual_check"
-        return forced + batch
+        sel = forced + batch
+        if self.flags["use_gp"]:
+            # laya-judge: no reruns of already-run points (counterfactuals included), at most max_fault_share per mode
+            div = orch["acquisition"]["diversity"]
+            ff = lambda c: SC.numeric_features(c, self.space, self.route_ids, self.fault_pool)[0]
+            ran = [ff(self.candidates[r["scenario_id"]]) for r in self.records if r.get("scenario_id") in self.candidates]
+            sel = enforce_diversity(sel, self.reserve_order(pool, sel, round_index), ran, len(sel), ff,
+                                    float(div.get("min_distance_to_run", 0.0)), float(div.get("max_fault_share", 0.0)))
+        return sel
+
+    def b_proposals(self, round_index: int) -> list[dict]:
+        """laya-judge: B scenario proposals (judges.propose_scenarios) from the judge cache, source 'B'. 04 gates them
+        against the scenario space like A's candidates."""
+        if self.judge_b not in JDG.BACKENDS or not self.b_cache:
+            return []
+        pcfg = self.cfg["judges"].get("proposals") or {}
+        by_key = {}
+        for c in self.candidates.values():
+            by_key.setdefault(self.b_key(c), c)
+        entries = [(row, by_key[k]) for k, row in self.b_cache.items() if k in by_key]
+
+        def make(seed, params, speed, why):
+            try:
+                return SC.make_candidate(self.space, route_id=seed["route_id"], speed=speed, fault_id=seed["fault"]["fault_id"],
+                                         params=params, onset_event=seed["onset_event"], offset=seed.get("onset_offset_s", 0.0),
+                                         source="B", round_index=round_index, friction=SC.friction_of(seed),
+                                         expected_mechanism=why)
+            except (KeyError, ValueError):
+                return None
+        props = JDG.propose_scenarios(entries, pcfg, self.space, make)
+        self.stats.setdefault("b_proposals", []).append({"round": round_index, "n": len(props),
+                                                         "ids": [c["scenario_id"] for c in props]})
+        return [self.quantize(c) for c in props]
 
     def nemotron_share(self, cands: list[dict], n_batch: int, score_of) -> list[dict]:
         """integration3 #4: reserve ceil(fraction * batch) slots for Nemotron A candidates every round (07
@@ -1254,7 +1297,7 @@ class Loop:
                                       int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd,
                                       speed_step=self.speed_step())
                 cf, self.cf_queue = self.cf_queue, []
-                pool = self.stage_04([self.quantize(c) for c in a_c + sf] + cf, rnd)
+                pool = self.stage_04([self.quantize(c) for c in a_c + sf] + cf + self.b_proposals(rnd), rnd)
                 target = self.batch
             dump(rdir / "03_04_pool.json", [{k: c.get(k) for k in ("scenario_id", "source", "route_id", "environment", "fault",
                                                                     "onset_event", "onset_offset_s", "tags", "evidence_ids",

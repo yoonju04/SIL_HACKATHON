@@ -838,7 +838,8 @@ def jev_features(answers: dict[str, dict] | None, questions: list[dict], drop: s
         if q.get("gp_encoding") == "ordinal":
             cols = [(f"{q['id']}=ordinal", sum(i * p[o] for i, o in enumerate(opts)) / max(1, len(opts) - 1))]
         else:
-            cols = [(f"{q['id']}=p({o})", p[o]) for o in opts if o != "unknown"]
+            nm = q.get("gp_names") or {}
+            cols = [(nm.get(o) or f"{q['id']}=p({o})", p[o]) for o in opts if o != "unknown"]
         for n, v in cols:
             if drop and n in drop:
                 continue
@@ -884,3 +885,41 @@ def summary(entries: list[dict], reg: JudgeRegression | None) -> dict:
                                         "low_confidence (System One judges give no citations, so there is no citation check)",
             "per_question": per_q, **{f"n_{k}": v for k, v in ta.items()},
             "n_outcome_checked": to["checked"]}
+
+
+def propose_scenarios(entries: list[tuple[dict, dict]], pcfg: dict, space: dict, make) -> list[dict]:
+    """B scenario proposals (laya-judge): for cached judge states whose J1 says the fault can only be caught by
+    accumulated deviation or by no check at all (p >= min_prob), propose a riskier neighbour of a scenario already in
+    that state: bias / intermittent magnitude just under one rate-check tick (the code's 90 deg/s x 0.05 s) and a
+    higher speed (more lateral error per second before tracking_divergence trips). `entries` = [(b_cache row, seed
+    candidate)]; `make(seed, params, speed, reason)` builds the candidate. Code-grounded reason in expected_mechanism.
+    Returns at most per_round, one per fault mode, highest probability first."""
+    if not pcfg.get("enabled", True):
+        return []
+    rate_tick = math.radians(90.0) * 0.05
+    env = space["environment"]["max_speed_kmh"]["range"]
+    scored = []
+    for row, seed in entries:
+        pr = ((row.get("answers") or {}).get("J1") or {}).get("probs") or {}
+        blind, acc = float(pr.get("no_dedicated_check", 0.0)), float(pr.get("deviation_accumulation", 0.0))
+        if blind + acc >= float(pcfg.get("min_prob", 0.4)):
+            scored.append((blind + acc, blind, acc, seed))
+    out, modes = [], set()
+    for tot, blind, acc, seed in sorted(scored, key=lambda t: (-t[0], t[3]["scenario_id"])):
+        mode = seed["fault"]["mode"]
+        if mode in modes:
+            continue
+        params = dict(seed["fault"].get("params") or {})
+        if mode in ("bias", "intermittent_bias") and "magnitude_rad" in params:
+            params["magnitude_rad"] = round(float(pcfg.get("below_rate_check_frac", 0.9)) * rate_tick, 4)
+        speed = min(env[1], float(seed["environment"]["max_speed_kmh"]) + float(pcfg.get("speed_step_kmh", 5.0)))
+        why = (f"B J1: p(no check)={blind:.2f}, p(accumulated deviation)={acc:.2f}. Code: MPCSupervisor.inspect only "
+               f"catches a one-tick jump > {rate_tick:.4f} rad (90 deg/s); below that only tracking_divergence "
+               f"(0.6 m / 0.35 rad held 0.15 s) or nothing trips, so a larger sub-threshold offset at higher speed "
+               f"builds more lateral error before the switch.")
+        c = make(seed, params, speed, why)
+        if c is not None:
+            out.append(c); modes.add(mode)
+        if len(out) >= int(pcfg.get("per_round", 2)):
+            break
+    return out
