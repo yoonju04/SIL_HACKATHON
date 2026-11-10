@@ -8,6 +8,8 @@ baseline (leave-one-out) and leave-one-fault-mode-out (regression vs the trainin
 
   python tools/judges_offline_eval.py --backend nemotron --out /tmp/judges_eval            # Token Factory, parallel
   python tools/judges_offline_eval.py --backend laya --limit 15 --out /tmp/judges_eval      # laya-serve sanity check
+  python tools/judges_offline_eval.py --backend laya --context digest --states-from /workspace/judges_eval/raw_laya.json --limit 42 --out /workspace/judges_eval_digest   # code-facts digest
+  python tools/judges_offline_eval.py --backend laya --context digest --fewshot on ...                                            # + synthetic worked examples
 Raw answers are cached in <out>/raw_<backend>.json (re-runs only ask what is missing). Keys are never printed."""
 from __future__ import annotations
 
@@ -73,6 +75,11 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="ask only this many runs (round-robin over fault modes)")
     ap.add_argument("--parallel", type=int, help="concurrent requests (default: backend 'parallel' or 1)")
     ap.add_argument("--analyse-only", action="store_true")
+    ap.add_argument("--context", choices=J.CONTEXTS, help="judge state: full (code excerpts) | digest (engine/code_facts.py); "
+                                                          "default judges.yaml context")
+    ap.add_argument("--fewshot", choices=("on", "off"), help="digest only: add the synthetic worked examples "
+                                                             "(05b_judges/fewshot.yaml); default judges.yaml fewshot")
+    ap.add_argument("--states-from", help="evaluate exactly the run ids of this earlier raw_<backend>.json (same states)")
     a = ap.parse_args()
     camp, out = Path(a.campaign), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -81,10 +88,19 @@ def main() -> None:
     bank = {q["id"]: q for q in bank_l}
     rc = camp / "run_config.json"
     sup = (json.loads(rc.read_text()).get("supervisor") if rc.exists() else None) or "tight"
-    qs, meta = J.judge_questions(bank_l, cfg, J.state_views(cfg, a.backend))
+    context = a.context or cfg.get("context", "full")
+    fewshot = (a.fewshot == "on") if a.fewshot else bool(cfg.get("fewshot", False))
+    if fewshot and context != "digest":
+        raise SystemExit("--fewshot on needs --context digest")
+    qs, meta = J.judge_questions(bank_l, cfg, J.state_views(cfg, a.backend), context=context)
     states = run_states(camp, sup)
     todo = pick(states, a.limit)
-    raw_path = out / f"raw_{a.backend}.json"
+    if a.states_from:
+        prev = list(json.loads(Path(a.states_from).read_text()))
+        todo = [k for k in prev if k in states] + [k for k in todo if k not in prev]
+        todo = todo[:max(a.limit or 0, len(prev))]
+    tag = "" if context == "full" else ("_digest_fewshot" if fewshot else "_digest")
+    raw_path = out / f"raw_{a.backend}{tag}.json"
     raw = json.loads(raw_path.read_text()) if raw_path.exists() else {}
     if not a.analyse_only:
         bcfg = cfg["backends"][a.backend]
@@ -99,11 +115,12 @@ def main() -> None:
 
         def ask(k):
             ctx = states[k][0]
-            state = J.make_state(cfg, a.backend, AV, ctx, SUPERVISOR_PROFILES.get(ctx["supervisor"]))
+            reqs = J.make_requests(cfg, a.backend, AV, ctx, SUPERVISOR_PROFILES.get(ctx["supervisor"]),
+                                   J.questions_for(qs, meta, bank_l, ctx["fault_mode"]), meta, context, fewshot)
             t0 = time.time()
-            resp = cli.system_one(state, J.questions_for(qs, meta, bank_l, ctx["fault_mode"]), tag=f"offline:{k}")
-            return k, {"context": ctx, "response": resp, "state_chars": len(json.dumps(state)),
-                       "wall_s": round(time.time() - t0, 2)}
+            resp = J.ask_requests(cli, reqs, tag=f"offline:{k}")
+            return k, {"context": ctx, "response": resp, "state_chars": sum(resp["state_chars"]),
+                       "judge_context": context, "fewshot": fewshot, "wall_s": round(time.time() - t0, 2)}
 
         par = int(a.parallel or bcfg.get("parallel") or 1)
         with ThreadPoolExecutor(max_workers=par) as ex:
@@ -127,7 +144,9 @@ def main() -> None:
                      "input_tokens_median": float(np.median(ins)) if ins else None,
                      "input_tokens_total": int(sum(ins)),
                      "truncated_any": any((r["response"].get("usage") or {}).get("truncated") for r in sel.values())}
-    (out / f"report_{a.backend}.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False))
+    rep["judge_context"], rep["fewshot"] = context, fewshot
+    rep["state_ids"] = list(sel)
+    (out / f"report_{a.backend}{tag}.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False))
     print(table(rep))
 
 

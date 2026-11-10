@@ -168,7 +168,8 @@ class Loop:
     def __init__(self, *, mode: str, out: Path, ablation: str, video_on: bool, seed: int, cfg: dict | None = None,
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
                  quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None,
-                 supervisor: str | None = None, gp_target: str | None = None, judge_b: str | None = None):
+                 supervisor: str | None = None, gp_target: str | None = None, judge_b: str | None = None,
+                 judge_context: str | None = None, judge_fewshot: bool | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -220,6 +221,8 @@ class Loop:
         # (Token Factory Nemotron as a System One judge): 25 typed judges over J1..J9 (05b_judges/questions.yaml) +
         # regression. nemotron_b = the earlier generative Nemotron B over its own Q-B1..5 bank (comparison only).
         self.judge_b = str(judge_b or self.cfg["orchestrator"].get("judge_b") or "laya")
+        self._judge_context, self._judge_fewshot = judge_context, judge_fewshot
+        self.judge_context, self.judge_fewshot = "full", False
         if self.judge_b not in (*JDG.BACKENDS, "nemotron_b"):
             raise SystemExit(f"--judge-b must be laya, jev, nemotron or nemotron_b, not {self.judge_b!r}")
         # integration3 #6: yes/no as strings, scope (per_scenario | static) and gp_feature defaults
@@ -288,7 +291,15 @@ class Loop:
         self.b_settings = role_settings(llm_cfg, "B")
         if self.judge_b in JDG.BACKENDS:
             jc = self.cfg["judges"]
-            self.jev_questions, self.jev_meta = JDG.judge_questions(self.questions, jc, JDG.state_views(jc, self.judge_b))
+            # laya-judge: --judge-context full (code excerpts, default) | digest (engine/code_facts.py facts per question)
+            self.judge_context = str(self._judge_context or jc.get("context") or "full")
+            if self.judge_context not in JDG.CONTEXTS:
+                raise SystemExit(f"--judge-context must be one of {JDG.CONTEXTS}, not {self.judge_context!r}")
+            self.judge_fewshot = bool(jc.get("fewshot", False) if self._judge_fewshot is None else self._judge_fewshot)
+            if self.judge_fewshot and self.judge_context != "digest":
+                raise SystemExit("--judge-fewshot on needs --judge-context digest")
+            self.jev_questions, self.jev_meta = JDG.judge_questions(self.questions, jc, JDG.state_views(jc, self.judge_b),
+                                                                    context=self.judge_context)
             self.jev_client, self.jev_backend = JDG.make_client(self.judge_b, jc, self.mode, self.questions, self.jev_meta,
                                                                 seed=self.seed, log_path=self.llm_log, llm_cfg=llm_cfg)
             if self.mode != "mock" and getattr(self.jev_client, "stub", False):
@@ -729,9 +740,10 @@ class Loop:
                 todo[k] = self.judge_ctx(c)
 
         def ask(k, ctx):
-            state = JDG.make_state(jc, self.judge_b, self.av_stack, ctx, prof)
             qs_req = JDG.questions_for(self.jev_questions, self.jev_meta, self.questions, ctx["fault_mode"])
-            return self.jev_client.system_one(state, qs_req, tag=f"B_judge:{k}")
+            reqs = JDG.make_requests(jc, self.judge_b, self.av_stack, ctx, prof, qs_req, self.jev_meta,
+                                     self.judge_context, self.judge_fewshot)
+            return JDG.ask_requests(self.jev_client, reqs, tag=f"B_judge:{k}")
 
         # laya-judge: one request per judge key, `parallel` at a time (Nemotron / Jev are remote; Laya / stub = 1)
         par = max(1, int((jc["backends"].get(self.judge_b) or {}).get("parallel", 1))) if not self.jev_client.stub else 1
@@ -1257,7 +1269,8 @@ class Loop:
                                             "judge_b": self.judge_b,
                                             "judges": ({"backend": self.judge_b, "model": self.jev_client.model,
                                                         "client": self.jev_backend,
-                                                        "judges_per_state": len(self.jev_questions)}
+                                                        "judges_per_state": len(self.jev_questions),
+                                                        "context": self.judge_context, "fewshot": self.judge_fewshot}
                                                        if self.judge_b in JDG.BACKENDS else None),
                                             "batch_size": self.batch, "rounds": self.rounds, "synthetic": self.mode == "mock",
                                             "scenario_space": str(self.space_path), "av_stack": str(self.av_stack)})
@@ -1838,6 +1851,12 @@ def main(argv: list[str] | None = None) -> int:
                          "protocol, key TYPESAFE_API_KEY; nemotron = Token Factory Nemotron as a System One judge over the "
                          "same 25 questions; nemotron_b = the earlier generative Nemotron B, for comparison). "
                          "--mock, or no server / no key -> deterministic SYNTHETIC stub")
+    ap.add_argument("--judge-context", choices=("full", "digest"),
+                    help="05b judge state (laya / jev / nemotron): full = code excerpts (default, judges.yaml context); "
+                         "digest = short rule-based code-facts digest per question (engine/code_facts.py), no code")
+    ap.add_argument("--judge-fewshot", choices=("on", "off"),
+                    help="with --judge-context digest: add 2 worked examples per code question from synthetic fault "
+                         "modes (05b_judges/fewshot.yaml); default judges.yaml fewshot (off)")
     ap.add_argument("--gp-history", action="append", metavar="GLOB",
                     help="pool earlier campaigns' run_records.jsonl (glob, repeatable) into GP training (warm start)")
     args = ap.parse_args(argv)
@@ -1864,7 +1883,8 @@ def main(argv: list[str] | None = None) -> int:
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
                 gp_history=args.gp_history, supervisor=args.supervisor, gp_target=args.gp_target,
-                judge_b=args.judge_b)
+                judge_b=args.judge_b, judge_context=args.judge_context,
+                judge_fewshot=None if args.judge_fewshot is None else args.judge_fewshot == "on")
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":

@@ -1,0 +1,52 @@
+# fewshot.yaml — 05b 판정자 풀이 예시 (laya-judge, --judge-fewshot on 일 때만 state 에 붙는다)
+# Worked examples for the code-key questions, used only with --judge-fewshot on (digest context).
+# Every example uses an INVENTED fault mode that the injector does not have (sign_flip, dropout, pulse_offset,
+# gps_offset, gain_scale) and the 'tight' profile, so no example is a state of any campaign and none gives the answer
+# of a real fault mode: they show how to follow the facts, not what the answer is (tests/test_code_facts.py checks
+# that no example names a real fault mode). Answers are option names of the example's OWN synthetic scenario.
+meta:
+  schema_version: '1.0'
+  profile: tight
+examples:
+  J1:
+    - scenario: "synthetic fault 'sign_flip': apply returns replace(output, steer=-output.steer); MPC steer just before onset 0.02 rad"
+      reasoning: "onset changes steer by 0.04 rad in one tick, below 0.0785 rad per tick, so check 8 passes; ok, seq, stamp_s and finiteness are unchanged, so checks 1-7 pass; only check 9 can return a reason, after the error is held 0.15 s"
+      answer: deviation_accumulation
+    - scenario: "synthetic fault 'dropout': apply returns replace(output, steer=None)"
+      reasoning: "check 2 (output.steer is None) returns a reason on the first fault tick, before any error builds up"
+      answer: immediate_check
+  J3:
+    - scenario: "synthetic fault 'pulse_offset': adds 0.03 rad to steer for 0.10 s, then nothing for 0.40 s, repeating"
+      reasoning: "each edge changes steer by 0.03 rad, below 0.0785 rad per tick, so check 8 passes; each on period (0.10 s) is shorter than divergence_hold_s 0.15 s and tracking_bad_since is reset to None whenever bad_tracking is false"
+      answer: can_evade
+    - scenario: "synthetic fault 'pulse_offset': adds 0.12 rad to steer for 0.50 s, then nothing for 0.50 s"
+      reasoning: "the first on edge changes steer by 0.12 rad in one tick, above 0.0785 rad per tick, so check 8 returns a reason at that edge"
+      answer: caught_by_rate_check
+  J4:
+    - scenario: "synthetic fault 'dropout': apply returns replace(output, steer=None)"
+      reasoning: "inspect returns 'missing_steer' on the first fault tick; result is only built from the MPC output when self.reason is None, so it is not; self.active becomes 'lqr' and the lqr block runs in the same tick"
+      answer: lqr_early
+    - scenario: "synthetic fault 'sign_flip': steer = -steer, MPC steer before onset 0.02 rad"
+      reasoning: "all checks pass while the error is small, so self.reason is None and result = LateralResult(output.steer, ...) with the flipped steer is sent each tick until check 9 fires"
+      answer: corrupted_mpc
+  J7:
+    - scenario: "synthetic fault 'dropout': apply returns replace(output, steer=None)"
+      reasoning: "the reason is returned on the first fault tick, so self.last still holds the previous tick's MPC command, computed before the fault; LQR is clipped to self.last.steer +- 0.0524 rad"
+      answer: continuous_from_clean
+    - scenario: "synthetic fault 'sign_flip': steer = -steer, MPC steer before onset 0.02 rad"
+      reasoning: "flipped commands pass every check and are sent for several ticks, so self.last.steer is a flipped command when LQR takes over; LQR then moves away from it at most 0.0524 rad per tick"
+      answer: continuous_from_faulted
+  J8:
+    - scenario: "synthetic fault 'gps_offset': adds 0.5 m to x and y before step() is called"
+      reasoning: "x and y are step()'s inputs, and step_controller('lqr', ...) receives the same x, y, so the LQR path sees the offset too"
+      answer: also_reaches_lqr
+    - scenario: "synthetic fault 'gain_scale': apply returns replace(output, steer=1.3 * output.steer)"
+      reasoning: "the change is made on the value self.mpc.compute returned; the LQR call takes step()'s own inputs and never that value"
+      answer: mpc_output_only
+  J9:
+    - scenario: "synthetic supervisor: step() also has self.active = 'mpc' guarded by: self.active == 'lqr' and healthy_for_s >= 2.0"
+      reasoning: "there is an assignment back to 'mpc' after 'lqr', so ownership can go back"
+      answer: returns_to_mpc
+    - scenario: "synthetic supervisor: __init__ sets self.active = 'mpc'; step() sets 'lqr' (from 'mpc') and 'safe_stop' (from 'lqr') only"
+      reasoning: "no statement after __init__ sets 'mpc', so once 'lqr' it stays 'lqr' or 'safe_stop'"
+      answer: latched_no_return

@@ -92,6 +92,25 @@ state:
     fault_helpers: {bias: _shift, drift: _shift, intermittent_bias: _intermittent, saturate: _saturate, output_delay: _delayed}
     max_chars_per_view: 2500
 
+  digest:                                       # --judge-context digest: 원시 코드 대신 engine/code_facts.py 사실 요약
+    # 질문마다 필요한 주제만 (규칙 기반, ast 로 소스를 읽는다. 결론·보기 이름·런 결과는 넣지 않는다).
+    # Per question: the code-facts topics its state carries (engine/code_facts.py). Questions with the same topic list
+    # share one /v1/systemone request (with few-shot on: one request per question, its own worked examples).
+    topics:
+      J1: [supervisor, fault]
+      J3: [supervisor, fault]
+      J4: [supervisor, fault, switch]
+      J7: [supervisor, fault, takeover]
+      J8: [fault, wiring]
+      J9: [latch]
+      J2: [supervisor, fault]
+      J5: [supervisor, fault]
+      J6: [fault, takeover]
+    fewshot_file: fewshot.yaml                  # --judge-fewshot on: 가짜 고장 모드 풀이 예시 2개씩 (코드 질문만)
+
+context: full                                   # full (기존: backend state_view 의 코드 발췌) | digest. run.py --judge-context
+fewshot: false                                  # digest 에서만: 풀이 예시 붙이기. run.py --judge-fewshot on|off
+
 judges:                                         # 질문 → 판정자 변형. J3 은 applies_to (intermittent_bias, saturate) 일 때만 → 22~25개
   J1: [en_notes, en_notes_rev, ko, focus_supervisor]          # 감지 경로
   J3: [en_notes, en_notes_rev, focus_supervisor]              # on/off 고장의 유지 시간 회피

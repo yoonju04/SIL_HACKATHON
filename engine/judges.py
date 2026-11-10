@@ -142,12 +142,13 @@ def _focus_text(focus: list[str]) -> str:
     return "Use " + ", ".join(f"`{f}`" for f in focus) + "."
 
 
-def judge_questions(bank: list[dict], layout: dict, views: list[str] | None = None
+def judge_questions(bank: list[dict], layout: dict, views: list[str] | None = None, context: str = "full"
                     ) -> tuple[dict[str, dict], dict[str, dict]]:
     """(`questions` map, meta {name: {qid, variant, form, options, keys}}). One question per (question id, variant);
     names are '<qid>__<variant>' so answers map back. Only ids in layout['judges'] are asked. `views` = code sections
     present in the state; a focus on a missing section (compact Laya state) falls back to `code`. meta['keys'] maps
-    the wire option key back to the bank option (yes/no choice options are sent as holds / ruled_out / undecided)."""
+    the wire option key back to the bank option (yes/no choice options are sent as holds / ruled_out / undecided).
+    context 'digest': focus on code sections becomes `facts` (the digest state has no code)."""
     qs = {q["id"]: q for q in bank}
     variants = layout["variants"]
     out, meta = {}, {}
@@ -163,6 +164,12 @@ def judge_questions(bank: list[dict], layout: dict, views: list[str] | None = No
             focus = list(spec.get("focus") or ["scenario", "code"])
             if views is not None:
                 focus = list(dict.fromkeys(f if not f.startswith("code.") or f[5:] in views else "code" for f in focus))
+            if context == "digest":   # digest state: '[scenario]' + '[facts.<topic>]' sections, no code
+                tps = ((layout.get("state") or {}).get("digest") or {}).get("topics", {}).get(qid) or []
+                fm = {"code.supervisor": "supervisor", "code.fault_injection": "fault", "code.switch": "switch",
+                      "code.lqr": "takeover"}
+                focus = list(dict.fromkeys((f"facts.{fm[f]}" if fm.get(f) in tps else "facts") if f.startswith("code")
+                                           else f for f in focus))
             instr = f"{text} {_focus_text(focus)}"
             name = f"{qid}__{v}"
             if spec["form"] == "noul":
@@ -300,6 +307,79 @@ def make_state(cfg: dict, backend: str, av_stack: Path | None, ctx: dict, profil
     full = st.get("full") or {}
     return build_state(code_views(av_stack, full.get("code_views") or {}, int(full.get("max_chars_per_view", 9000))),
                        ctx, profile, tick)
+
+
+# ---------------------------------------------------------------- digest context (engine/code_facts.py)
+CONTEXTS = ("full", "digest")
+
+
+def load_fewshot(cfg: dict) -> dict[str, list[dict]]:
+    """{qid: [{scenario, reasoning, answer}]} from 05b_judges/<state.digest.fewshot_file> (synthetic fault modes only)."""
+    import yaml
+    from engine.config import PIPELINE_DIR
+    name = ((cfg.get("state") or {}).get("digest") or {}).get("fewshot_file") or "fewshot.yaml"
+    p = PIPELINE_DIR / "05b_judges" / name
+    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("examples") or {} if p.is_file() else {}
+
+
+def fewshot_text(examples: list[dict]) -> str:
+    return "\n".join(f"Example {i + 1} (a different, synthetic scenario): {e['scenario']}\n  facts used: {e['reasoning']}\n"
+                     f"  answer: {e['answer']}" for i, e in enumerate(examples))
+
+
+def digest_state(av_stack: Path | None, ctx: dict, profile: dict | None, topics: list[str], tick_s: float = 0.05,
+                 examples: list[dict] | None = None) -> str:
+    """Text state of the digest context: the same '[scenario]' inputs block as the compact state, then the code-facts
+    digest of `topics` (no code, no conclusions, no run outcome), then optional worked examples."""
+    from engine import code_facts as CF
+    sc = build_state({}, ctx, profile, tick_s)       # independence check on the scenario block
+    txt = state_text({"scenario": sc["scenario"], "code": {}})
+    if av_stack is not None:
+        txt += "\n" + CF.digest(av_stack, ctx, topics, tick_s)
+    if examples:
+        txt += "\n[worked_examples]\n" + fewshot_text(examples)
+    return txt
+
+
+def make_requests(cfg: dict, backend: str, av_stack: Path | None, ctx: dict, profile: dict | None, questions: dict,
+                  meta: dict, context: str = "full", fewshot: bool = False,
+                  examples: dict[str, list[dict]] | None = None) -> list[tuple[Any, dict]]:
+    """[(state, questions)] for one scenario. full: one request, make_state (the earlier behaviour). digest: one
+    request per group of questions sharing a topic list (state.digest.topics); with fewshot, one per question id so
+    each carries only its own worked examples (code questions only)."""
+    if context == "full":
+        return [(make_state(cfg, backend, av_stack, ctx, profile), questions)]
+    if context != "digest":
+        raise ValueError(f"judge context must be one of {CONTEXTS}, not {context!r}")
+    st = cfg.get("state") or {}
+    topics = (st.get("digest") or {}).get("topics") or {}
+    tick = float(st.get("tick_s", 0.05))
+    ex = (examples if examples is not None else load_fewshot(cfg)) if fewshot else {}
+    groups: dict[tuple, dict] = {}
+    for name, jq in questions.items():
+        qid = meta[name]["qid"]
+        tp = tuple(topics.get(qid) or ("supervisor", "fault", "switch"))
+        key = (tp, qid if fewshot and ex.get(qid) else None)
+        groups.setdefault(key, {})[name] = jq
+    return [(digest_state(av_stack, ctx, profile, list(tp), tick, ex.get(q) if q else None), qs)
+            for (tp, q), qs in groups.items()]
+
+
+def ask_requests(client: "SystemOneClient", requests: list[tuple[Any, dict]], tag: str = "B_judge") -> dict:
+    """Send every (state, questions) request of one scenario; merge the answers, sum usage, latency and add the
+    per-request state sizes (one /v1/systemone shape back, `n_requests` added)."""
+    ans, inp, outp, lat, model, chars = {}, 0, 0, 0.0, None, []
+    for state, qs in requests:
+        r = client.system_one(state, qs, tag=tag)
+        ans.update(r.get("answers") or {})
+        u = r.get("usage") or {}
+        inp += int(u.get("input_tokens") or 0)
+        outp += int(u.get("output_tokens") or 0)
+        lat += float(r.get("latency_s") or 0.0)
+        model = model or r.get("model")
+        chars.append(len(state) if isinstance(state, str) else len(json.dumps(state)))
+    return {"model": model, "answers": ans, "latency_s": round(lat, 3), "n_requests": len(requests),
+            "state_chars": chars, "usage": {"input_tokens": inp, "output_tokens": outp}}
 
 
 def _keys(obj: Any) -> set[str]:
