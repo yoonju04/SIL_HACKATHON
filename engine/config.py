@@ -40,6 +40,7 @@ STAGE_FILES = {
     "deterministic_features": "05a_deterministic_features/deterministic_features.yaml",
     "nemotron_b": "05b_nemotron_b/nemotron_b.yaml",
     "judges": "05b_judges/judges.yaml",                # laya-judge: Laya / Jev x25 + regression (05b B judge)
+    "failure_types": "05c_failure_types/failure_types.yaml",   # laya-judge: failure-type stacking layer (optional 07 term)
     "surrogate": "06_gp_surrogate/surrogate.yaml",
     "orchestrator": "07_orchestrator/orchestrator.yaml",
     "paired_runs": "08_carla_paired_run/paired_runs.yaml",

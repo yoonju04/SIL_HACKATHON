@@ -1,0 +1,47 @@
+# failure_types.yaml — 05c failure-type stacking layer (laya-judge, engine/failure_types.py)
+# Per switched run, 4 binary failure types that can be on at the same time (multi-label). Labels come from the finished
+# run record only (monitor fields); they are regression TARGETS, never inputs of any judge or of this model.
+# Inputs = deterministic features (05a DF) + the judges' regressed J probabilities that the GP already gets (05b) +
+# two judge-uncertainty features (disagreement across variants, forward vs reverse option order).
+# docs/FAILURE_TYPES.md has the offline evaluation (result_8..12) and its caveats (small n).
+
+meta:
+  schema_version: '1.0'
+  status: offline_checked_result_8_to_12        # docs/FAILURE_TYPES.md. Not used by the GP; optional acquisition term only
+
+types:                                          # label rule per type (engine.failure_types.type_labels)
+  jerk:            {rule: "metrics.lat_jerk_excess_mps3 > lat_jerk_limit_mps3", lat_jerk_limit_mps3: 15.0}   # P-04 (integration4: 5 -> 15)
+  lat_acc:         {rule: "metrics.lat_acc_excess_mps2 > lat_acc_base_mps2 * tire_friction_scale", lat_acc_base_mps2: 4.41}  # P-02
+  lane_departure:  {rule: "lane_recovery_robustness < 0 or recovery_outcome in (recovered_after_departure, unrecovered) or departed_at_switch",
+                    include_sr4_footprint: false}  # true: also SR4 footprint departure anywhere in onset..onset+10 s (pre-switch too)
+  unsettled:       {rule: "recovery_outcome == unsettled"}
+switched_only: true                             # never-switched runs: LQR never acted -> no failure-type label
+
+inputs: [df, judges, judge_uncertainty]         # df | judges | judge_uncertainty | scenario (the GP's numeric scenario columns)
+
+model:
+  method: hier_bayes                            # hier_bayes (shared-prior slopes) | logistic_balanced (per-type L2, class_weight balanced)
+  logistic_C: 0.5                               # per-type L2 logistic (sklearn C)
+  hier: {mu_var: 1.0, tau: null, tau_grid: [0.1, 0.25, 0.5, 1.0, 2.0], intercept_var: 25.0}   # tau null = Laplace evidence picks it
+  balanced_weights: false                       # hier_bayes: weight positives per type like class_weight='balanced'
+  prior_correction: true                        # balanced-weight fits: shift the logit back by log(pi/(1-pi)) before thresholds
+
+# Decision threshold per type from costs, not 0.5 / argmax:  flag when p > c_false_alarm / (c_false_alarm + c_miss).
+# PROVISIONAL TEAM DECISION: the numbers below are placeholders that only say "a missed lane departure costs far more
+# than a false alarm". Change them; nothing else in the pipeline depends on them.
+costs:
+  false_alarm: 1.0
+  miss: {jerk: 2.0, lat_acc: 5.0, lane_departure: 20.0, unsettled: 5.0}
+
+ordinal:                                        # optional single cumulative-logit model over a severity order
+  enabled: false
+  # TEAM DECISION (not decided): the order below is the proposal from the review, not an agreed severity scale.
+  order: [none, jerk_only, lat_acc, unsettled, departed_recovered, unrecovered]
+  prior_var: 0.5
+
+acquisition:                                    # 07 hook (run.py Loop.rare_type_picks): rare-type probability x epistemic
+  enabled: false                                # off by default; run.py --rare-type-picks N turns it on
+  picks_per_round: 1                            # reserved batch slots (like B proposals: <= 2)
+  weight: 1.0                                   # score = weight * max_t in rare_types P_t(x) * epistemic_t(x) (logit variance)
+  rare_types: [lane_departure, unsettled, lat_acc]
+  min_train_runs: 12                            # fit only after this many labelled switched runs

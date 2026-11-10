@@ -29,6 +29,7 @@ from typing import Any
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import numpy as np
 import yaml
 
 from engine import judgment as J
@@ -169,7 +170,9 @@ class Loop:
                  cold_start: int | None = None, batch_size: int | None = None, rounds: int | None = None,
                  quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None,
                  supervisor: str | None = None, gp_target: str | None = None, judge_b: str | None = None,
-                 judge_context: str | None = None, judge_fewshot: bool | None = None):
+                 judge_context: str | None = None, judge_fewshot: bool | None = None,
+                 rare_type_picks: int | None = None, judge_regression_inputs: str | None = None,
+                 judge_regression_model: str | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -230,6 +233,20 @@ class Loop:
                           NM.normalize_questions(self.cfg["nemotron_b"]["B_question_answering"]["question_bank"]))
         self.av_stack = resolve_av_stack()
         self.records: list[dict] = []
+        # laya-judge (2026-11-10): J regression inputs / model overrides (judges.yaml regression.inputs / .model)
+        reg_cfg = self.cfg["judges"].setdefault("regression", {})
+        if judge_regression_inputs is not None:
+            reg_cfg["inputs"] = judge_regression_inputs
+        if judge_regression_model is not None:
+            reg_cfg["model"] = judge_regression_model
+        # laya-judge: 05c failure-type layer -> optional 07 slots "rare-type probability x epistemic" (default off)
+        import copy as _copy
+        from engine import failure_types as FT
+        self.ft_cfg = _copy.deepcopy(self.cfg.get("failure_types") or FT.load_config())
+        ac = self.ft_cfg.setdefault("acquisition", {})
+        if rare_type_picks is not None:
+            ac["enabled"] = int(rare_type_picks) > 0
+            ac["picks_per_round"] = int(rare_type_picks)
         self.candidates: dict[str, dict] = {}
         self.features_of: dict[str, list[float]] = {}
         self.explanations: dict[str, dict] = {}
@@ -765,7 +782,7 @@ class Loop:
         sources = {qid: qs[qid].get("label_source", "code") for qid in variants_of}
         keys = {k: self.judge_labels(k, e["context"]) for k, e in self.jev_raw.items()}
         self.jev_reg = JDG.JudgeRegression(jc.get("regression") or {}, variants_of, options_of, seed=self.seed,
-                                           report_only=report_only).fit(
+                                           report_only=report_only, variant_specs=jc.get("variants") or {}).fit(
             [(e["parsed"], keys[k]) for k, e in self.jev_raw.items()])
         low = float((jc.get("regression") or {}).get("low_confidence", 0.5))
         for k, e in self.jev_raw.items():
@@ -971,6 +988,9 @@ class Loop:
             div = orch["acquisition"]["diversity"]
             share = self.nemotron_share(rest, self.batch - len(forced), lambda c: self.acq_score(c, beta))
             rest = [c for c in rest if c not in share]
+            rare = self.rare_type_picks(rest, round_index, self.batch - len(forced) - len(share))
+            share += rare
+            rest = [c for c in rest if c not in rare]
             batch = share + select_batch_scored(rest, lambda c: self.acq_score(c, beta),
                                         batch_size=self.batch - len(forced) - len(share),
                                         acquisition_fraction=float(orch["acquisition"]["batch_composition"]["lcb"]),
@@ -987,6 +1007,57 @@ class Loop:
             sel = enforce_diversity(sel, self.reserve_order(pool, sel, round_index), ran, len(sel), ff,
                                     float(div.get("min_distance_to_run", 0.0)), float(div.get("max_fault_share", 0.0)))
         return sel
+
+    def failure_type_inputs(self, c: dict) -> tuple[list[float], list[str]]:
+        """05c inputs for a candidate: the GP feature columns failure_types.yaml `inputs` selects (df / judges /
+        scenario) + the two judge-uncertainty columns from the cached raw judge vectors (judge_uncertainty)."""
+        from engine import failure_types as FT
+        inputs = list(self.ft_cfg.get("inputs") or ["df", "judges", "judge_uncertainty"])
+        x, names = self.features(c)
+        idx = FT.select_columns(names, inputs)
+        x, names = [x[i] for i in idx], [names[i] for i in idx]
+        if "judge_uncertainty" in inputs and self.judge_b in JDG.BACKENDS:
+            ans = (self.b_cache.get(self.b_key(c)) or {}).get("answers") or {}
+            parsed = {q: r.get("judges") or [] for q, r in ans.items()}
+            u, un = FT.judge_uncertainty(parsed, self.cfg["judges"].get("variants") or {})
+            x, names = x + u, names + un
+        return x, names
+
+    def rare_type_picks(self, pool: list[dict], round_index: int, room: int) -> list[dict]:
+        """laya-judge plan 4: reserve up to acquisition.picks_per_round batch slots (default off) for the candidates
+        with the highest 'rare failure-type probability x epistemic logit variance' under the 05c hierarchical model
+        fitted on this campaign's labelled switched runs (labels = run outcomes; they are targets, never judge
+        inputs). Logged in stats['rare_type_picks']."""
+        from engine import failure_types as FT
+        ac = self.ft_cfg.get("acquisition") or {}
+        n = min(int(ac.get("picks_per_round", 0) or 0), max(0, room))
+        if not ac.get("enabled", False) or n <= 0 or not pool:
+            return []
+        X, Y = [], []
+        for r in self.records:
+            lab = FT.type_labels(r, self.ft_cfg)
+            c = self.candidates.get(r.get("scenario_id"))
+            if lab is None or c is None:
+                continue
+            X.append(self.failure_type_inputs(c)[0])
+            Y.append([np.nan if lab[t] is None else float(lab[t]) for t in FT.TYPES])
+        st = {"round": round_index, "n_train": len(X), "picked": []}
+        if len(X) < int(ac.get("min_train_runs", 12)):
+            st["note"] = "too few labelled switched runs"
+            self.stats.setdefault("rare_type_picks", []).append(st)
+            return []
+        m = FT.FailureTypeModel(self.ft_cfg).fit(np.array(X), np.array(Y))
+        pred = m.predict(np.array([self.failure_type_inputs(c)[0] for c in pool]))
+        score = FT.rare_type_score(pred, self.ft_cfg)
+        picked = [pool[i] for i in np.argsort(-score, kind="stable")[:n]]
+        for c in picked:
+            i = pool.index(c)
+            c["selected_by"] = "rare_type_epistemic"
+            c["rare_type_score"] = round(float(score[i]), 5)
+            st["picked"].append({"scenario_id": c["scenario_id"], "score": c["rare_type_score"],
+                                 "probs": {t: round(float(v), 3) for t, v in zip(FT.TYPES, pred["probs"][i])}})
+        self.stats.setdefault("rare_type_picks", []).append(st)
+        return picked
 
     def b_proposals(self, round_index: int) -> list[dict]:
         """laya-judge: B scenario proposals (judges.propose_scenarios) from the judge cache, source 'B'. 04 gates them
@@ -1270,8 +1341,11 @@ class Loop:
                                             "judges": ({"backend": self.judge_b, "model": self.jev_client.model,
                                                         "client": self.jev_backend,
                                                         "judges_per_state": len(self.jev_questions),
-                                                        "context": self.judge_context, "fewshot": self.judge_fewshot}
+                                                        "context": self.judge_context, "fewshot": self.judge_fewshot,
+                                                        "regression": {k: (self.cfg["judges"].get("regression") or {}).get(k)
+                                                                       for k in ("inputs", "model", "ordinal")}}
                                                        if self.judge_b in JDG.BACKENDS else None),
+                                            "rare_type_picks": (self.ft_cfg.get("acquisition") or {}) if (self.ft_cfg.get("acquisition") or {}).get("enabled") else None,
                                             "batch_size": self.batch, "rounds": self.rounds, "synthetic": self.mode == "mock",
                                             "scenario_space": str(self.space_path), "av_stack": str(self.av_stack)})
         self.screen("시작: 사전 지식 정리 중")
@@ -1857,6 +1931,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--judge-fewshot", choices=("on", "off"),
                     help="with --judge-context digest: add 2 worked examples per code question from synthetic fault "
                          "modes (05b_judges/fewshot.yaml); default judges.yaml fewshot (off)")
+    ap.add_argument("--rare-type-picks", type=int, metavar="N",
+                    help="07: reserve N batch slots per round (0 = off, the default; 1-2 suggested) for the candidates "
+                         "with the highest rare failure-type probability x epistemic uncertainty (05c "
+                         "failure_types.yaml acquisition)")
+    ap.add_argument("--judge-regression-inputs", choices=("compressed", "per_judge"),
+                    help="05b J regression inputs: compressed = per question mean log p across variants + variant std "
+                         "+ forward/reverse gap (judges.yaml default); per_judge = every variant's log p (v2)")
+    ap.add_argument("--judge-regression-model", choices=("logistic_l2", "bayes_laplace"),
+                    help="05b J regression: L2 multinomial logistic (default) or the Laplace Bayesian logistic, which "
+                         "also stores an epistemic value per answer ('judge does not know here')")
     ap.add_argument("--gp-history", action="append", metavar="GLOB",
                     help="pool earlier campaigns' run_records.jsonl (glob, repeatable) into GP training (warm start)")
     args = ap.parse_args(argv)
@@ -1884,7 +1968,9 @@ def main(argv: list[str] | None = None) -> int:
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
                 gp_history=args.gp_history, supervisor=args.supervisor, gp_target=args.gp_target,
                 judge_b=args.judge_b, judge_context=args.judge_context,
-                judge_fewshot=None if args.judge_fewshot is None else args.judge_fewshot == "on")
+                judge_fewshot=None if args.judge_fewshot is None else args.judge_fewshot == "on",
+                rare_type_picks=args.rare_type_picks, judge_regression_inputs=args.judge_regression_inputs,
+                judge_regression_model=args.judge_regression_model)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":
