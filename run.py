@@ -1938,9 +1938,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--judge-regression-inputs", choices=("compressed", "per_judge"),
                     help="05b J regression inputs: compressed = per question mean log p across variants + variant std "
                          "+ forward/reverse gap (judges.yaml default); per_judge = every variant's log p (v2)")
-    ap.add_argument("--judge-regression-model", choices=("logistic_l2", "bayes_laplace"),
-                    help="05b J regression: L2 multinomial logistic (default) or the Laplace Bayesian logistic, which "
-                         "also stores an epistemic value per answer ('judge does not know here')")
+    ap.add_argument("--judge-regression-model", choices=("logistic_l2", "bayes_laplace", "ridge"),
+                    help="05b J regression: L2 multinomial logistic (default), the Laplace Bayesian logistic (also "
+                         "stores an epistemic value per answer, 'judge does not know here'), or ridge (L2 least "
+                         "squares, RidgeCV alpha, scores clipped to [0, 1], one-vs-rest). Ordinal-coded ridge is "
+                         "opt-in in judges.yaml (ridge_ordinal: true), not this flag")
     ap.add_argument("--gp-history", action="append", metavar="GLOB",
                     help="pool earlier campaigns' run_records.jsonl (glob, repeatable) into GP training (warm start)")
     args = ap.parse_args(argv)

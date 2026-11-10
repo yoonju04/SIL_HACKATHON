@@ -413,3 +413,81 @@ def test_ordinal_regression_keeps_all_buckets():
     assert set(p) == {"lo", "mid", "hi", "top"} and max(p, key=p.get) == "hi"
     assert reg.epistemic("Q", rows[2][0]["Q"]) is not None
     assert J.judge_epistemic({"Q": {"epistemic": 0.2}, "R": {"epistemic": None}}) == 0.2
+
+
+@pytest.mark.parametrize("cfg", [{"inputs": "compressed", "model": "ridge"},
+                                 {"inputs": "per_judge", "model": "ridge"}])
+def test_ridge_regression_fits_and_has_no_epistemic(cfg):
+    rows = _jrows()
+    reg = J.JudgeRegression(dict(cfg, min_labels=8), {"Q": ["good", "rev", "noise"]}, {"Q": ["a", "b", "c"]}).fit(rows)
+    assert reg.report["Q"]["method"] == "ridge"
+    assert reg.report["Q"]["regression"]["accuracy"] > 0.8
+    p = reg.predict("Q", rows[0][0]["Q"])
+    assert set(p) == {"a", "b", "c"} and max(p, key=p.get) == "a"
+    assert all(0.0 <= v <= 1.0 for v in p.values()) and abs(sum(p.values()) - 1.0) < 1e-9
+    assert reg.epistemic("Q", rows[0][0]["Q"]) is None
+    ans = J.aggregate(rows[0][0], reg, rows[0][1])
+    assert ans["Q"]["epistemic"] is None and ans["Q"]["method"] == "ridge"
+
+
+def test_ridge_rejects_unknown_model():
+    with pytest.raises(ValueError, match="regression.model"):
+        J.JudgeRegression({"model": "nope"}, {}, {})
+
+
+def test_ordinal_ridge_keeps_all_buckets_and_rounds():
+    rows = []
+    for i in range(30):
+        t = ["lo", "mid", "hi"][i % 3]
+        pr = {"lo": 0.1, "mid": 0.1, "hi": 0.1, "top": 0.05}
+        pr[t] = 0.7
+        rows.append(({"Q": [{"judge": "v", "probs": pr}]}, {"Q": [t]}))
+    # without ridge_ordinal, a question in ordinal still uses one-vs-rest ridge (not 0..K-1 coding)
+    reg_ovr = J.JudgeRegression({"inputs": "compressed", "model": "ridge", "ordinal": ["Q"], "min_labels": 8},
+                                {"Q": ["v"]}, {"Q": ["lo", "mid", "hi", "top"]}).fit(rows, cv=False)
+    assert reg_ovr.report["Q"]["method"] == "ridge"
+    reg = J.JudgeRegression({"inputs": "compressed", "model": "ridge", "ordinal": ["Q"], "ridge_ordinal": True,
+                             "min_labels": 8}, {"Q": ["v"]}, {"Q": ["lo", "mid", "hi", "top"]}).fit(rows)
+    assert reg.report["Q"]["method"] == "ordinal_ridge"
+    p = reg.predict("Q", rows[2][0]["Q"])
+    assert set(p) == {"lo", "mid", "hi", "top"} and max(p, key=p.get) == "hi"
+    assert all(0.0 <= v <= 1.0 for v in p.values()) and abs(sum(p.values()) - 1.0) < 1e-9
+    assert p["top"] >= 0.0          # unseen end bucket stays on the number line
+    assert reg.epistemic("Q", rows[2][0]["Q"]) is None
+
+
+def test_ridge_binary_clips_to_unit_interval():
+    # linearly separable two-class problem; scores must stay in [0, 1] and sum to 1
+    rows = []
+    for i in range(20):
+        t = "yes" if i < 10 else "no"
+        pr = {"yes": 0.85 if t == "yes" else 0.15, "no": 0.15 if t == "yes" else 0.85}
+        rows.append(({"Q": [{"judge": "v", "probs": pr}]}, {"Q": [t]}))
+    reg = J.JudgeRegression({"inputs": "compressed", "model": "ridge", "min_labels": 8, "min_classes": 2,
+                             "blend_mean": 0.0}, {"Q": ["v"]}, {"Q": ["yes", "no"]}).fit(rows, cv=False)
+    for js, key in rows:
+        p = reg.predict("Q", js["Q"])
+        assert set(p) == {"yes", "no"}
+        assert all(0.0 <= v <= 1.0 for v in p.values()) and abs(sum(p.values()) - 1.0) < 1e-9
+        assert max(p, key=p.get) == key["Q"][0]
+
+
+def test_ridge_adapter_alpha_from_cv_and_triangular_kernel():
+    import numpy as np
+    X = np.linspace(-1, 1, 30)[:, None]
+    y = np.array(["lo" if v < -0.3 else ("hi" if v > 0.3 else "mid") for v in X[:, 0]])
+    m = J._RidgeAdapter(opts=["lo", "mid", "hi"], ordinal=True)
+    m.fit(X, y)
+    ridge = m._model.named_steps["ridgecv"]
+    assert float(ridge.alpha_) in set(J.RIDGE_ALPHAS)
+    P = m.predict_proba(np.array([[0.0], [1.0], [-1.0]]))
+    assert P.shape == (3, 3) and np.allclose(P.sum(axis=1), 1.0)
+    assert list(m.classes_) == ["lo", "mid", "hi"]
+    assert m.classes_[int(P[1].argmax())] == "hi" and m.classes_[int(P[2].argmax())] == "lo"
+    # triangular kernel: ŷ = 1.5 (mid/hi boundary) -> equal mass on mid and hi; tie -> mid
+    class _Const:
+        def predict(self, X):
+            return np.full(len(X), 1.5)
+    m._model = _Const()
+    p = m.predict_proba(np.zeros((1, 1)))[0]
+    assert np.allclose(p, [0.0, 0.5, 0.5]) and m.classes_[int(p.argmax())] == "mid"

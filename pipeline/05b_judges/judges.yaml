@@ -140,8 +140,12 @@ regression:                                     # 원래 질문마다 판정자 
   # inputs are compressed per question to K mean log-probs + variant std + forward/reverse order gap (K+2 columns
   # instead of V x K). per_judge = the v2 layout (every variant's log p), kept behind this flag / --judge-regression-inputs.
   inputs: compressed                            # compressed | per_judge
-  model: logistic_l2                            # logistic_l2 | bayes_laplace (Laplace posterior: per-answer epistemic MI)
-  ordinal: [J2, J5]                             # ordered outcome buckets -> cumulative-logit regression (shared slope)
+  model: logistic_l2                            # logistic_l2 | bayes_laplace (Laplace posterior: per-answer epistemic MI) | ridge
+  # ridge = L2 least squares, alpha by RidgeCV GCV, scores clipped to [0,1], one-vs-rest + renormalise.
+  # Ordinal-coded ridge (0..K-1 + triangular kernel) is opt-in via ridge_ordinal: true; it is not used just
+  # because a question is in ordinal (J2's labels are U-shaped, and least squares then predicts the rare
+  # middle buckets). Default stays logistic_l2; see tools/j_regression_offline_eval.py.
+  ordinal: [J2, J5]                             # ordered outcome buckets -> cumulative-logit (logistic / Bayes). ridge ignores this unless ridge_ordinal: true
   C: 0.5
   prob_clip: 0.001
   cv_folds: 5                                   # 층화 k-fold, 라벨 적으면 줄임. 보고 지표는 모두 out-of-fold

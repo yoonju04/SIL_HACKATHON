@@ -764,7 +764,8 @@ def _x_row(judges: list[dict], variants: list[str], opts: list[str], clip: float
 
 
 REGRESSION_INPUTS = ("compressed", "per_judge")
-REGRESSION_MODELS = ("logistic_l2", "bayes_laplace")
+REGRESSION_MODELS = ("logistic_l2", "bayes_laplace", "ridge")
+RIDGE_ALPHAS = tuple(float(a) for a in np.logspace(-3, 3, 13))  # RidgeCV grid, ~1e-3 .. 1e3
 
 
 def _x_row_compressed(judges: list[dict], variants: list[str], opts: list[str], clip: float,
@@ -830,6 +831,94 @@ class _OrdinalAdapter:
         return self.m.uncertainty(X)["epistemic_mi"]
 
 
+class _RidgeAdapter:
+    """Linear least squares with an L2 penalty (sklearn RidgeCV) on 0/1 or ordinal-coded targets.
+
+    Unordered questions: one-vs-rest. Each class is a RidgeCV on a 0/1 indicator; scores are clipped
+    to [0, 1] and renormalised to a simplex so they can be used as probability-like values (Brier,
+    blend_mean, argmax). Two classes reduce to one 0/1 ridge: P(class_1) is the clipped score.
+
+    Opt-in ordinal coding (`ridge_ordinal: true` and qid in regression.ordinal): targets are coded
+    0..K-1 in option order, one RidgeCV is fit, the predicted value is clipped to [0, K-1], and a
+    triangular kernel p(k) ∝ max(0, 1 - |ŷ - k|) is the probability-like distribution (already a
+    partition of unity between two adjacent buckets). Argmax equals rounding except at exact
+    half-integers, where the lower bucket wins the tie. This is not the ridge default: a U-shaped
+    label (J2) makes least squares predict the mean of the two ends, i.e. the rare middle buckets.
+
+    Inputs are z-scored on the training fold (constant columns keep scale 1). Alpha is chosen by
+    RidgeCV's generalized cross-validation (efficient leave-one-out). There is no epistemic()
+    method: a residual is not a calibrated 'the model does not know here' signal.
+    """
+
+    def __init__(self, opts: list[str] | None = None, ordinal: bool = False,
+                 alphas: list[float] | tuple[float, ...] | None = None):
+        self.opts = list(opts) if opts is not None else None
+        self.ordinal = bool(ordinal) and self.opts is not None
+        self.alphas = tuple(float(a) for a in alphas) if alphas is not None else RIDGE_ALPHAS
+        self.classes_: np.ndarray | None = None
+        self._binary = False
+        self._model = None
+        self._models: list | None = None
+
+    def _pipe(self):
+        from sklearn.linear_model import RidgeCV
+        from sklearn.pipeline import make_pipeline
+        from sklearn.preprocessing import StandardScaler
+        return make_pipeline(StandardScaler(), RidgeCV(alphas=np.asarray(self.alphas, dtype=float)))
+
+    def fit(self, X, y):
+        X = np.asarray(X, dtype=float)
+        y_s = np.array([str(v) for v in np.asarray(y)])
+        if self.ordinal:
+            self.classes_ = np.array(self.opts)
+            codes = np.array([self.opts.index(v) for v in y_s], dtype=float)
+            self._model = self._pipe()
+            self._model.fit(X, codes)
+            return self
+        self.classes_ = np.array(sorted(set(y_s.tolist())))
+        if len(self.classes_) <= 1:
+            return self
+        if len(self.classes_) == 2:
+            self._binary = True
+            self._model = self._pipe()
+            self._model.fit(X, (y_s == self.classes_[1]).astype(float))
+            return self
+        self._models = []
+        for c in self.classes_:
+            m = self._pipe()
+            m.fit(X, (y_s == c).astype(float))
+            self._models.append(m)
+        return self
+
+    def predict_proba(self, X):
+        X = np.asarray(X, dtype=float)
+        n = len(X)
+        if self.ordinal:
+            k = len(self.classes_)
+            yhat = np.clip(self._model.predict(X), 0.0, k - 1)
+            w = np.maximum(0.0, 1.0 - np.abs(yhat[:, None] - np.arange(k, dtype=float)[None, :]))
+            z = w.sum(axis=1, keepdims=True)
+            empty = z.ravel() <= 0
+            if empty.any():
+                rows = np.flatnonzero(empty)
+                rnd = np.clip(np.rint(yhat[rows]), 0, k - 1).astype(int)
+                w[rows] = 0.0
+                w[rows, rnd] = 1.0
+                z = w.sum(axis=1, keepdims=True)
+            return w / np.where(z > 0, z, 1.0)
+        if self.classes_ is None or len(self.classes_) == 0:
+            return np.zeros((n, 0))
+        if len(self.classes_) == 1:
+            return np.ones((n, 1))
+        if self._binary:
+            p1 = np.clip(self._model.predict(X), 0.0, 1.0)
+            return np.column_stack([1.0 - p1, p1])
+        scores = np.column_stack([np.clip(m.predict(X), 0.0, 1.0) for m in self._models])
+        z = scores.sum(axis=1, keepdims=True)
+        out = np.divide(scores, z, out=np.full_like(scores, 1.0 / scores.shape[1]), where=z > 0)
+        return out
+
+
 def mean_probs(judges: list[dict], opts: list[str]) -> dict[str, float]:
     if not judges:
         return {o: 1.0 / len(opts) for o in opts}
@@ -890,6 +979,14 @@ class JudgeRegression:
 
     def _model(self, qid: str | None = None):
         C = float(self.cfg.get("C", 0.5))
+        if self.model_kind == "ridge":
+            # Ordinal-coded ridge is opt-in (ridge_ordinal: true). The default yaml list
+            # ordinal: [J2, J5] is for the cumulative-logit path; least squares on 0..K-1
+            # collapses a U-shaped label (J2: mostly the two end buckets) onto the rare
+            # middle ones. One-vs-rest is the ridge default, including for those questions.
+            use_ord = bool(self.cfg.get("ridge_ordinal", False)) and qid is not None and qid in self.ordinal
+            return _RidgeAdapter(opts=self.options_of[qid] if qid is not None else None,
+                                 ordinal=use_ord, alphas=self.cfg.get("ridge_alphas"))
         if qid is not None and qid in self.ordinal:
             return _OrdinalAdapter(self.options_of[qid], prior_var=C, seed=self.seed)
         if self.model_kind == "bayes_laplace":
@@ -927,7 +1024,12 @@ class JudgeRegression:
                    "n_judges": len(variants)}
             use_reg = len(lab) >= int(self.cfg.get("min_labels", 8)) and len(classes) >= int(self.cfg.get("min_classes", 2))
             use_reg = use_reg and qid not in self.report_only
-            kind = "ordinal_logistic" if qid in self.ordinal else self.model_kind
+            if qid in self.ordinal and self.model_kind == "ridge" and self.cfg.get("ridge_ordinal", False):
+                kind = "ordinal_ridge"
+            elif qid in self.ordinal and self.model_kind != "ridge":
+                kind = "ordinal_logistic"
+            else:
+                kind = self.model_kind
             rep["method"] = kind if use_reg else ("report_only" if qid in self.report_only else "mean")
             rep["inputs"] = self.inputs
             self.models[qid] = self._model(qid).fit(X, y) if use_reg else None
@@ -975,7 +1077,8 @@ class JudgeRegression:
 
     def epistemic(self, qid: str, judges: list[dict]) -> float | None:
         """'The judge regression does not know here': mutual information of the Laplace posterior predictive
-        (regression.model bayes_laplace, or an ordinal question); None for the plain L2 logistic / mean."""
+        (regression.model bayes_laplace, or a cumulative-logit ordinal question); None for the plain L2
+        logistic, ridge (including ordinal-coded ridge), or the judge mean."""
         model = self.models.get(qid)
         if model is None or not hasattr(model, "epistemic"):
             return None

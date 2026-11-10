@@ -139,6 +139,38 @@ Laya's noise. LOO falls from 0.61 to 0.50 (J1) and from 0.76 to 0.58 (J4). All o
   errors are confident and in-distribution for a linear model on 6 inputs. It stays as an exposed signal
   (`epistemic` in b_cache rows, `judge_epistemic`), but it is not evidence that "the judge does not know here".
 
+### Ridge option (`model: ridge`)
+
+`--judge-regression-model ridge` (or `regression.model: ridge`) is an L2 least-squares model: RidgeCV picks alpha by
+generalized cross-validation, inputs are z-scored on the training fold, and scores are clipped to [0, 1] then
+renormalised (one-vs-rest; two classes reduce to one 0/1 ridge). There is no epistemic value. Ordinal-coded ridge
+(targets as 0..K−1, a triangular kernel around the clipped prediction, argmax ≈ rounding) exists but is **opt-in**
+(`ridge_ordinal: true`). It is not used just because a question is in `ordinal: [J2, J5]`, so flipping the model flag
+does not silently replace the cumulative logit.
+
+Same Nemotron / result_8 data, compressed inputs. LOMO accuracy / Brier, next to the current default (compressed L2,
+with cumulative-logit J2/J5) and the judge-free baselines. J3 / J8 / J9 have no regression (J3 has 15 single-answer
+labels, all `caught_by_rate_check`; J8/J9 are constant / report-only).
+
+| q | lookup (LOO) | LOMO majority | L2 (J2/J5 ordinal) LOMO | ridge OvR LOMO | ridge ordinal-coded LOMO |
+|---|---|---|---|---|---|
+| J1 | 0.743 | 0.297 | 0.784 / 0.512 | 0.784 / 0.492 | (same as OvR) |
+| J4 | 0.743 | 0.297 | 0.743 / 0.528 | 0.743 / 0.554 | (same as OvR) |
+| J7 | 0.743 | 0.622 | 0.757 / 0.479 | **0.622 / 0.499** | (same as OvR) |
+| J2 | 0.747 | 0.152 | **0.544 / 0.739** | 0.443 / 0.752 | 0.063 / 1.273 |
+| J5 | 0.556 | 0.457 | **0.543 / 0.655** | 0.519 / 0.633 | 0.346 / 0.757 |
+| J6 | 0.740 | 0.760 | 0.680 / 0.438 | 0.680 / 0.456 | (same as OvR) |
+
+Round-order / forward (train on earlier rounds only; n = 42–69) does not change the reading: ridge OvR is a little
+better on J5 (0.551 / 0.592 vs L2 0.507 / 0.644) and J6 accuracy (0.762 vs 0.714), and a little worse on J1 and J4.
+One-vs-rest AUROC under LOMO is similar for J1/J4/J7 and worse for J6 (ridge 0.311 vs L2 0.480).
+
+**Reading.** The default stays `logistic_l2` with ordinal J2/J5. Ridge OvR is not clearly better: J1's LOMO Brier
+improves slightly (0.512 → 0.492) and J5's Brier improves without a change in accuracy, but J7's LOMO accuracy falls
+from 0.757 to the training majority (0.622). Ordinal-coded ridge is harmful on J2: the labels are U-shaped (34
+`under_0_5s`, 33 `over_5s_or_never`, 6+6 in the middle), least squares predicts the mean of the two ends, and that
+lands on the rare middle buckets (LOMO 0.063, Brier 1.273). The cumulative logit does not have that failure mode.
+
 ## 3. Laya calibration and fine-tuning
 
 `.venv-laya` ships laya 0.4.17 with a real fine-tune path (`laya-train`, `laya.train.finetune`). It supports
