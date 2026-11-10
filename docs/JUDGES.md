@@ -169,3 +169,15 @@ the route end keep a failure label (`truncated_window`) when the observed part a
 lat_jerk / collision (settle needs the full window). Acquisition drops candidates within 0.05 normalized distance of a
 run point and caps one fault mode at 50% of a batch. av_stack now logs the LQR command before the takeover clip
 (`lqr_unclipped_steer_rad`), so `first_lqr_command_unclipped_rad` is filled for new CARLA runs.
+
+## 2026-11-10: compressed regression, ordinal J2/J5, Bayesian option, Laya calibration
+
+See [FAILURE_TYPES.md](FAILURE_TYPES.md) for the tables. The J regression now defaults to compressed inputs: per
+question, the mean log p across variants, the variant std and the forward/reverse gap. The old layout is
+`regression.inputs: per_judge`. On Nemotron (82 states) compressed inputs reach the same accuracy with a third of the
+inputs and a slightly better Brier. J2 and J5 use a cumulative-logit regression, which gives LOMO +0.05 and +0.02 and a
+lower Brier. `regression.model: bayes_laplace` adds a per-answer epistemic value. It does **not** rank the LOMO errors
+(AUROC 0.26–0.55), so it is exposed but not trusted. Laya temperature scaling improves ECE and Brier, but argmax
+accuracy cannot change, and with the regression on top Laya only reaches the LOMO majority (0.50 for J1 and J4). A
+soft-target fine-tune recipe (`tools/laya_finetune_data.py` plus `laya-train --loss soft-ce`) is set up; it needs a GPU or a
+long CPU run, and it has not been evaluated.
