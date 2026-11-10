@@ -354,3 +354,62 @@ def test_live_jev_one_tiny_request(bank, cfg):
     qs = {"J9__en_notes": qs["J9__en_notes"]}
     r = J.SystemOneClient(cfg["backends"]["jev"], backend="jev").system_one("[scenario]\nfault_mode: bias", qs)
     assert r["answers"]["J9__en_notes"]["type"] == "choice"
+
+
+# ---------------------------------------------------------------- 2026-11-10: compressed inputs, ordinal, Bayes
+def _jrows(n=40, seed=0):
+    import random as _r
+    rng = _r.Random(seed)
+    rows = []
+    for i in range(n):
+        t = ["a", "b", "c"][i % 3]
+        good = {o: (0.8 if o == t else 0.1) for o in "abc"}
+        noise = {o: rng.random() + 0.05 for o in "abc"}
+        s = sum(noise.values())
+        rows.append(({"Q": [{"judge": "good", "probs": good}, {"judge": "rev", "probs": good},
+                            {"judge": "noise", "probs": {o: v / s for o, v in noise.items()}}]}, {"Q": [t]}))
+    return rows
+
+
+def test_compressed_inputs_shape_and_order_gap():
+    specs = {"good": {"order": "forward"}, "rev": {"order": "reverse"}, "noise": {"order": "forward"}}
+    js = [{"judge": "good", "probs": {"a": 0.9, "b": 0.05, "c": 0.05}},
+          {"judge": "rev", "probs": {"a": 0.05, "b": 0.9, "c": 0.05}}]
+    x = J._x_row_compressed(js, ["good", "rev", "noise"], ["a", "b", "c"], 1e-3, specs)
+    assert x.shape == (5,)                       # K means + std + forward/reverse gap
+    assert x[-1] == pytest.approx(0.85) and x[-2] > 0
+    reg = J.JudgeRegression({"inputs": "compressed"}, {"Q": ["good", "rev", "noise"]}, {"Q": ["a", "b", "c"]},
+                            variant_specs=specs)
+    assert reg.x_row("Q", js).shape == (5,)
+    with pytest.raises(ValueError):
+        J.JudgeRegression({"inputs": "nope"}, {}, {})
+
+
+@pytest.mark.parametrize("cfg", [{"inputs": "compressed"}, {"inputs": "compressed", "model": "bayes_laplace"},
+                                 {"inputs": "per_judge", "model": "bayes_laplace"}])
+def test_regression_variants_fit_and_epistemic(cfg):
+    rows = _jrows()
+    reg = J.JudgeRegression(dict(cfg, min_labels=8), {"Q": ["good", "rev", "noise"]}, {"Q": ["a", "b", "c"]}).fit(rows)
+    assert reg.report["Q"]["regression"]["accuracy"] > 0.8
+    p = reg.predict("Q", rows[0][0]["Q"])
+    assert max(p, key=p.get) == "a"
+    e = reg.epistemic("Q", rows[0][0]["Q"])
+    assert (e is None) == (cfg.get("model", "logistic_l2") == "logistic_l2")
+    ans = J.aggregate(rows[0][0], reg, rows[0][1])
+    assert "epistemic" in ans["Q"]
+
+
+def test_ordinal_regression_keeps_all_buckets():
+    rows = []
+    for i in range(30):
+        t = ["lo", "mid", "hi"][i % 3]
+        pr = {"lo": 0.1, "mid": 0.1, "hi": 0.1, "top": 0.05}
+        pr[t] = 0.7
+        rows.append(({"Q": [{"judge": "v", "probs": pr}]}, {"Q": [t]}))
+    reg = J.JudgeRegression({"inputs": "compressed", "ordinal": ["Q"], "min_labels": 8}, {"Q": ["v"]},
+                            {"Q": ["lo", "mid", "hi", "top"]}).fit(rows)
+    assert reg.report["Q"]["method"] == "ordinal_logistic"
+    p = reg.predict("Q", rows[2][0]["Q"])
+    assert set(p) == {"lo", "mid", "hi", "top"} and max(p, key=p.get) == "hi"
+    assert reg.epistemic("Q", rows[2][0]["Q"]) is not None
+    assert J.judge_epistemic({"Q": {"epistemic": 0.2}, "R": {"epistemic": None}}) == 0.2

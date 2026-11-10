@@ -159,7 +159,7 @@ def analyse(raw: dict, states: dict, bank: dict, meta: dict, cfg: dict) -> dict:
         ctx, rec = states[k]
         rows.append((k, J.parse_answers(r["response"], meta), J.labels_for(list(bank.values()), ctx, rec), ctx["fault_mode"]))
     reg = J.JudgeRegression(cfg.get("regression") or {}, variants_of, options_of, seed=0,
-                            report_only=report_only).fit([(p, kk) for _, p, kk, _ in rows])
+                            report_only=report_only, variant_specs=cfg.get("variants") or {}).fit([(p, kk) for _, p, kk, _ in rows])
     per_q = {}
     for q in variants_of:
         hits, n, maj, mean_hit, answers, labels = Counter(), 0, 0, 0, Counter(), Counter()

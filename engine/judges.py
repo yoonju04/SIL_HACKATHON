@@ -763,6 +763,73 @@ def _x_row(judges: list[dict], variants: list[str], opts: list[str], clip: float
     return np.array(row, dtype=float)
 
 
+REGRESSION_INPUTS = ("compressed", "per_judge")
+REGRESSION_MODELS = ("logistic_l2", "bayes_laplace")
+
+
+def _x_row_compressed(judges: list[dict], variants: list[str], opts: list[str], clip: float,
+                      variant_specs: dict[str, dict] | None = None) -> np.ndarray:
+    """Compressed judge inputs of one question (review 2026-11-10: the variants are a few effective votes, so V x K
+    correlated log-probs over-fit 82 states): per option the mean log p across the variants that answered (K
+    columns), then the std of log p across variants (mean over options, 1 column) and the forward - reverse option
+    order gap (total variation between the mean forward-order and mean reverse-order vectors, 1 column).
+    Missing variants are left out of the mean (all missing -> uniform)."""
+    by = {j["judge"]: j["probs"] for j in judges}
+    uni = 1.0 / len(opts)
+    L = np.array([[math.log(max(clip, by[v].get(o, 0.0))) for o in opts] for v in variants if v in by]) \
+        if any(v in by for v in variants) else np.full((1, len(opts)), math.log(uni))
+    mean = L.mean(axis=0)
+    std = float(L.std(axis=0).mean()) if len(L) > 1 else 0.0
+    specs = variant_specs or {}
+    fw = [by[v] for v in variants if v in by and (specs.get(v) or {}).get("order", "forward") != "reverse"]
+    rv = [by[v] for v in variants if v in by and (specs.get(v) or {}).get("order") == "reverse"]
+    gap = 0.0
+    if fw and rv:
+        gap = 0.5 * sum(abs(np.mean([p.get(o, 0.0) for p in fw]) - np.mean([p.get(o, 0.0) for p in rv])) for o in opts)
+    return np.r_[mean, std, gap].astype(float)
+
+
+class _BayesAdapter:
+    """engine.bayes_logistic.BayesMultinomial behind the sklearn calls JudgeRegression makes (classes_,
+    predict_proba) + epistemic(): the mutual information of the Laplace posterior predictive."""
+
+    def __init__(self, prior_var: float, seed: int = 0):
+        from engine.bayes_logistic import BayesMultinomial
+        self.m = BayesMultinomial(prior_var=prior_var, seed=seed)
+
+    def fit(self, X, y):
+        self.m.fit(X, y)
+        self.classes_ = self.m.classes_
+        return self
+
+    def predict_proba(self, X):
+        return self.m.predict_proba(X)
+
+    def epistemic(self, X):
+        return self.m.uncertainty(X)["epistemic_mi"]
+
+
+class _OrdinalAdapter:
+    """Cumulative-logit regression over the question's ordered options (J2 / J5 buckets): one slope vector shared by
+    every threshold, so a rare bucket is still placed between its neighbours (classes_ = all options, in order)."""
+
+    def __init__(self, opts: list[str], prior_var: float, seed: int = 0):
+        from engine.bayes_logistic import OrdinalLogistic
+        self.opts = list(opts)
+        self.m = OrdinalLogistic(prior_var=prior_var, n_classes=len(opts), seed=seed)
+        self.classes_ = np.array(self.opts)
+
+    def fit(self, X, y):
+        self.m.fit(X, np.array([self.opts.index(str(v)) for v in y]))
+        return self
+
+    def predict_proba(self, X):
+        return self.m.predict_map(X)
+
+    def epistemic(self, X):
+        return self.m.uncertainty(X)["epistemic_mi"]
+
+
 def mean_probs(judges: list[dict], opts: list[str]) -> dict[str, float]:
     if not judges:
         return {o: 1.0 / len(opts) for o in opts}
@@ -796,7 +863,7 @@ class JudgeRegression:
     single option (lists = 'code allows several' and None = 'code does not decide' are not labels)."""
 
     def __init__(self, cfg: dict, variants_of: dict[str, list[str]], options_of: dict[str, list[str]], seed: int = 0,
-                 report_only: set[str] | None = None):
+                 report_only: set[str] | None = None, variant_specs: dict[str, dict] | None = None):
         self.cfg = cfg
         self.variants_of = variants_of
         self.options_of = options_of
@@ -804,10 +871,31 @@ class JudgeRegression:
         self.models: dict[str, Any] = {}
         self.report: dict[str, dict] = {}
         self.report_only = set(report_only or ())
+        self.variant_specs = variant_specs or {}
+        self.inputs = str(cfg.get("inputs", "per_judge"))
+        if self.inputs not in REGRESSION_INPUTS:
+            raise ValueError(f"regression.inputs must be one of {REGRESSION_INPUTS}, not {self.inputs!r}")
+        self.model_kind = str(cfg.get("model", "logistic_l2"))
+        if self.model_kind not in REGRESSION_MODELS:
+            raise ValueError(f"regression.model must be one of {REGRESSION_MODELS}, not {self.model_kind!r}")
+        self.ordinal = set(cfg.get("ordinal") or ())
 
-    def _model(self):
+    def x_row(self, qid: str, judges: list[dict]) -> np.ndarray:
+        """Regression inputs of one state for one question: per_judge (V x K log-probs, the v2 layout) or compressed
+        (K mean log-probs + variant std + forward/reverse gap)."""
+        clip = float(self.cfg.get("prob_clip", 1e-3))
+        if self.inputs == "compressed":
+            return _x_row_compressed(judges, self.variants_of[qid], self.options_of[qid], clip, self.variant_specs)
+        return _x_row(judges, self.variants_of[qid], self.options_of[qid], clip)
+
+    def _model(self, qid: str | None = None):
+        C = float(self.cfg.get("C", 0.5))
+        if qid is not None and qid in self.ordinal:
+            return _OrdinalAdapter(self.options_of[qid], prior_var=C, seed=self.seed)
+        if self.model_kind == "bayes_laplace":
+            return _BayesAdapter(prior_var=C, seed=self.seed)
         from sklearn.linear_model import LogisticRegression
-        return LogisticRegression(C=float(self.cfg.get("C", 0.5)), max_iter=2000)
+        return LogisticRegression(C=C, max_iter=2000)
 
     def _predict(self, model, x: np.ndarray, judges: list[dict], opts: list[str]) -> dict[str, float]:
         mean = mean_probs(judges, opts)
@@ -822,38 +910,45 @@ class JudgeRegression:
         s = sum(out.values()) or 1.0
         return {o: v / s for o, v in out.items()}
 
-    def fit(self, rows: list[tuple[dict[str, list[dict]], dict[str, list[str] | None]]]) -> "JudgeRegression":
-        """rows = [(parsed judges {qid: [...]}, answer key {qid: allowed options | None}) per state]."""
+    def fit(self, rows: list[tuple[dict[str, list[dict]], dict[str, list[str] | None]]], cv: bool = True
+            ) -> "JudgeRegression":
+        """rows = [(parsed judges {qid: [...]}, answer key {qid: allowed options | None}) per state].
+        cv=False skips the out-of-fold report (offline evaluations that do their own splits)."""
         from sklearn.model_selection import StratifiedKFold, KFold
         clip = float(self.cfg.get("prob_clip", 1e-3))
         for qid, variants in self.variants_of.items():
             opts = self.options_of[qid]
             lab = [(j[qid], key[qid][0]) for j, key in rows if j.get(qid) and key.get(qid) and len(key[qid]) == 1]
             allowed = [(j[qid], key[qid]) for j, key in rows if j.get(qid) and key.get(qid)]
-            X = np.array([_x_row(js, variants, opts, clip) for js, _ in lab]) if lab else np.zeros((0, 0))
+            X = np.array([self.x_row(qid, js) for js, _ in lab]) if lab else np.zeros((0, 0))
             y = np.array([t for _, t in lab])
             classes = sorted(set(y.tolist()))
             rep = {"n_states": sum(1 for j, _ in rows if j.get(qid)), "n_labels": len(lab), "classes": classes,
                    "n_judges": len(variants)}
             use_reg = len(lab) >= int(self.cfg.get("min_labels", 8)) and len(classes) >= int(self.cfg.get("min_classes", 2))
             use_reg = use_reg and qid not in self.report_only
-            rep["method"] = "logistic_l2" if use_reg else ("report_only" if qid in self.report_only else "mean")
-            self.models[qid] = self._model().fit(X, y) if use_reg else None
+            kind = "ordinal_logistic" if qid in self.ordinal else self.model_kind
+            rep["method"] = kind if use_reg else ("report_only" if qid in self.report_only else "mean")
+            rep["inputs"] = self.inputs
+            self.models[qid] = self._model(qid).fit(X, y) if use_reg else None
             # out-of-fold predictions for every reported number
             oof_reg, oof_mean = [], [mean_probs(js, opts) for js, _ in lab]
-            if use_reg:
+            if use_reg and cv:
                 counts = {c: int((y == c).sum()) for c in classes}
                 k = min(int(self.cfg.get("cv_folds", 5)), min(counts.values()))
                 splitter = StratifiedKFold(n_splits=k, shuffle=True, random_state=self.seed) if k >= 2 else \
                     KFold(n_splits=min(5, len(lab)), shuffle=True, random_state=self.seed)
                 oof = [None] * len(lab)
                 for tr, te in splitter.split(X, y):
-                    m = self._model().fit(X[tr], y[tr]) if len(set(y[tr].tolist())) >= 2 else None
+                    m = self._model(qid).fit(X[tr], y[tr]) if len(set(y[tr].tolist())) >= 2 else None
                     for i in te:
                         oof[i] = self._predict(m, X[i], lab[i][0], opts)
                 oof_reg = oof
                 rep["cv_folds"] = splitter.get_n_splits()
             truth = [t for _, t in lab]
+            if not cv:
+                self.report[qid] = rep
+                continue
             for name, pp in (("regression", oof_reg if use_reg else oof_mean), ("judge_mean", oof_mean)):
                 rep[name] = {"accuracy": (float(np.mean([max(p, key=p.get) == t for p, t in zip(pp, truth)])) if pp else None),
                              "brier": brier(pp, truth), "ece": ece(pp, truth, int(self.cfg.get("ece_bins", 10)))}
@@ -876,8 +971,15 @@ class JudgeRegression:
     def predict(self, qid: str, judges: list[dict]) -> dict[str, float]:
         opts = self.options_of[qid]
         model = self.models.get(qid)
-        x = _x_row(judges, self.variants_of[qid], opts, float(self.cfg.get("prob_clip", 1e-3)))
-        return self._predict(model, x, judges, opts)
+        return self._predict(model, self.x_row(qid, judges), judges, opts)
+
+    def epistemic(self, qid: str, judges: list[dict]) -> float | None:
+        """'The judge regression does not know here': mutual information of the Laplace posterior predictive
+        (regression.model bayes_laplace, or an ordinal question); None for the plain L2 logistic / mean."""
+        model = self.models.get(qid)
+        if model is None or not hasattr(model, "epistemic"):
+            return None
+        return float(model.epistemic(self.x_row(qid, judges).reshape(1, -1))[0])
 
 
 def aggregate(parsed: dict[str, list[dict]], reg: JudgeRegression, key: dict[str, list[str] | None],
@@ -894,7 +996,9 @@ def aggregate(parsed: dict[str, list[dict]], reg: JudgeRegression, key: dict[str
         exp = key.get(qid)
         conf = judge_confidence(p)
         matches = None if exp is None or not js else ans in exp
+        epi = reg.epistemic(qid, js)
         out[qid] = {"answer": ans, "probs": {o: round(v, 4) for o, v in p.items()}, "confidence": round(conf, 4),
+                    "epistemic": None if epi is None else round(epi, 5),
                     "low_confidence": conf < low_conf, "method": (reg.report.get(qid) or {}).get("method", "mean"),
                     "n_judges": len(js), "judges": js, "expected_from_code": exp, "matches_code": matches,
                     "hallucinated": bool(matches is False and ans != "unknown" and conf >= low_conf),
@@ -925,6 +1029,14 @@ def jev_features(answers: dict[str, dict] | None, questions: list[dict], drop: s
                 continue
             names.append(n); x.append(v)
     return x, names
+
+
+def judge_epistemic(answers: dict[str, dict] | None, qids: list[str] | None = None) -> float | None:
+    """State-level 'judge does not know here' signal for the orchestrator: max over the answered questions of the
+    regression's epistemic value (None when no question has one, i.e. regression.model is not bayes_laplace)."""
+    vals = [float(r["epistemic"]) for q, r in (answers or {}).items()
+            if r.get("epistemic") is not None and (qids is None or q in qids)]
+    return max(vals) if vals else None
 
 
 def constant_columns(entries: list[dict], questions: list[dict], tol: float = 1e-6) -> set[str]:

@@ -136,6 +136,12 @@ key:                                            # 판정 캐시 키 = 고장 모
 
 regression:                                     # 원래 질문마다 판정자 확률 → 정답 키 (Quantitative LLM Judges)
   method: multinomial_logistic_l2               # 입력 = 판정자별 log p (보기마다), L2 정규화
+  # 2026-11-10 (docs/FAILURE_TYPES.md, tools/j_regression_offline_eval.py): variants are a few effective votes, so the
+  # inputs are compressed per question to K mean log-probs + variant std + forward/reverse order gap (K+2 columns
+  # instead of V x K). per_judge = the v2 layout (every variant's log p), kept behind this flag / --judge-regression-inputs.
+  inputs: compressed                            # compressed | per_judge
+  model: logistic_l2                            # logistic_l2 | bayes_laplace (Laplace posterior: per-answer epistemic MI)
+  ordinal: [J2, J5]                             # ordered outcome buckets -> cumulative-logit regression (shared slope)
   C: 0.5
   prob_clip: 0.001
   cv_folds: 5                                   # 층화 k-fold, 라벨 적으면 줄임. 보고 지표는 모두 out-of-fold
