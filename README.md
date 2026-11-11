@@ -10,6 +10,77 @@
 
 ---
 
+## 0. 실행 방법 (Windows 로컬 · CARLA 0.9.15 · GPT 전용)
+
+Nebius 키 없이 OpenAI 키만으로 CARLA에서 고장 주입 실험을 돌리는 순서입니다. PowerShell 창 두 개를 씁니다(창 1: CARLA, 창 2: 실행).
+
+### 처음 한 번만: 환경 설치
+
+```powershell
+# 1) 파이프라인 환경 (저장소 루트)
+cd C:\path\to\SIL_HACKATHON
+py -3.11 -m venv .venv-sil
+.venv-sil\Scripts\python -m pip install -r requirements-pipeline.txt
+
+# 2) 주행 스택 환경 (av_stack, Python 3.10)
+cd pipeline\08_carla_paired_run\av_stack
+powershell -ExecutionPolicy Bypass -File .\tools\fetch_third_party.ps1
+uv venv .venv-tfpp --python 3.10
+uv pip install --python .\.venv-tfpp\Scripts\python.exe -r requirements-tfpp-lock.txt --extra-index-url https://download.pytorch.org/whl/cu121 --index-strategy unsafe-best-match
+```
+
+- `fetch_third_party.ps1`가 `patch failed`로 멈추면 패치가 이미 적용된 경우입니다. `git -C third_party/carla_garage apply --reverse --check ../patches/carla_garage.patch; echo $LASTEXITCODE` 결과가 `0`이면 무시해도 됩니다.
+- `torch==2.5.0+cu121`은 PyTorch 저장소에만 있으므로 `--extra-index-url` 옵션이 꼭 필요합니다. PDM 플래너 경로는 GPU가 없어도 돕니다.
+
+### 매번: 실행 순서
+
+**0) RPC 포트 비우기.** 다른 프로그램(예: Node 개발 서버)이 같은 포트를 쓰면 CARLA 클라이언트가 메시지 없이 죽습니다(종료 코드 `-1073740791`).
+
+```powershell
+netstat -ano | findstr ":3000"     # CarlaUE4 외 다른 PID가 있으면 종료
+```
+
+**1) 창 1: CARLA 서버 켜기** (켜 둔 채로 두고, 맵이 뜰 때까지 30초쯤 대기)
+
+```powershell
+& "C:\path\to\CARLA_0.9.15\WindowsNoEditor\CarlaUE4.exe" -carla-rpc-port=3000 -quality-level=Low -windowed -ResX=800 -ResY=600
+```
+
+**2) 창 2: 연결 확인 + 고장 1회 단독 주행**
+
+```powershell
+cd C:\path\to\SIL_HACKATHON\pipeline\08_carla_paired_run\av_stack
+.\.venv-tfpp\Scripts\python.exe -c "import carla; c=carla.Client('127.0.0.1',3000); c.set_timeout(20); print(c.get_server_version())"
+.\.venv-tfpp\Scripts\python.exe run_benchmark.py --routes town10_long --planner pdm --controller supervised --green-lights --host 127.0.0.1 --port 3000 --mpc-fault bias --fault-magnitude 0.1 --fault-start 20 --fault-duration 5 --out runs\fault_01
+```
+
+- 출발 20초 뒤 MPC 조향에 0.1 rad 편향을 5초간 주입하고, Supervisor가 감지해 LQR로 넘기는 과정을 봅니다.
+- `--mpc-fault`: `bias`, `drift`, `stale`, `solver_fail`, `intermittent_bias`, `saturate`, `output_delay`
+- `--out`은 매번 새 폴더여야 합니다. 카메라 창이 필요 없으면 `--no-view`를 붙입니다.
+
+**3) 창 2: GPT 파이프라인 실험**
+
+```powershell
+cd C:\path\to\SIL_HACKATHON
+$env:CARLA_HOST = "127.0.0.1"
+$env:CARLA_PORT = "3000"
+$env:OPENAI_API_KEY = "<your key>"      # 키를 파일이나 채팅에 남기지 마세요
+.venv-sil\Scripts\python run.py --check
+
+# 짧은 테스트: 시나리오 1개
+.venv-sil\Scripts\python run.py --real --llm-provider gpt --supervisor tight --cold-start 1 --rounds 0 --video-explainer off --insights off
+
+# 본 실험
+.venv-sil\Scripts\python run.py --real --llm-provider gpt --supervisor tight --gp-target safety_margin --rare-type-picks 2 --rare-type-mode quiet_seeds --cold-start 8 --batch-size 6 --rounds 4 --seed 0
+```
+
+- `--llm-provider gpt`이면 시나리오 제안(A), 판정 보조(B), 영상 설명, 인사이트를 모두 GPT로 돌립니다. `OPENAI_API_KEY`만 있으면 자동으로 GPT가 선택됩니다.
+- 각 시나리오는 정상 주행과 고장 주행을 짝지어 CARLA에서 돌리고, GP가 다음 시나리오를 고릅니다. 결과는 `outputs\real_<날짜>_<시간>`에 저장됩니다.
+- 시나리오마다 `baseline failed`가 뜨면 주행 스택이 안 도는 상태입니다. 2)의 단독 주행부터 확인하세요.
+- MPC/LQR 추적 카메라 창과 `view.mp4`를 원하면 `pipeline\08_carla_paired_run\paired_runs.yaml`에서 `chase_view: true`로 바꿉니다.
+
+---
+
 ## 1. 프로젝트 개요
 
 차량의 주 횡방향 제어기인 **MPC**가 계산 시간 초과, 실행 중단, 잘못된 출력 같은 고장을 일으키면 Supervisor가 이를 감지해 백업 제어기인 **LQR**로 제어권을 넘깁니다. 이 전환이 안전한지는 **언제, 어떤 차량 상태에서** 전환이 일어나느냐에 크게 좌우됩니다.
