@@ -6,7 +6,8 @@ import pytest
 from engine import nemotron as NM
 from engine.config import load_stage_configs
 from engine.llm import (DEFAULT_GPT_MODEL, LLMError, proposer_client, proposer_settings,
-                        required_llm_keys, resolve_proposer)
+                        required_llm_keys, resolve_llm_provider, resolve_proposer,
+                        resolve_vision_backend, vision_settings)
 from tests.test_engine_llm import FAKE_KEY, Session, client, ok
 
 
@@ -37,6 +38,8 @@ def test_required_llm_keys():
     assert both == ["OPENAI_API_KEY", "NEBIUS_API_KEY"]
     both = required_llm_keys(proposer="gpt", video_on=False, insights_on=False, judge_b="nemotron")
     assert both == ["OPENAI_API_KEY", "NEBIUS_API_KEY"]
+    only = required_llm_keys(proposer="gpt", video_on=True, insights_on=True, judge_b="gpt", vision_backend="gpt")
+    assert only == ["OPENAI_API_KEY"]
 
 
 def test_gpt_settings_omit_thinking_and_use_json_object():
@@ -141,3 +144,37 @@ def test_mock_loop_proposer_nemotron_still_selectable(tmp_path):
     loop.run()
     cfg = json.loads((tmp_path / "n" / "run_config.json").read_text(encoding="utf-8"))
     assert cfg["proposer"]["backend"] == "nemotron" and cfg["proposer"]["stub"] is True
+
+
+def test_openai_only_provider_and_vision(monkeypatch):
+    monkeypatch.delenv("NEBIUS_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key-123")
+    assert resolve_llm_provider(_llm(), mode="real") == "gpt"
+    assert resolve_llm_provider(_llm(), mode="mock") is None
+    assert resolve_vision_backend(_llm(), mode="real") == "gpt"
+    assert resolve_vision_backend(_llm(), "nemotron", mode="real") == "nemotron"
+    s = vision_settings(_llm(), "gpt")
+    assert s["model"] == "gpt-4o" and s.get("thinking") is None
+    assert "video" not in s["media"] and "frames" in s["media"]
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert resolve_llm_provider(_llm(), mode="real") is None
+
+
+def test_chat_logprobs_in_request_body(tmp_path):
+    from tests.test_engine_llm import client, ok
+    c = client(tmp_path, [ok('{"ok": true}')])
+    c.chat("gpt-4o", [{"role": "user", "content": "x"}], logprobs=True, top_logprobs=5, tag="B")
+    body = c.session.sent[0][2]
+    assert body["logprobs"] is True and body["top_logprobs"] == 5
+
+
+def test_mock_loop_llm_provider_gpt_records_roles(tmp_path):
+    from run import Loop
+    loop = Loop(mode="mock", out=tmp_path / "p", ablation="X-5", video_on=False, seed=0,
+                cold_start=2, batch_size=2, rounds=0, quiet=True, llm_provider="gpt")
+    assert loop.proposer == "gpt" and loop.judge_b == "gpt" and loop.vision_backend == "gpt"
+    assert loop.jev_client.stub
+    loop.run()
+    cfg = json.loads((tmp_path / "p" / "run_config.json").read_text(encoding="utf-8"))
+    assert cfg["llm_provider"] == "gpt" and cfg["vision_backend"] == "gpt"
+    assert cfg["judge_b"] == "gpt" and cfg["proposer"]["backend"] == "gpt"

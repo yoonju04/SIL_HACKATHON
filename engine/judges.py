@@ -5,6 +5,9 @@ questions answered in parallel and in isolation, over one wire protocol shared b
   laya (default) — open-source Laya (Apache-2.0, github.com/NandhaKishorM/laya, HF convaiinnovations/laya), served
                    locally by `laya-serve` (or in-process laya.Router). No key.
   jev            — TypeSafe's hosted Jev (docs.typesafe.ai, checked 2026-10-29), Authorization: Bearer $TYPESAFE_API_KEY.
+  gpt            — OpenAI Chat Completions (gpt-4o default, OPENAI_API_KEY) used as a System One judge: same 25 typed
+                   questions, JSON probabilities (logprobs used only as a fallback if a question has no numeric masses).
+                   --real never falls back to the SYNTHETIC stub.
   POST {base_url}/v1/systemone
   {"model": ..., "state": ..., "questions": {name: {"type": "choice", "instructions": str, "criteria": {option: description}}
                                               | {"type": "noul", "instructions": str, "criteria": {"true", "false"}}}}
@@ -47,7 +50,7 @@ import numpy as np
 from engine import nemotron as NM
 
 SYNTHETIC_NOTE = "SYNTHETIC stub judge: deterministic probabilities from the answer key; no model was called"
-BACKENDS = ("laya", "jev", "nemotron")      # System One judges; "nemotron_b" (legacy generative B) is run.py-only
+BACKENDS = ("laya", "jev", "nemotron", "gpt")  # System One judges; "nemotron_b" (legacy generative B) is run.py-only
 # Laya: boolean-word choice keys are unreliable (README "Honest limits"), so yes/no choice options get semantic keys
 YN_KEYS = {"yes": "holds", "no": "ruled_out", "unknown": "undecided"}
 
@@ -594,13 +597,138 @@ class NemotronSystemOne(SystemOneClient):
                 "usage": {"input_tokens": int(u.get("prompt_tokens") or 0), "output_tokens": int(u.get("completion_tokens") or 0)}}
 
 
+def option_probs_from_logprobs(logprobs, options: list[str]) -> dict[str, float] | None:
+    """Softmax over OpenAI chat top_logprobs that match option names. None if nothing matches.
+    The Nemotron judge path does not use logprobs; this is a GPT fallback when JSON masses are missing."""
+    content = (logprobs or {}).get("content") if isinstance(logprobs, dict) else None
+    if not content:
+        return None
+    scores: dict[str, float] = {}
+    for tok in content[:12]:
+        tops = list(tok.get("top_logprobs") or [])
+        if not tops and tok.get("token") is not None:
+            tops = [{"token": tok.get("token"), "logprob": tok.get("logprob")}]
+        for item in tops:
+            t = str(item.get("token") or "").strip().strip('"').strip("'")
+            lp = item.get("logprob")
+            if not t or lp is None:
+                continue
+            for opt in options:
+                if t == opt or opt.startswith(t) or t.startswith(opt):
+                    scores[opt] = max(scores.get(opt, -1e9), float(lp))
+        if scores:
+            break
+    if not scores:
+        return None
+    m = max(scores.values())
+    exps = {o: math.exp(scores.get(o, -1e9) - m) for o in options}
+    z = sum(exps.values()) or 1.0
+    return {o: exps[o] / z for o in options}
+
+
+class GptSystemOne(NemotronSystemOne):
+    """OpenAI gpt-4o (Chat Completions) as a System One judge: same state, 25 questions, and answer shape.
+    Prompt and independence rules are inherited (state never carries answer keys or run outcomes).
+    Primary parse = JSON probabilities like Nemotron. If a question has no numeric masses, use OpenAI
+    top_logprobs when they match option tokens, otherwise a one-hot of the parsed choice."""
+
+    def __init__(self, cfg: dict, llm_cfg: dict | None = None, log_path: Path | None = None,
+                 client: Any = None, model: str | None = None) -> None:
+        SystemOneClient.__init__(self, cfg, log_path, backend="gpt")
+        from engine.llm import DEFAULT_GPT_MODEL, openai_client
+        env = os.environ.get(str(cfg.get("model_env_override") or "OPENAI_B_MODEL_ID") or "")
+        self.model = str(model or env or cfg.get("model") or DEFAULT_GPT_MODEL)
+        self.client = client or openai_client(llm_cfg, log_path)
+        self.temperature = cfg.get("temperature", 0.0)
+        self.max_tokens = int(cfg.get("max_tokens", 8000))
+        self.settings = {"top_p": cfg.get("top_p")}  # no thinking / chat_template_kwargs
+        self.use_logprobs = bool(cfg.get("logprobs", True))
+        self.top_logprobs = int(cfg.get("top_logprobs", 5))
+        self.response_format = str(cfg.get("response_format") or "json_object")
+
+    def system_one(self, state: Any, questions: dict, tag: str = "B_judge") -> dict:
+        from engine.llm import LLMError, extract_json, json_schema_format
+        from engine.nemotron import _with_schema
+        t0 = time.time()
+        msgs = self.messages(state, questions)
+        schema = self.schema(questions)
+        kw = dict(temperature=self.temperature, top_p=self.settings.get("top_p"), max_tokens=self.max_tokens, tag=tag)
+        if self.use_logprobs:
+            kw["logprobs"] = True
+            kw["top_logprobs"] = self.top_logprobs
+        try:
+            if self.response_format == "json_schema":
+                try:
+                    res = self.client.chat(self.model, msgs,
+                                           response_format=json_schema_format("system_one", schema), **kw)
+                except LLMError as e:
+                    if "HTTP 400" not in str(e):
+                        raise
+                    res = self.client.chat(self.model, _with_schema(msgs, schema),
+                                           response_format={"type": "json_object"}, **kw)
+            else:
+                res = self.client.chat(self.model, _with_schema(msgs, schema),
+                                       response_format={"type": "json_object"}, **kw)
+            obj = extract_json(res.content) or {}
+        except (LLMError, ValueError) as e:
+            raise JevError(f"gpt: {type(e).__name__}: {e}"[:300]) from e
+        if not isinstance(obj, dict):
+            obj = {}
+        lp = getattr(res, "logprobs", None)
+        answers = {}
+        for name, jq in questions.items():
+            opts = self._opts(jq)
+            raw_v = obj.get(name)
+            raw: dict[str, float] = {}
+            parsed = None
+            if isinstance(raw_v, dict):
+                raw = {str(k): max(0.0, float(v)) for k, v in raw_v.items() if isinstance(v, (int, float))}
+            elif isinstance(raw_v, str):
+                parsed = raw_v
+            tot = sum(raw.get(o, 0.0) for o in opts)
+            if tot > 0:
+                pr = {o: raw.get(o, 0.0) / tot for o in opts}
+            else:
+                pr = option_probs_from_logprobs(lp, opts)
+                if pr is None:
+                    if parsed in opts:
+                        pr = {o: (1.0 if o == parsed else 0.0) for o in opts}
+                    else:
+                        continue
+            if jq["type"] == "noul":
+                answers[name] = {"type": "noul", "noul": round(pr.get("true", 0.0), 4)}
+            else:
+                best = max(pr, key=pr.get)
+                k = len(pr)
+                answers[name] = {"type": "choice", "choice": best,
+                                 "probabilities": {o: round(v, 4) for o, v in pr.items()},
+                                 "confidence": round((k * pr[best] - 1) / (k - 1), 4) if k > 1 else 1.0}
+        u = res.usage or {}
+        return {"model": res.model, "answers": answers, "latency_s": round(time.time() - t0, 3),
+                "usage": {"input_tokens": int(u.get("prompt_tokens") or 0),
+                          "output_tokens": int(u.get("completion_tokens") or 0)}}
+
+
 def make_client(backend: str, cfg: dict, mode: str, bank: list[dict], meta: dict, seed: int = 0,
-                log_path: Path | None = None, llm_cfg: dict | None = None) -> tuple[SystemOneClient, str]:
+                log_path: Path | None = None, llm_cfg: dict | None = None,
+                model: str | None = None) -> tuple[SystemOneClient, str]:
     """(client, backend label). --mock -> stub. laya: laya-serve if /health answers, else in-process laya if
-    importable, else the stub (SYNTHETIC, said so in the label). jev: live with TYPESAFE_API_KEY, else the stub."""
-    bcfg = (cfg.get("backends") or {})[backend]
+    importable, else the stub (SYNTHETIC, said so in the label). jev: live with TYPESAFE_API_KEY, else the stub.
+    gpt: live OpenAI (OPENAI_API_KEY); on --real a missing key is an error, never a silent stub."""
+    bcfg = dict((cfg.get("backends") or {})[backend] or {})
+    if model:
+        bcfg["model"] = model
     if mode == "mock":
         return StubJev(bcfg, bank, meta, seed=seed, log_path=log_path), "stub (mock)"
+    if backend == "gpt":
+        if llm_cfg is None:
+            import yaml
+            from engine.config import PIPELINE_DIR
+            llm_cfg = yaml.safe_load((PIPELINE_DIR / "llm_models.yaml").read_text(encoding="utf-8"))
+        c = GptSystemOne(bcfg, llm_cfg, log_path, model=bcfg.get("model"))
+        if c.has_key:
+            return c, f"gpt System One {c.model}"
+        raise JevError("OPENAI_API_KEY is not set (--judge-b gpt); refusing SYNTHETIC stub answers")
     if backend == "nemotron":
         if llm_cfg is None:
             import yaml

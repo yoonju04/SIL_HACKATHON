@@ -286,22 +286,23 @@ mock 은 `engine/fixtures/synthetic_sim.py`(운동학 근사 시뮬레이터, 32
 ```powershell
 # 1) CARLA 서버 (sim-eval av_stack 폴더)
 cd pipeline\08_carla_paired_run\av_stack ; .\start_carla_stable.ps1 ; cd ..\..\..
-# 2) 키: .env 에 OPENAI_API_KEY=... (03 제안, 기본 GPT) 와, 영상 해설/Nemotron 을 쓰면 NEBIUS_API_KEY=...
-#    (커밋 금지) 또는
+# 2) 키: OpenAI 만 쓸 때는 OPENAI_API_KEY=... 만. (커밋 금지)
 $env:OPENAI_API_KEY = "..."
-$env:NEBIUS_API_KEY = "..."
-# 3) 점검 → 실행
-.venv-sil\Scripts\python run.py --real --check
-.venv-sil\Scripts\python run.py --real                       # 기본: GPT 제안 + X-5 + 영상 해설 on (= X-6)
-.venv-sil\Scripts\python run.py --real --proposer nemotron    # 03 을 Token Factory Nemotron A 로
+# 3) 점검 → 실행 (OpenAI only: 제안 + 05b 판정 + 영상 해설/인사이트 모두 GPT)
+.venv-sil\Scripts\python run.py --real --check --llm-provider gpt
+.venv-sil\Scripts\python run.py --real --llm-provider gpt
+# NEBIUS_API_KEY 가 없고 OPENAI_API_KEY 만 있으면 --llm-provider gpt 는 생략해도 같다.
+# Token Factory 를 같이 쓰려면 NEBIUS_API_KEY 도 넣고 --proposer nemotron 또는 --vision-backend nemotron.
 .venv-sil\Scripts\python run.py --real --ablation X-3 --video-explainer off --rounds 2
 ```
 
 | 환경 변수 | 뜻 |
 |---|---|
-| `OPENAI_API_KEY` | 03 시나리오 제안이 GPT 일 때 (기본). 출력·로그에 남기지 않음 |
-| `OPENAI_A_MODEL_ID` | GPT 모델 id 덮어쓰기 (기본 `gpt-4o`, 또는 `--proposer-model`) |
-| `NEBIUS_API_KEY` | Token Factory 키. `--proposer nemotron`, `--judge-b nemotron`/`nemotron_b`, 또는 영상 해설/인사이트(Cosmos) 가 켜져 있을 때만 필요. 출력·로그에 남기지 않음 |
+| `OPENAI_API_KEY` | `--llm-provider gpt` (또는 OpenAI only 자동 선택) 일 때 03 제안 · 05b 판정 · 영상 해설/인사이트. 출력·로그에 남기지 않음 |
+| `OPENAI_A_MODEL_ID` | 03 제안 모델 (기본 `gpt-4o`, 또는 `--proposer-model`) |
+| `OPENAI_B_MODEL_ID` | 05b GPT 판정 모델 (기본 `gpt-4o`, 또는 `--judge-model`) |
+| `OPENAI_C_MODEL_ID` | 10/09 비전·인사이트 모델 (기본 `gpt-4o`) |
+| `NEBIUS_API_KEY` | Token Factory 키. `--proposer nemotron`, `--judge-b nemotron`/`nemotron_b`, 또는 `--vision-backend nemotron` (Cosmos) 일 때만 필요. 출력·로그에 남기지 않음 |
 | `NEMOTRON_A_MODEL_ID`, `NEMOTRON_B_MODEL_ID` | Nemotron 모델 id 덮어쓰기 (기본값 `pipeline/llm_models.yaml`) |
 | `COSMOS_MODEL_ID`, `COSMOS_BASE_URL`, `COSMOS_API_KEY` | Cosmos Reason Dedicated Endpoint. 없으면 `nvidia/Nemotron-3.5-Super-VL` 로 대체 |
 | `AV_STACK_ROOT` / `SIM_EVAL_ROOT` | 병합 전 av_stack 위치 |

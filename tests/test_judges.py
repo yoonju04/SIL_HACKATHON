@@ -327,8 +327,8 @@ def test_loop_judge_switch(tmp_path):
     assert nb.questions[0]["id"].startswith("Q-B") and "|v#" not in nb.b_key(c)
     assert Loop(mode="mock", out=tmp_path / "o4", ablation="X-5", video_on=False, seed=0, quiet=True,
                 judge_b="nemotron").questions[0]["id"] == "J1"
-    with pytest.raises(SystemExit):
-        Loop(mode="mock", out=tmp_path / "o3", ablation="X-5", video_on=False, seed=0, quiet=True, judge_b="gpt")
+    gp = Loop(mode="mock", out=tmp_path / "o3", ablation="X-5", video_on=False, seed=0, quiet=True, judge_b="gpt")
+    assert gp.judge_b == "gpt" and gp.questions[0]["id"] == "J1" and gp.jev_client.stub
 
 
 # ------------------------------------------------------------ live (skipped unless a backend is there)
@@ -491,3 +491,87 @@ def test_ridge_adapter_alpha_from_cv_and_triangular_kernel():
     m._model = _Const()
     p = m.predict_proba(np.zeros((1, 1)))[0]
     assert np.allclose(p, [0.0, 0.5, 0.5]) and m.classes_[int(p.argmax())] == "mid"
+
+
+def test_make_client_gpt_refuses_silent_stub(bank, cfg, monkeypatch):
+    _, meta = J.judge_questions(bank, cfg)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(J.JevError, match="OPENAI_API_KEY"):
+        J.make_client("gpt", cfg, "live", bank, meta)
+    c, label = J.make_client("gpt", cfg, "mock", bank, meta)
+    assert c.stub and label == "stub (mock)"
+
+
+class _FakeGptChat:
+    has_key = True
+
+    def __init__(self):
+        self.calls = []
+
+    def chat(self, model, messages, **kw):
+        from engine.llm import ChatResult
+        self.calls.append(kw)
+        content = messages[-1]["content"]
+        schema = None
+        if "JSON SCHEMA" in content:
+            schema = json.loads(content.split("JSON SCHEMA", 1)[1].strip())
+        else:
+            try:
+                schema = json.loads(content).get("json_schema")
+            except (TypeError, ValueError):
+                schema = (kw.get("response_format") or {}).get("json_schema", {}).get("schema")
+        props = (schema or {}).get("properties") or {}
+        obj = {n: {o: (3.0 if i == 0 else 1.0) for i, o in enumerate(p["required"])} for n, p in props.items()}
+        return ChatResult(content=json.dumps(obj), reasoning=None, finish_reason="stop",
+                          usage={"prompt_tokens": 100, "completion_tokens": 50}, model=model, latency_s=0.0)
+
+
+def test_gpt_system_one_shape_and_no_truth_in_prompt(bank, cfg):
+    llm = yaml.safe_load((REPO_ROOT / "pipeline" / "llm_models.yaml").read_text(encoding="utf-8"))
+    qs, meta = J.judge_questions(bank, cfg, J.state_views(cfg, "gpt"))
+    fake = _FakeGptChat()
+    c = J.GptSystemOne(cfg["backends"]["gpt"], llm, client=fake)
+    state = "[scenario]\nfault_mode: bias"
+    r = c.system_one(state, qs)
+    assert set(r["answers"]) == set(qs) and r["usage"]["input_tokens"] == 100
+    a = r["answers"]["J1__en_notes"]
+    assert a["choice"] == list(qs["J1__en_notes"]["criteria"])[0]
+    assert sum(a["probabilities"].values()) == pytest.approx(1.0, abs=1e-3)
+    body = fake.calls[0]
+    assert "thinking" not in body and body.get("response_format", {}).get("type") == "json_object"
+    assert body.get("logprobs") is True
+    msgs = c.messages(state, qs)
+    blob = json.dumps(msgs)
+    assert "expected_from_code" not in blob and "switch_time" not in blob and "final_safe_recovery" not in blob
+    p = J.parse_answers(r, meta)
+    assert set(p) == {q["id"] for q in bank}
+
+
+class _FakeChatLogprobs:
+    has_key = True
+
+    def __init__(self, options):
+        self.options = list(options)
+
+    def chat(self, model, messages, **kw):
+        from engine.llm import ChatResult
+        a, b = self.options[0], self.options[1]
+        content = json.dumps({})
+        lp = {"content": [{"token": a, "logprob": -0.1,
+                           "top_logprobs": [{"token": a, "logprob": -0.1},
+                                            {"token": b, "logprob": -2.0}]}]}
+        return ChatResult(content=content, reasoning=None, finish_reason="stop",
+                          usage={"prompt_tokens": 10, "completion_tokens": 5}, model=model,
+                          latency_s=0.0, logprobs=lp)
+
+
+def test_gpt_logprob_fallback_when_json_has_no_masses(bank, cfg):
+    llm = yaml.safe_load((REPO_ROOT / "pipeline" / "llm_models.yaml").read_text(encoding="utf-8"))
+    qs, meta = J.judge_questions(bank, cfg, J.state_views(cfg, "gpt"))
+    qs = {k: v for k, v in qs.items() if k == "J1__en_notes"}
+    opts = J.GptSystemOne._opts(qs["J1__en_notes"])
+    c = J.GptSystemOne(cfg["backends"]["gpt"], llm, client=_FakeChatLogprobs(opts))
+    r = c.system_one("[scenario]\nfault_mode: bias", qs)
+    pr = r["answers"]["J1__en_notes"]["probabilities"]
+    assert pr[opts[0]] > pr[opts[1]] and r["answers"]["J1__en_notes"]["choice"] == opts[0]
+

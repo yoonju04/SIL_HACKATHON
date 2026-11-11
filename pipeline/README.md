@@ -51,7 +51,7 @@ flowchart TD
 | ↳ Scenario space | [`04_feasibility_expansion/scenario_space.yaml`](04_feasibility_expansion/scenario_space.yaml) | ODD 변수, 고장 F-01~03, 주입 시점 (가설 도구용 팀 템플릿) |
 | ↳ av_stack 고장 목록 | [`04_feasibility_expansion/scenario_space_av_stack.yaml`](04_feasibility_expansion/scenario_space_av_stack.yaml) | 고장 F-01~07 × 시점 × 환경 (루프가 실제로 쓰는 목록, 팀원 sim-eval) |
 | 05a 결정론적 feature | [`05a_deterministic_features/deterministic_features.yaml`](05a_deterministic_features/deterministic_features.yaml) | DF-01~05, GP 입력 구성 |
-| 05b 판정자 | [`05b_judges/judges.yaml`](05b_judges/judges.yaml) · [`questions.yaml`](05b_judges/questions.yaml) | 질문 은행 J1~J9 (코드 정답 키 / 결과 라벨), Laya(기본) · Jev · Nemotron ×25 판정 + 질문별 회귀, state 구성, GP feature ([docs/JUDGES.md](../docs/JUDGES.md)) |
+| 05b 판정자 | [`05b_judges/judges.yaml`](05b_judges/judges.yaml) · [`questions.yaml`](05b_judges/questions.yaml) | 질문 은행 J1~J9 (코드 정답 키 / 결과 라벨), Laya(기본) · Jev · Nemotron · GPT ×25 판정 + 질문별 회귀, state 구성, GP feature ([docs/JUDGES.md](../docs/JUDGES.md)) |
 | ↳ Nemotron B (예전) | [`05b_nemotron_b/nemotron_b.yaml`](05b_nemotron_b/nemotron_b.yaml) | 생성형 Nemotron B 와 그 질문 Q-B1~5, `--judge-b nemotron_b` 비교용 |
 | 06 GP surrogate | [`06_gp_surrogate/surrogate.yaml`](06_gp_surrogate/surrogate.yaml) | 가설 주 지표마다 GP 1개, 방향·스케일 정규화 z 회귀 |
 | 07 Orchestrator | [`07_orchestrator/orchestrator.yaml`](07_orchestrator/orchestrator.yaml) | cold start, LCB 획득, 예산·중단 조건 |
@@ -62,7 +62,7 @@ flowchart TD
 | ↳ SR 검사 · 화면 | [`engine/sr_checks.py`](../engine/sr_checks.py) · [`engine/dashboard.py`](../engine/dashboard.py) | SR 모니터 v3.1 호출 어댑터 → run_record `sr_*` 필드, 진행 화면 HTML |
 | ↳ SR monitor v3.1 | [`09_monitor/monitor.py`](09_monitor/monitor.py) · [`09_monitor/README.md`](09_monitor/README.md) | SR1~SR6 채점 본체(기준 실행 대비 P-02, R79 방식 횡가속도·jerk). 예외적으로 실행 코드가 이 폴더에 있음 |
 | 10 Video explainer | [`10_video_explainer/video_explainer.yaml`](10_video_explainer/video_explainer.yaml) | 해설할 런 선택, 클립 4 fps, 검증 ±0.5 s, 메커니즘 태그, 피드백 |
-| LLM 모델 | [`llm_models.yaml`](llm_models.yaml) | 03 proposer (기본 GPT / Nemotron A) · B Ultra x3 · C Cosmos(Dedicated) / Super-VL |
+| LLM 모델 | [`llm_models.yaml`](llm_models.yaml) | 03 proposer (기본 GPT / Nemotron A) · 05b GPT/Nemotron · C GPT 프레임 또는 Cosmos / Super-VL. `--llm-provider gpt` 면 전부 OpenAI |
 | 실행 엔진 | [`engine/`](../engine/) · [`run.py`](../run.py) (저장소 루트) | judgment, monitor, scenarios, surrogate(sklearn GP + straddle), llm, nemotron, carla_runner, video, explainer, feedback, fixtures(SYNTHETIC) |
 | 비교 실험 | [`evaluation/ablations.yaml`](evaluation/ablations.yaml) | X-1~6 ablation (+ video_explainer on/off), 경계 추정 지표, mock_suite |
 

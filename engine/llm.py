@@ -35,6 +35,7 @@ class ChatResult:
     model: str
     latency_s: float
     raw: dict = field(default_factory=dict, repr=False)
+    logprobs: dict | None = field(default=None, repr=False)
 
 
 def role_settings(llm_cfg: dict, role: str) -> dict:
@@ -110,14 +111,72 @@ def proposer_client(llm_cfg: dict, backend: str, log_path: Path | None = None) -
     )
 
 
+def openai_client(llm_cfg: dict | None = None, log_path: Path | None = None) -> "TokenFactoryClient":
+    """OpenAI Chat Completions client (OPENAI_API_KEY). Shared by the 03 proposer, 05b GPT judge, and vision/insights."""
+    return proposer_client(llm_cfg or {}, "gpt", log_path)
+
+
+def resolve_llm_provider(llm_cfg: dict | None = None, provider: str | None = None, *,
+                         mode: str = "real") -> str | None:
+    """Return 'gpt' | 'nemotron' | None. CLI / yaml win; in --real, auto-select gpt when only OPENAI_API_KEY is set."""
+    if provider:
+        p = str(provider).strip().lower()
+        if p not in ("gpt", "nemotron"):
+            raise ValueError(f"--llm-provider must be gpt or nemotron, not {provider!r}")
+        return p
+    yaml_p = ((llm_cfg or {}).get("llm_provider") or (llm_cfg or {}).get("default_provider"))
+    if yaml_p:
+        return str(yaml_p).strip().lower()
+    if mode == "real" and os.environ.get(OPENAI_API_KEY_ENV) and not os.environ.get("NEBIUS_API_KEY"):
+        return "gpt"
+    return None
+
+
+def resolve_vision_backend(llm_cfg: dict | None = None, backend: str | None = None,
+                           llm_provider: str | None = None, *, mode: str = "real") -> str:
+    if backend:
+        b = str(backend).strip().lower()
+        if b not in ("gpt", "nemotron"):
+            raise ValueError(f"--vision-backend must be gpt or nemotron, not {backend!r}")
+        return b
+    if llm_provider in ("gpt", "nemotron"):
+        return llm_provider
+    # OpenAI-only --real: prefer GPT even if yaml vision.default is still nemotron
+    if mode == "real" and os.environ.get(OPENAI_API_KEY_ENV) and not os.environ.get("NEBIUS_API_KEY"):
+        return "gpt"
+    v = ((llm_cfg or {}).get("vision") or {}).get("default")
+    return str(v).strip().lower() if v else "nemotron"
+
+
+def vision_settings(llm_cfg: dict, backend: str, model: str | None = None) -> dict:
+    """Chat settings for stage 10 / insights. GPT uses image frames (no raw video, no thinking kwargs)."""
+    if backend != "gpt":
+        return {}
+    g = dict(((llm_cfg or {}).get("vision") or {}).get("gpt") or {})
+    env = g.get("model_env_override") or "OPENAI_C_MODEL_ID"
+    return {
+        "backend": "gpt",
+        "model": model or os.environ.get(env) or g.get("model") or DEFAULT_GPT_MODEL,
+        "temperature": g.get("temperature", 0.6),
+        "top_p": g.get("top_p", 0.95),
+        "max_tokens": g.get("max_tokens", 6000),
+        "media": list(g.get("media") or ["frames", "contact_sheet"]),
+        "prompt_format": g.get("prompt_format", "think_answer"),
+    }
+
+
 def required_llm_keys(*, proposer: str, video_on: bool = True, insights_on: bool = True,
-                      judge_b: str | None = "laya") -> list[str]:
+                      judge_b: str | None = "laya", vision_backend: str | None = None) -> list[str]:
     """Env vars that must be set for a --real run with this combination. Values are never returned."""
+    vision = (vision_backend or "nemotron").strip().lower()
+    judge = str(judge_b or "laya")
     keys: list[str] = []
-    if proposer == "gpt":
+    needs_openai = (proposer == "gpt" or judge == "gpt"
+                    or (video_on and vision == "gpt") or (insights_on and vision == "gpt"))
+    needs_nebius = (proposer == "nemotron" or judge in ("nemotron", "nemotron_b")
+                    or (video_on and vision == "nemotron") or (insights_on and vision == "nemotron"))
+    if needs_openai:
         keys.append(OPENAI_API_KEY_ENV)
-    needs_nebius = (proposer == "nemotron" or video_on or insights_on
-                    or str(judge_b or "laya") in ("nemotron", "nemotron_b"))
     if needs_nebius:
         keys.append("NEBIUS_API_KEY")
     return keys
@@ -165,12 +224,17 @@ class TokenFactoryClient:
 
     def chat(self, model: str, messages: list[dict], *, temperature: float | None = None, top_p: float | None = None,
              max_tokens: int | None = None, response_format: dict | None = None, thinking: bool | None = None,
-             chat_template_kwargs: dict | None = None, extra_body: dict | None = None, tag: str = "") -> ChatResult:
+             chat_template_kwargs: dict | None = None, extra_body: dict | None = None, tag: str = "",
+             logprobs: bool | None = None, top_logprobs: int | None = None) -> ChatResult:
         body: dict[str, Any] = {"model": model, "messages": messages}
         for k, v in (("temperature", temperature), ("top_p", top_p), ("max_tokens", max_tokens),
                      ("response_format", response_format)):
             if v is not None:
                 body[k] = v
+        if logprobs:
+            body["logprobs"] = True
+            if top_logprobs is not None:
+                body["top_logprobs"] = int(top_logprobs)
         ctk = dict(chat_template_kwargs or {})
         if thinking is not None:
             ctk["enable_thinking"] = bool(thinking)
@@ -200,7 +264,8 @@ class TokenFactoryClient:
             msg = choice.get("message") or {}
             res = ChatResult(content=msg.get("content") or "", reasoning=msg.get("reasoning_content") or msg.get("reasoning"),
                              finish_reason=choice.get("finish_reason"), usage=data.get("usage") or {},
-                             model=data.get("model", model), latency_s=dt, raw=data)
+                             model=data.get("model", model), latency_s=dt, raw=data,
+                             logprobs=choice.get("logprobs"))
             self._log(tag, model, res.finish_reason, res.usage, dt, None)
             if res.finish_reason == "length":
                 raise TruncatedOutput(f"{model}: finish_reason=length (raise max_tokens or disable thinking)")

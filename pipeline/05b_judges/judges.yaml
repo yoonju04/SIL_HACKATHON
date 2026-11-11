@@ -7,6 +7,8 @@
 #                 TypeSafe Jev 와 같은 POST /v1/systemone 프로토콜·답 스키마를 낸다. 키 필요 없음.
 #   jev         — TypeSafe 호스팅 Jev (TYPESAFE_API_KEY, 선택). 같은 클라이언트, base_url 과 키만 다르다.
 #   nemotron    — Token Factory Nemotron 을 System One 처럼 쓴다 (같은 질문 25개, 보기별 확률 JSON). NEBIUS_API_KEY
+#   gpt         — OpenAI Chat Completions (기본 gpt-4o, OPENAI_API_KEY, --judge-model / OPENAI_B_MODEL_ID).
+#                 같은 질문 25개·프롬프트·파싱. --real 에서 키 없으면 stub 로 조용히 떨어지지 않는다.
 #   nemotron_b  — 예전 Nemotron B (생성 + 인용, 옛 질문 은행 Q-B1~5, 05b_nemotron_b/nemotron_b.yaml). 비교용
 #
 # 질문 원본은 하나: 05b_judges/questions.yaml (J1~J9). 여기에는 질문을 복사하지 않고, 질문마다 판정자(변형) 이름만 적는다.
@@ -45,6 +47,19 @@ backends:
     max_tokens: 16000
     parallel: 6                                 # 오프라인 평가·라운드 안에서 동시 요청 수
     price_per_mtok_usd: 0.0                     # Token Factory 단가는 llm_models.yaml 밖 (보고서는 토큰 수만)
+  gpt:
+    # OpenAI Chat Completions 을 System One 처럼 쓴다 (같은 질문 25개, JSON 확률). --judge-b gpt
+    model: gpt-4o
+    model_env_override: OPENAI_B_MODEL_ID
+    state_view: full
+    temperature: 0.0
+    top_p: 1.0
+    max_tokens: 8000
+    response_format: json_object                # 스키마는 프롬프트에 붙이고 engine 이 검증
+    logprobs: true                              # JSON 확률이 없을 때만 top_logprobs 로 보기 분포를 복원
+    top_logprobs: 5
+    parallel: 6
+    price_per_mtok_usd: 0.0
   jev:
     # docs.typesafe.ai (2026-10-29 확인): POST https://api.typesafe.ai/v1/systemone, Authorization: Bearer <key>,
     # body {model, state, questions: {name: {type: choice|noul|score, instructions, criteria}}},

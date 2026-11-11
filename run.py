@@ -5,7 +5,8 @@
   python run.py --mock                       # no CARLA, no network, synthetic fixtures + stub LLMs
   python run.py --mock --ablation-suite      # X-1..X-6 x seeds on the synthetic simulator
   python run.py --real --check               # preflight: av_stack, CARLA port, API keys, models, ffmpeg
-  python run.py --real                       # CARLA + GPT proposer (default) / optional Nebius Token Factory
+  python run.py --real --llm-provider gpt    # OpenAI-only (proposer + judge + vision); needs OPENAI_API_KEY
+  python run.py --real                       # same as above when only OPENAI_API_KEY is set (no NEBIUS)
   (python -m run ... works the same; 09 monitor alone: python -m engine.monitor RUN_DIR [--baseline DIR])
 
 Outputs go to outputs/<mode>_<timestamp>/ (git-ignored). Thresholds are PROVISIONAL (02 outcome_definitions).
@@ -36,7 +37,8 @@ from engine import judgment as J
 from engine import nemotron as NM
 from engine import judges as JDG
 
-JUDGE_NAME = {"laya": "Laya", "jev": "Jev", "nemotron": "Nemotron (System One)", "nemotron_b": "Nemotron B"}
+JUDGE_NAME = {"laya": "Laya", "jev": "Jev", "nemotron": "Nemotron (System One)", "gpt": "GPT",
+              "nemotron_b": "Nemotron B"}
 from engine import scenarios as SC
 from engine.carla_runner import CarlaRunner, MockRunner, carla_reachable
 from engine.config import (REPO_ROOT, load_stage_configs, load_yaml, resolve_av_stack,
@@ -45,8 +47,9 @@ from engine.explainer import GROUNDED_TIMELINE_KEYS, explain, stub_explanation, 
 from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure, outcome_examples, tried_view,
                              visible_failure,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
-from engine.llm import (LLMError, StubClient, TokenFactoryClient, proposer_client, proposer_settings,
-                                    required_llm_keys, resolve_proposer, role_settings)
+from engine.llm import (LLMError, StubClient, TokenFactoryClient, openai_client, proposer_client,
+                                    proposer_settings, required_llm_keys, resolve_llm_provider, resolve_proposer,
+                                    resolve_vision_backend, role_settings, vision_settings)
 from engine.monitor import (compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline,
                             scale_thresholds_for_friction, thresholds_from_config)
 from engine.surrogate import (MetricGPs, acquisition_score, boundary_score, boundary_score_parts, enforce_diversity,
@@ -174,7 +177,9 @@ class Loop:
                  judge_context: str | None = None, judge_fewshot: bool | None = None,
                  rare_type_picks: int | None = None, judge_regression_inputs: str | None = None,
                  judge_regression_model: str | None = None, rare_type_mode: str | None = None,
-                 proposer: str | None = None, proposer_model: str | None = None):
+                 proposer: str | None = None, proposer_model: str | None = None,
+                 judge_model: str | None = None, vision_backend: str | None = None,
+                 llm_provider: str | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -222,14 +227,29 @@ class Loop:
         self.no_reaction_on = bool(nr.get("mock" if mode == "mock" else "real", False)) if no_reaction is None else no_reaction
         self.vcfg = self.cfg["video_explainer"]
         self.taxonomy = self.vcfg["mechanism_taxonomy"]
-        # laya-judge: 05b B judge = laya (open-source Laya, default) | jev (hosted TypeSafe Jev, same protocol) | nemotron
-        # (Token Factory Nemotron as a System One judge): 25 typed judges over J1..J9 (05b_judges/questions.yaml) +
-        # regression. nemotron_b = the earlier generative Nemotron B over its own Q-B1..5 bank (comparison only).
+        # laya-judge: 05b B judge = laya (default) | jev | nemotron | gpt (OpenAI Chat Completions, same 25 judges)
+        # | nemotron_b (earlier generative B, comparison only). --llm-provider gpt (or --real with only
+        # OPENAI_API_KEY) selects gpt for the proposer, the judge, and vision/insights together.
+        self.llm_provider = resolve_llm_provider(self.cfg["llm"], llm_provider, mode=mode)
+        if self.llm_provider == "gpt":
+            if proposer is None:
+                proposer = "gpt"
+            if judge_b is None:
+                judge_b = "gpt"
+            if vision_backend is None:
+                vision_backend = "gpt"
+        elif self.llm_provider == "nemotron":
+            if proposer is None:
+                proposer = "nemotron"
+            if vision_backend is None:
+                vision_backend = "nemotron"
         self.judge_b = str(judge_b or self.cfg["orchestrator"].get("judge_b") or "laya")
+        self.judge_model = judge_model
+        self.vision_backend = resolve_vision_backend(self.cfg["llm"], vision_backend, self.llm_provider, mode=mode)
         self._judge_context, self._judge_fewshot = judge_context, judge_fewshot
         self.judge_context, self.judge_fewshot = "full", False
         if self.judge_b not in (*JDG.BACKENDS, "nemotron_b"):
-            raise SystemExit(f"--judge-b must be laya, jev, nemotron or nemotron_b, not {self.judge_b!r}")
+            raise SystemExit(f"--judge-b must be laya, jev, nemotron, gpt or nemotron_b, not {self.judge_b!r}")
         # integration3 #6: yes/no as strings, scope (per_scenario | static) and gp_feature defaults
         self.questions = (JDG.load_bank() if self.judge_b in JDG.BACKENDS else
                           NM.normalize_questions(self.cfg["nemotron_b"]["B_question_answering"]["question_bank"]))
@@ -265,7 +285,8 @@ class Loop:
         self.cf_queue: list[dict] = []
         self.proposer, self.proposer_model = resolve_proposer(self.cfg["llm"], proposer, proposer_model)
         self.stats: dict[str, Any] = {"a_calls": [], "rejected": [], "llm_errors": [],
-                                      "proposer": {"backend": self.proposer, "model": self.proposer_model}}
+                                      "proposer": {"backend": self.proposer, "model": self.proposer_model},
+                                      "vision_backend": self.vision_backend}
         if self.gp_history:
             self.load_gp_history(self.gp_history)
         self.cosmos = CosmosGuard()       # main() swaps in the auto guard for --real --cosmos-power auto
@@ -311,13 +332,18 @@ class Loop:
         else:
             self.client_a = proposer_client(llm_cfg, self.proposer, self.llm_log)
             self.client_b = TokenFactoryClient.from_config(llm_cfg, self.llm_log, role="B")
-            cos = role_settings(llm_cfg, "C_cosmos")
-            if cos.get("model"):
-                self.client_c, self.c_settings = TokenFactoryClient.from_config(llm_cfg, self.llm_log, role="C_cosmos"), cos
+            if self.vision_backend == "gpt":
+                self.client_c = openai_client(llm_cfg, self.llm_log)
+                self.c_settings = vision_settings(llm_cfg, "gpt")
+                self.c_fallback = self.c_settings  # no Token Factory fallback on an OpenAI-only run
             else:
-                self.client_c = TokenFactoryClient.from_config(llm_cfg, self.llm_log)
-                self.c_settings = role_settings(llm_cfg, "C_fallback")
-            self.c_fallback = role_settings(llm_cfg, "C_fallback")
+                cos = role_settings(llm_cfg, "C_cosmos")
+                if cos.get("model"):
+                    self.client_c, self.c_settings = TokenFactoryClient.from_config(llm_cfg, self.llm_log, role="C_cosmos"), cos
+                else:
+                    self.client_c = TokenFactoryClient.from_config(llm_cfg, self.llm_log)
+                    self.c_settings = role_settings(llm_cfg, "C_fallback")
+                self.c_fallback = role_settings(llm_cfg, "C_fallback")
         self.a_settings = proposer_settings(llm_cfg, self.proposer, self.proposer_model)
         self.a_refine = proposer_settings(llm_cfg, self.proposer, self.proposer_model, refine=True)
         self.stats["proposer"]["model"] = self.a_settings.get("model")
@@ -335,8 +361,14 @@ class Loop:
                 raise SystemExit("--judge-fewshot on needs --judge-context digest")
             self.jev_questions, self.jev_meta = JDG.judge_questions(self.questions, jc, JDG.state_views(jc, self.judge_b),
                                                                     context=self.judge_context)
-            self.jev_client, self.jev_backend = JDG.make_client(self.judge_b, jc, self.mode, self.questions, self.jev_meta,
-                                                                seed=self.seed, log_path=self.llm_log, llm_cfg=llm_cfg)
+            try:
+                self.jev_client, self.jev_backend = JDG.make_client(
+                    self.judge_b, jc, self.mode, self.questions, self.jev_meta,
+                    seed=self.seed, log_path=self.llm_log, llm_cfg=llm_cfg, model=self.judge_model)
+            except JDG.JevError as e:
+                raise SystemExit(str(e)) from e
+            if self.mode != "mock" and self.judge_b == "gpt" and getattr(self.jev_client, "stub", False):
+                raise SystemExit("OPENAI_API_KEY is not set (--judge-b gpt); refusing SYNTHETIC stub answers")
             if self.mode != "mock" and getattr(self.jev_client, "stub", False):
                 bar = "!" * 100
                 msg = (f"{bar}\nWARNING: 05b judge backend '{self.judge_b}' is NOT live ({self.jev_backend}).\n"
@@ -1475,6 +1507,8 @@ class Loop:
                                             "supervisor": self.supervisor, "gp_target": self.gp_target_choice,
                                             "proposer": {"backend": self.proposer, "model": self.a_settings.get("model"),
                                                          "stub": self.mode == "mock"},
+                                            "llm_provider": self.llm_provider,
+                                            "vision_backend": self.vision_backend,
                                             "judge_b": self.judge_b,
                                             "judges": ({"backend": self.judge_b, "model": self.jev_client.model,
                                                         "client": self.jev_backend,
@@ -1924,9 +1958,21 @@ def _boundary_lines(b: dict) -> list[str]:
 
 
 def preflight(cfg: dict, *, proposer: str | None = None, proposer_model: str | None = None,
-              video_on: bool = True, insights_on: bool = True, judge_b: str | None = None) -> int:
+              video_on: bool = True, insights_on: bool = True, judge_b: str | None = None,
+              vision_backend: str | None = None, llm_provider: str | None = None,
+              judge_model: str | None = None) -> int:
     ok = True
+    llm_cfg = cfg["llm"]
+    provider = resolve_llm_provider(llm_cfg, llm_provider, mode="real")
+    if provider == "gpt":
+        proposer = proposer or "gpt"
+        judge_b = judge_b or "gpt"
+        vision_backend = vision_backend or "gpt"
+    elif provider == "nemotron":
+        proposer = proposer or "nemotron"
+        vision_backend = vision_backend or "nemotron"
     judge_b = judge_b or (cfg.get("orchestrator") or {}).get("judge_b") or "laya"
+    vision = resolve_vision_backend(llm_cfg, vision_backend, provider, mode="real")
     av = resolve_av_stack()
     log(f"av_stack: {av or 'NOT FOUND (merge junwoo/sim-eval or set AV_STACK_ROOT)'}")
     ok &= av is not None
@@ -1945,10 +1991,11 @@ def preflight(cfg: dict, *, proposer: str | None = None, proposer_model: str | N
     log(f"CARLA {host}:{port}: {'reachable' if reach else 'NOT reachable (start_carla_stable.ps1)'}")
     ok &= reach
     log(f"ffmpeg: {ffmpeg_exe() or 'NOT FOUND (pip install imageio-ffmpeg)'}")
-    llm_cfg = cfg["llm"]
     backend, pmodel = resolve_proposer(llm_cfg, proposer, proposer_model)
-    log(f"proposer: {backend} ({pmodel})")
-    keys = required_llm_keys(proposer=backend, video_on=video_on, insights_on=insights_on, judge_b=judge_b)
+    log(f"llm_provider: {provider or 'per-role'}  proposer: {backend} ({pmodel})  "
+        f"judge_b: {judge_b}  vision: {vision}")
+    keys = required_llm_keys(proposer=backend, video_on=video_on, insights_on=insights_on,
+                             judge_b=judge_b, vision_backend=vision)
     missing_keys = [k for k in keys if not os.environ.get(k)]
     for k in keys:
         log(f"{k}: {'set' if os.environ.get(k) else 'NOT SET'}")
@@ -2024,7 +2071,7 @@ def load_dotenv(path: Path = REPO_ROOT / ".env") -> None:
 
 
 def campaign_insights(out: Path, mode: str, cfg: dict, cosmos: CosmosGuard | None = None,
-                      history: list[str] | None = None) -> dict | None:
+                      history: list[str] | None = None, vision_backend: str | None = None) -> dict | None:
     """09 monitor Cosmos campaign insights (pipeline/09_monitor/explain.py) after the loop -> out/insights/.
     Text-only (monitor numbers, no video). mock: no network. Never fails the run."""
     if mode != "mock" and cosmos is not None and cosmos.power is not None:
@@ -2036,7 +2083,7 @@ def campaign_insights(out: Path, mode: str, cfg: dict, cosmos: CosmosGuard | Non
             return campaign_insights(out, mode, cfg, None, history)
     try:
         from engine.insights import run_insights
-        res = run_insights(out, mode=mode, llm_cfg=cfg["llm"])
+        res = run_insights(out, mode=mode, llm_cfg=cfg["llm"], vision_backend=vision_backend)
     except Exception as e:  # noqa: BLE001 - insights are a report add-on; run results are already written
         log(f"campaign insights failed (run results unaffected): {type(e).__name__}: {e}")
         return None
@@ -2102,12 +2149,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--proposer-model",
                     help="model id for the 03 proposer (default: gpt-4o when --proposer gpt, or roles.A when "
                          "--proposer nemotron; overridable by OPENAI_A_MODEL_ID / NEMOTRON_A_MODEL_ID)")
-    ap.add_argument("--judge-b", choices=("laya", "jev", "nemotron", "nemotron_b"),
-                    help="05b B judge (default orchestrator.yaml judge_b = laya: open-source Laya x25 judges + regression "
-                         "via laya-serve LAYA_BASE_URL, default http://127.0.0.1:8000; jev = hosted TypeSafe Jev, same "
-                         "protocol, key TYPESAFE_API_KEY; nemotron = Token Factory Nemotron as a System One judge over the "
-                         "same 25 questions; nemotron_b = the earlier generative Nemotron B, for comparison). "
-                         "--mock, or no server / no key -> deterministic SYNTHETIC stub")
+    ap.add_argument("--llm-provider", choices=("gpt", "nemotron"),
+                    help="set every LLM role to this provider: gpt = OpenAI (proposer, --judge-b gpt, vision/insights); "
+                         "nemotron = Token Factory for proposer and vision (judge stays laya unless --judge-b is set). "
+                         "On --real, if only OPENAI_API_KEY is set (no NEBIUS_API_KEY), gpt is selected automatically. "
+                         "OpenAI-only: --llm-provider gpt (needs OPENAI_API_KEY only)")
+    ap.add_argument("--vision-backend", choices=("gpt", "nemotron"),
+                    help="10 video explainer + 09 insights: gpt = gpt-4o with sampled frames as base64 images "
+                         "(OPENAI_API_KEY); nemotron = Cosmos / Nemotron-VL on Token Factory. "
+                         "Default: gpt when --llm-provider gpt or when only OPENAI_API_KEY is set, else nemotron")
+    ap.add_argument("--judge-b", choices=("laya", "jev", "nemotron", "gpt", "nemotron_b"),
+                    help="05b B judge (default orchestrator.yaml judge_b = laya, or gpt when --llm-provider gpt / "
+                         "OpenAI-only --real). laya = open-source Laya x25 + regression via laya-serve; "
+                         "jev = TypeSafe Jev (TYPESAFE_API_KEY); nemotron = Token Factory Nemotron as a System One "
+                         "judge over the same 25 questions; gpt = OpenAI Chat Completions (OPENAI_API_KEY, "
+                         "--judge-model, default gpt-4o) with the same 25 questions — a missing key on --real is an "
+                         "error, never a silent SYNTHETIC stub; nemotron_b = earlier generative Nemotron B. "
+                         "--mock, or (laya/jev/nemotron with no server/key) -> deterministic SYNTHETIC stub")
+    ap.add_argument("--judge-model",
+                    help="model id for --judge-b gpt (default gpt-4o; overridable by OPENAI_B_MODEL_ID)")
     ap.add_argument("--judge-context", choices=("full", "digest"),
                     help="05b judge state (laya / jev / nemotron): full = code excerpts (default, judges.yaml context); "
                          "digest = short rule-based code-facts digest per question (engine/code_facts.py), no code")
@@ -2143,7 +2203,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.real and args.check:
         return preflight(load_stage_configs(), proposer=args.proposer, proposer_model=args.proposer_model,
                          video_on=args.video_explainer == "on", insights_on=args.insights == "on",
-                         judge_b=args.judge_b)
+                         judge_b=args.judge_b, vision_backend=args.vision_backend,
+                         llm_provider=args.llm_provider, judge_model=args.judge_model)
     if args.ablation_suite:
         if not args.mock:
             ap.error("--ablation-suite is mock only (real runs cost CARLA time; run conditions one by one)")
@@ -2152,10 +2213,13 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out or REPO_ROOT / "outputs" / f"{mode}_{time.strftime('%Y%m%d_%H%M%S')}"
     if args.real:
         cfg = load_stage_configs()
-        backend, _model = resolve_proposer(cfg["llm"], args.proposer, args.proposer_model)
-        judge = args.judge_b or (cfg.get("orchestrator") or {}).get("judge_b") or "laya"
+        provider = resolve_llm_provider(cfg["llm"], args.llm_provider, mode="real")
+        proposer = args.proposer or ("gpt" if provider == "gpt" else ("nemotron" if provider == "nemotron" else None))
+        judge = args.judge_b or ("gpt" if provider == "gpt" else None) or (cfg.get("orchestrator") or {}).get("judge_b") or "laya"
+        vision = resolve_vision_backend(cfg["llm"], args.vision_backend, provider, mode="real")
+        backend, _model = resolve_proposer(cfg["llm"], proposer, args.proposer_model)
         for key in required_llm_keys(proposer=backend, video_on=args.video_explainer == "on",
-                                     insights_on=args.insights == "on", judge_b=judge):
+                                     insights_on=args.insights == "on", judge_b=judge, vision_backend=vision):
             if not os.environ.get(key):
                 ap.error(f"{key} is not set")
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
@@ -2166,10 +2230,12 @@ def main(argv: list[str] | None = None) -> int:
                 judge_fewshot=None if args.judge_fewshot is None else args.judge_fewshot == "on",
                 rare_type_picks=args.rare_type_picks, judge_regression_inputs=args.judge_regression_inputs,
                 judge_regression_model=args.judge_regression_model, rare_type_mode=args.rare_type_mode,
-                proposer=args.proposer, proposer_model=args.proposer_model)
+                proposer=args.proposer, proposer_model=args.proposer_model,
+                judge_model=args.judge_model, vision_backend=args.vision_backend,
+                llm_provider=args.llm_provider)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
-    if args.real and args.cosmos_power == "auto":
+    if args.real and args.cosmos_power == "auto" and loop.vision_backend != "gpt":
         power = CosmosPower.from_env(role_settings(loop.cfg["llm"], "C_cosmos").get("model"), log=log,
                                      timeout_s=args.cosmos_start_timeout * 60)
         loop.cosmos = CosmosGuard(power, log=log)
@@ -2178,11 +2244,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             atexit.register(loop.cosmos.shutdown, "process exit")
             log(f"[cosmos-power] auto: endpoint {power.routing_key} is started only for stage 10 / insights")
+    elif args.real and loop.vision_backend == "gpt":
+        log("[cosmos-power] skipped: vision backend is gpt (OpenAI frames / text insights)")
     try:
         m = loop.run()
         if args.insights == "on":
             loop.screen("캠페인 인사이트 만드는 중")
-        ins = campaign_insights(out, mode, loop.cfg, loop.cosmos, history=loop.gp_history) if args.insights == "on" else None
+        ins = campaign_insights(out, mode, loop.cfg, loop.cosmos, history=loop.gp_history,
+                                 vision_backend=loop.vision_backend) if args.insights == "on" else None
     except BaseException:
         loop.screen("중단됨 (오류 또는 Ctrl+C)")
         raise

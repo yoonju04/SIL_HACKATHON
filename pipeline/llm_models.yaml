@@ -16,8 +16,9 @@ provider:
   timeout_s: 180
   max_retries: 2                        # 429 / 5xx 만 재시도
 
+# 한 줄로 모든 역할을 GPT 로: run.py --llm-provider gpt (또는 --real 에서 OPENAI_API_KEY 만 있고 NEBIUS 가 없으면 자동).
+# llm_provider: gpt
 # 03 시나리오 제안 모델 (Nemotron A 역할). 기본은 OpenAI GPT. --proposer / --proposer-model 로 덮어쓴다.
-# Nemotron B(05b 판정)와 Cosmos 는 여기 영향 없음.
 proposer:
   default: gpt                          # gpt | nemotron
   gpt:
@@ -32,6 +33,19 @@ proposer:
     refine:
       max_tokens: 16000
       response_format: json_object
+
+# 10 영상 해설 + 09 캠페인 인사이트. --vision-backend / --llm-provider 가 덮어씀.
+# NEBIUS_API_KEY 가 없고 OPENAI_API_KEY 가 있으면 --real 기본은 gpt.
+vision:
+  default: nemotron
+  gpt:
+    model: gpt-4o
+    model_env_override: OPENAI_C_MODEL_ID
+    temperature: 0.6
+    top_p: 0.95
+    max_tokens: 6000
+    media: [frames, contact_sheet]              # gpt-4o 이미지 입력 (원본 mp4 는 보내지 않음)
+    prompt_format: think_answer
 
 roles:
   A:                                    # 03 시나리오 후보 대량 생성 (--proposer nemotron 일 때)

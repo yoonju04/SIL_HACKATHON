@@ -93,9 +93,16 @@ def adapt_record(rec: dict, out: Path | None = None) -> dict:
     return _round(r)
 
 
-def cosmos_client(llm_cfg: dict, timeout_s: float = 300.0):
-    """explain.ModelClient with the same Cosmos endpoint/key/model resolution as the engine's C_cosmos role."""
-    from .llm import TokenFactoryClient, role_settings
+def cosmos_client(llm_cfg: dict, timeout_s: float = 300.0, vision_backend: str | None = None):
+    """explain.ModelClient for campaign insights: GPT (OpenAI, text) or Cosmos / Nemotron VL (Token Factory)."""
+    from .llm import TokenFactoryClient, openai_client, resolve_vision_backend, role_settings, vision_settings
+    backend = resolve_vision_backend(llm_cfg, vision_backend)
+    if backend == "gpt":
+        tf = openai_client(llm_cfg)
+        s = vision_settings(llm_cfg, "gpt")
+        ex = load_explain()
+        client = ex.ModelClient(key=tf._key or "", base_url=tf.base_url, model=s.get("model") or "", timeout=timeout_s)
+        return client, "C_gpt"
     role = "C_cosmos"
     s = role_settings(llm_cfg, role)
     if not s.get("model"):                                     # same fallback as run.py Loop._setup_clients
@@ -107,7 +114,8 @@ def cosmos_client(llm_cfg: dict, timeout_s: float = 300.0):
 
 
 def run_insights(out: Path, *, mode: str = "real", llm_cfg: dict | None = None, force: bool = False,
-                 max_tokens: int = DEFAULT_MAX_TOKENS, client=None, attempts: int = 2) -> dict:
+                 max_tokens: int = DEFAULT_MAX_TOKENS, client=None, attempts: int = 2,
+                 vision_backend: str | None = None) -> dict:
     """Write <out>/insights/. mode == "mock": dataset + dashboard only, no network."""
     out = Path(out)
     src = out / "run_records.jsonl"
@@ -136,7 +144,7 @@ def run_insights(out: Path, *, mode: str = "real", llm_cfg: dict | None = None, 
         if llm_cfg is None:
             from .config import load_stage_configs
             llm_cfg = load_stage_configs()["llm"]
-        client, role = cosmos_client(llm_cfg)
+        client, role = cosmos_client(llm_cfg, vision_backend=vision_backend)
     else:
         role = "custom"
     calls, errors, history = 0, [], []
