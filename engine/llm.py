@@ -45,6 +45,84 @@ def role_settings(llm_cfg: dict, role: str) -> dict:
     return s
 
 
+# ----------------------------------------------------------------------------- 03 scenario proposer (Nemotron A or OpenAI GPT)
+PROPOSER_BACKENDS = ("gpt", "nemotron")
+DEFAULT_PROPOSER = "gpt"
+DEFAULT_GPT_MODEL = "gpt-4o"
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
+
+
+def proposer_block(llm_cfg: dict) -> dict:
+    return dict((llm_cfg or {}).get("proposer") or {})
+
+
+def resolve_proposer(llm_cfg: dict, backend: str | None = None, model: str | None = None) -> tuple[str, str]:
+    """Return (backend, model) for the 03 scenario proposer. CLI values win, then yaml, then defaults."""
+    p = proposer_block(llm_cfg)
+    b = str(backend or p.get("default") or DEFAULT_PROPOSER).strip().lower()
+    if b not in PROPOSER_BACKENDS:
+        raise ValueError(f"--proposer must be gpt or nemotron, not {b!r}")
+    if model:
+        return b, str(model)
+    if b == "gpt":
+        gpt = dict(p.get("gpt") or {})
+        env = gpt.get("model_env_override") or "OPENAI_A_MODEL_ID"
+        return b, str(os.environ.get(env) or gpt.get("model") or DEFAULT_GPT_MODEL)
+    return b, str(role_settings(llm_cfg, "A").get("model") or "")
+
+
+def proposer_settings(llm_cfg: dict, backend: str, model: str, *, refine: bool = False) -> dict:
+    """Chat settings for call_a. GPT omits Nemotron thinking / chat_template_kwargs."""
+    if backend == "nemotron":
+        s = role_settings(llm_cfg, "A_refine" if refine else "A")
+        if model:
+            s["model"] = model
+        s["backend"] = backend
+        return s
+    gpt = dict(proposer_block(llm_cfg).get("gpt") or {})
+    src = dict(gpt.get("refine") or {}) if refine else gpt
+    base_temp, base_top, base_fmt = gpt.get("temperature", 1.0), gpt.get("top_p", 0.95), gpt.get("response_format", "json_object")
+    s = {
+        "backend": backend,
+        "model": model or src.get("model") or gpt.get("model") or DEFAULT_GPT_MODEL,
+        "temperature": src.get("temperature", base_temp),
+        "top_p": src.get("top_p", base_top),
+        "max_tokens": src.get("max_tokens", 16000 if refine else 6000),
+        "response_format": src.get("response_format", base_fmt),
+        "enabled": src.get("enabled", True),
+    }
+    return s
+
+
+def proposer_client(llm_cfg: dict, backend: str, log_path: Path | None = None) -> "TokenFactoryClient":
+    """OpenAI-compatible chat client for the 03 proposer (requests; no openai package required)."""
+    if backend == "nemotron":
+        return TokenFactoryClient.from_config(llm_cfg, log_path, role="A")
+    gpt = dict(proposer_block(llm_cfg).get("gpt") or {})
+    p = (llm_cfg or {}).get("provider") or {}
+    return TokenFactoryClient(
+        base_url=gpt.get("base_url") or OPENAI_BASE_URL,
+        api_key_env=gpt.get("api_key_env") or OPENAI_API_KEY_ENV,
+        timeout_s=float(gpt.get("timeout_s") or p.get("timeout_s") or 180),
+        max_retries=int(gpt.get("max_retries") or p.get("max_retries") or 2),
+        log_path=log_path,
+    )
+
+
+def required_llm_keys(*, proposer: str, video_on: bool = True, insights_on: bool = True,
+                      judge_b: str | None = "laya") -> list[str]:
+    """Env vars that must be set for a --real run with this combination. Values are never returned."""
+    keys: list[str] = []
+    if proposer == "gpt":
+        keys.append(OPENAI_API_KEY_ENV)
+    needs_nebius = (proposer == "nemotron" or video_on or insights_on
+                    or str(judge_b or "laya") in ("nemotron", "nemotron_b"))
+    if needs_nebius:
+        keys.append("NEBIUS_API_KEY")
+    return keys
+
+
 class TokenFactoryClient:
     def __init__(self, base_url: str = "https://api.tokenfactory.nebius.com/v1", api_key_env: str = "NEBIUS_API_KEY",
                  timeout_s: float = 180.0, max_retries: int = 2, log_path: Path | None = None,

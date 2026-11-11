@@ -4,8 +4,8 @@
   python run.py --check                      # stage-YAML null report (exit 2 while required nulls remain)
   python run.py --mock                       # no CARLA, no network, synthetic fixtures + stub LLMs
   python run.py --mock --ablation-suite      # X-1..X-6 x seeds on the synthetic simulator
-  python run.py --real --check               # preflight: av_stack, CARLA port, NEBIUS_API_KEY, models, ffmpeg
-  python run.py --real                       # CARLA + Nebius Token Factory
+  python run.py --real --check               # preflight: av_stack, CARLA port, API keys, models, ffmpeg
+  python run.py --real                       # CARLA + GPT proposer (default) / optional Nebius Token Factory
   (python -m run ... works the same; 09 monitor alone: python -m engine.monitor RUN_DIR [--baseline DIR])
 
 Outputs go to outputs/<mode>_<timestamp>/ (git-ignored). Thresholds are PROVISIONAL (02 outcome_definitions).
@@ -45,7 +45,8 @@ from engine.explainer import GROUNDED_TIMELINE_KEYS, explain, stub_explanation, 
 from engine.feedback import (counterfactual_candidates, failure_table, few_shot, is_failure, outcome_examples, tried_view,
                              visible_failure,
                                       mechanism_features, mechanism_summary, taxonomy_proposals)
-from engine.llm import LLMError, StubClient, TokenFactoryClient, role_settings
+from engine.llm import (LLMError, StubClient, TokenFactoryClient, proposer_client, proposer_settings,
+                                    required_llm_keys, resolve_proposer, role_settings)
 from engine.monitor import (compute_run_record, evaluate as monitor_evaluate, load_av_stack_run, monitor_timeline,
                             scale_thresholds_for_friction, thresholds_from_config)
 from engine.surrogate import (MetricGPs, acquisition_score, boundary_score, boundary_score_parts, enforce_diversity,
@@ -172,7 +173,8 @@ class Loop:
                  supervisor: str | None = None, gp_target: str | None = None, judge_b: str | None = None,
                  judge_context: str | None = None, judge_fewshot: bool | None = None,
                  rare_type_picks: int | None = None, judge_regression_inputs: str | None = None,
-                 judge_regression_model: str | None = None, rare_type_mode: str | None = None):
+                 judge_regression_model: str | None = None, rare_type_mode: str | None = None,
+                 proposer: str | None = None, proposer_model: str | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -261,7 +263,9 @@ class Loop:
         self.jev_drop: set[str] = set()
         self.events_cache: dict[str, dict] = {}
         self.cf_queue: list[dict] = []
-        self.stats: dict[str, Any] = {"a_calls": [], "rejected": [], "llm_errors": []}
+        self.proposer, self.proposer_model = resolve_proposer(self.cfg["llm"], proposer, proposer_model)
+        self.stats: dict[str, Any] = {"a_calls": [], "rejected": [], "llm_errors": [],
+                                      "proposer": {"backend": self.proposer, "model": self.proposer_model}}
         if self.gp_history:
             self.load_gp_history(self.gp_history)
         self.cosmos = CosmosGuard()       # main() swaps in the auto guard for --real --cosmos-power auto
@@ -290,6 +294,12 @@ class Loop:
         if not self.quiet:
             log(msg)
 
+    def _proposer_status(self) -> str:
+        """Status-bar label for stage 03. Keeps 'Nemotron A' when that backend is selected."""
+        if self.proposer == "nemotron":
+            return "Nemotron A"
+        return f"시나리오 제안(GPT · {self.a_settings.get('model') or self.proposer_model})"
+
     def _setup_clients(self) -> None:
         llm_cfg = self.cfg["llm"]
         self.llm_log = self.out / "llm_calls.jsonl"
@@ -299,7 +309,7 @@ class Loop:
             self.client_c = None
             self.c_settings = {"model": "stub/explainer", "media": ["video"]}
         else:
-            self.client_a = TokenFactoryClient.from_config(llm_cfg, self.llm_log, role="A")
+            self.client_a = proposer_client(llm_cfg, self.proposer, self.llm_log)
             self.client_b = TokenFactoryClient.from_config(llm_cfg, self.llm_log, role="B")
             cos = role_settings(llm_cfg, "C_cosmos")
             if cos.get("model"):
@@ -308,8 +318,11 @@ class Loop:
                 self.client_c = TokenFactoryClient.from_config(llm_cfg, self.llm_log)
                 self.c_settings = role_settings(llm_cfg, "C_fallback")
             self.c_fallback = role_settings(llm_cfg, "C_fallback")
-        self.a_settings = role_settings(llm_cfg, "A")
-        self.a_refine = role_settings(llm_cfg, "A_refine")
+        self.a_settings = proposer_settings(llm_cfg, self.proposer, self.proposer_model)
+        self.a_refine = proposer_settings(llm_cfg, self.proposer, self.proposer_model, refine=True)
+        self.stats["proposer"]["model"] = self.a_settings.get("model")
+        if self.mode == "mock":
+            self.stats["proposer"]["stub"] = True
         self.b_settings = role_settings(llm_cfg, "B")
         if self.judge_b in JDG.BACKENDS:
             jc = self.cfg["judges"]
@@ -1460,6 +1473,8 @@ class Loop:
         dump(self.out / "run_config.json", {"mode": self.mode, "ablation": self.ablation, "flags": self.flags,
                                             "video_explainer": self.video_on, "seed": self.seed, "cold_start": self.cold,
                                             "supervisor": self.supervisor, "gp_target": self.gp_target_choice,
+                                            "proposer": {"backend": self.proposer, "model": self.a_settings.get("model"),
+                                                         "stub": self.mode == "mock"},
                                             "judge_b": self.judge_b,
                                             "judges": ({"backend": self.judge_b, "model": self.jev_client.model,
                                                         "client": self.jev_backend,
@@ -1482,7 +1497,7 @@ class Loop:
                 n_a = int(round(self.cold * float(mix["nemotron_a"]))) if self.flags["use_a"] else 0
                 if self.ablation == "X-2":
                     n_a = self.cold
-                self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
+                self.screen(f"라운드 {rnd}: {self._proposer_status()}가 시나리오 만드는 중")
                 a_c = self.stage_03(n_a, rnd)
                 a_pool = self.stage_04([self.quantize(c) for c in a_c], rnd)
                 # integration3 #8c: fault types cycle; control faults only up to what the round's cap (BUG-025) leaves
@@ -1528,7 +1543,7 @@ class Loop:
                     k_unexplored=int(sv2.get("k_unexplored", 3)), unexplored_std_frac=float(sv2.get("unexplored_std_frac", 0.75)))
                 dump(rdir / "03_gp_summary.json", gp_summary)
                 n_a = int(self.cfg["nemotron_a"]["A_scenario_generation"]["per_round"]) if self.flags["use_a"] else 0
-                self.screen(f"라운드 {rnd}: Nemotron A가 시나리오 만드는 중")
+                self.screen(f"라운드 {rnd}: {self._proposer_status()}가 시나리오 만드는 중")
                 a_c = self.stage_03(n_a, rnd, near=near if self.flags["use_gp"] else None, gp_summary=gp_summary)
                 sf = SC.space_filling(self.space, self.route_ids, self.fault_pool,
                                       int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd,
@@ -1704,7 +1719,9 @@ def nemotron_a_metrics(loop: Loop) -> dict:
             "proposals_with_range_extreme": sum(bool(NM.extreme_fields(c, loop.space)) for c in a),
             "proposals_extreme_unjustified": sum("range_extreme_unjustified" in c.get("tags", []) for c in a),
             "mean_edge_distance": (sum(d) / len(d)) if d else None,
-            "expected_side": _count(c.get("expected_side") for c in a)}
+            "expected_side": _count(c.get("expected_side") for c in a),
+            "backend": getattr(loop, "proposer", None),
+            "model": (getattr(loop, "a_settings", None) or {}).get("model")}
 
 
 def boundary_metrics(records: list[dict], candidates: dict, band: float = 0.2, target: str = "safety_margin") -> dict:
@@ -1906,8 +1923,10 @@ def _boundary_lines(b: dict) -> list[str]:
     return lines
 
 
-def preflight(cfg: dict) -> int:
+def preflight(cfg: dict, *, proposer: str | None = None, proposer_model: str | None = None,
+              video_on: bool = True, insights_on: bool = True, judge_b: str | None = None) -> int:
     ok = True
+    judge_b = judge_b or (cfg.get("orchestrator") or {}).get("judge_b") or "laya"
     av = resolve_av_stack()
     log(f"av_stack: {av or 'NOT FOUND (merge junwoo/sim-eval or set AV_STACK_ROOT)'}")
     ok &= av is not None
@@ -1927,16 +1946,45 @@ def preflight(cfg: dict) -> int:
     ok &= reach
     log(f"ffmpeg: {ffmpeg_exe() or 'NOT FOUND (pip install imageio-ffmpeg)'}")
     llm_cfg = cfg["llm"]
-    client = TokenFactoryClient.from_config(llm_cfg)
-    if not client.has_key:
-        log(f"{llm_cfg['provider']['api_key_env']}: NOT SET"); return 2
-    try:
-        models = set(client.list_models())
-    except LLMError as e:
-        log(f"model list failed: {e}"); return 2
-    for role in ("A", "A_refine", "B", "C_cosmos", "C_fallback"):
-        m = role_settings(llm_cfg, role).get("model")
-        log(f"  role {role:10s} {m}: {'listed' if m in models else ('not configured' if not m else 'NOT in /v1/models (Dedicated endpoint?)')}")
+    backend, pmodel = resolve_proposer(llm_cfg, proposer, proposer_model)
+    log(f"proposer: {backend} ({pmodel})")
+    keys = required_llm_keys(proposer=backend, video_on=video_on, insights_on=insights_on, judge_b=judge_b)
+    missing_keys = [k for k in keys if not os.environ.get(k)]
+    for k in keys:
+        log(f"{k}: {'set' if os.environ.get(k) else 'NOT SET'}")
+    if "OPENAI_API_KEY" in keys:
+        a_client = proposer_client(llm_cfg, "gpt")
+        if a_client.has_key:
+            try:
+                listed = set(a_client.list_models())
+                log(f"  role A (gpt)  {pmodel}: {'listed' if pmodel in listed else 'NOT in /v1/models'}")
+            except LLMError as e:
+                log(f"OpenAI model list failed: {e}"); ok = False
+        else:
+            ok = False
+    if "NEBIUS_API_KEY" in keys:
+        client = TokenFactoryClient.from_config(llm_cfg)
+        if not client.has_key:
+            ok = False
+        else:
+            try:
+                models = set(client.list_models())
+            except LLMError as e:
+                log(f"Token Factory model list failed: {e}"); return 2
+            roles = []
+            if backend == "nemotron":
+                roles += ["A", "A_refine"]
+            if str(judge_b or cfg.get("orchestrator", {}).get("judge_b") or "laya") in ("nemotron", "nemotron_b"):
+                roles += ["B"]
+            if video_on or insights_on:
+                roles += ["C_cosmos", "C_fallback"]
+            if not roles:
+                roles = ["C_fallback"]
+            for role in roles:
+                m = pmodel if (role in ("A", "A_refine") and backend == "nemotron") else role_settings(llm_cfg, role).get("model")
+                log(f"  role {role:10s} {m}: {'listed' if m in models else ('not configured' if not m else 'NOT in /v1/models (Dedicated endpoint?)')}")
+    if missing_keys:
+        return 2
     return 0 if ok else 2
 
 
@@ -2017,7 +2065,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--mock", action="store_true", help="synthetic fixtures + stub LLMs, no CARLA, no network")
-    g.add_argument("--real", action="store_true", help="CARLA (sim-eval av_stack) + Nebius Token Factory")
+    g.add_argument("--real", action="store_true",
+                    help="CARLA (sim-eval av_stack) + OpenAI GPT (03 proposer, default) and/or Nebius Token Factory")
     ap.add_argument("--check", action="store_true",
                     help="alone: stage-YAML null report (exit 2 while nulls remain); with --real: CARLA/API preflight only")
     ap.add_argument("--out", type=Path)
@@ -2046,6 +2095,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gp-target", choices=("safety_margin", "lrr"),
                     help="recovery GP target (default 02 metric_rules.recovery_success.gp.target = safety_margin; "
                          "lrr = lane_recovery_robustness, the target before integration3 #9)")
+    ap.add_argument("--proposer", choices=("gpt", "nemotron"),
+                    help="03 scenario proposer (default: pipeline/llm_models.yaml proposer.default = gpt). "
+                         "gpt = OpenAI Chat Completions, key OPENAI_API_KEY, model --proposer-model (default gpt-4o); "
+                         "nemotron = Token Factory Nemotron A, key NEBIUS_API_KEY. The 05b judge is unchanged (--judge-b)")
+    ap.add_argument("--proposer-model",
+                    help="model id for the 03 proposer (default: gpt-4o when --proposer gpt, or roles.A when "
+                         "--proposer nemotron; overridable by OPENAI_A_MODEL_ID / NEMOTRON_A_MODEL_ID)")
     ap.add_argument("--judge-b", choices=("laya", "jev", "nemotron", "nemotron_b"),
                     help="05b B judge (default orchestrator.yaml judge_b = laya: open-source Laya x25 judges + regression "
                          "via laya-serve LAYA_BASE_URL, default http://127.0.0.1:8000; jev = hosted TypeSafe Jev, same "
@@ -2085,7 +2141,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.real:
         load_dotenv()
     if args.real and args.check:
-        return preflight(load_stage_configs())
+        return preflight(load_stage_configs(), proposer=args.proposer, proposer_model=args.proposer_model,
+                         video_on=args.video_explainer == "on", insights_on=args.insights == "on",
+                         judge_b=args.judge_b)
     if args.ablation_suite:
         if not args.mock:
             ap.error("--ablation-suite is mock only (real runs cost CARLA time; run conditions one by one)")
@@ -2094,8 +2152,12 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out or REPO_ROOT / "outputs" / f"{mode}_{time.strftime('%Y%m%d_%H%M%S')}"
     if args.real:
         cfg = load_stage_configs()
-        if not TokenFactoryClient.from_config(cfg["llm"]).has_key:
-            ap.error("NEBIUS_API_KEY is not set")
+        backend, _model = resolve_proposer(cfg["llm"], args.proposer, args.proposer_model)
+        judge = args.judge_b or (cfg.get("orchestrator") or {}).get("judge_b") or "laya"
+        for key in required_llm_keys(proposer=backend, video_on=args.video_explainer == "on",
+                                     insights_on=args.insights == "on", judge_b=judge):
+            if not os.environ.get(key):
+                ap.error(f"{key} is not set")
     loop = Loop(mode=mode, out=out, ablation=args.ablation, video_on=args.video_explainer == "on", seed=args.seed,
                 cold_start=args.cold_start, batch_size=args.batch_size, rounds=args.rounds,
                 no_reaction=None if args.no_reaction_runs is None else args.no_reaction_runs == "on",
@@ -2103,7 +2165,8 @@ def main(argv: list[str] | None = None) -> int:
                 judge_b=args.judge_b, judge_context=args.judge_context,
                 judge_fewshot=None if args.judge_fewshot is None else args.judge_fewshot == "on",
                 rare_type_picks=args.rare_type_picks, judge_regression_inputs=args.judge_regression_inputs,
-                judge_regression_model=args.judge_regression_model, rare_type_mode=args.rare_type_mode)
+                judge_regression_model=args.judge_regression_model, rare_type_mode=args.rare_type_mode,
+                proposer=args.proposer, proposer_model=args.proposer_model)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":

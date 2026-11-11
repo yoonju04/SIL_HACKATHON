@@ -202,7 +202,7 @@ SIL_HACKATHON/
 │   ├── 00_prior_knowledge/        # 물리 관계 · 검증 전 가설 (PK)
 │   ├── 01_safety_profile/         # 코드 관측 사실
 │   ├── 02_hypotheses/             # 지표 정의 + search_objectives/ (S1~S4 탐색 목표, A 분석층, R 회귀). 옛 H-01~11은 superseded
-│   ├── 03_nemotron_a/             # Nemotron A: 시나리오 생성
+│   ├── 03_nemotron_a/             # 03 시나리오 제안 (기본 GPT, 또는 Nemotron A)
 │   ├── 04_feasibility_expansion/  # 타당성 검사 G-01~04 + 후보 확장, scenario space
 │   ├── 05a_deterministic_features/# DF-01~09 (DF-07~09 = 고장 역학, 판정자 대신 계산)
 │   ├── 05b_judges/                # 05b 판정자: 질문 은행 J1~J9 (questions.yaml) + Laya / Jev / Nemotron ×25 + 회귀 (docs/JUDGES.md)
@@ -212,7 +212,7 @@ SIL_HACKATHON/
 │   ├── 08_carla_paired_run/       # baseline vs fault 짝 실행
 │   ├── 09_monitor/                # safety spec P-01~04 + SR1/2/4/6 수치 + error table (판정 코드는 engine/monitor.py · sr_checks.py)
 │   ├── 10_video_explainer/        # 영상 해설 + 검증 (Cosmos Reason / Nemotron VL)
-│   ├── llm_models.yaml            # 모델 id · 호출 파라미터 (역할 A, A_refine, B, C)
+│   ├── llm_models.yaml            # 모델 id · 호출 파라미터 (proposer GPT/Nemotron A, B, C)
 │   └── evaluation/                # ablation X-1~6
 ├── engine/                        # 실행 코드 전부 (pipeline/ 에는 단계 설정만 둔다)
 │   ├── judgment.py · monitor.py   # 판정 순수 함수 · 09 모니터 evaluate() (CLI: python -m engine.monitor RUN_DIR --baseline DIR)
@@ -281,23 +281,28 @@ py -3.11 -m venv .venv-sil
 mock 은 `engine/fixtures/synthetic_sim.py`(운동학 근사 시뮬레이터, 320x180 합성 영상)와 stub LLM 을 쓴다.
 모든 파일에 `synthetic_fixture: true` 가 붙고 보고서에 SYNTHETIC 이 표시된다. **수치는 실측이 아니다.**
 
-### real 모드 (CARLA 0.9.15 + Nebius Token Factory)
+### real 모드 (CARLA 0.9.15 + OpenAI GPT 제안 / Nebius Token Factory)
 
 ```powershell
 # 1) CARLA 서버 (sim-eval av_stack 폴더)
 cd pipeline\08_carla_paired_run\av_stack ; .\start_carla_stable.ps1 ; cd ..\..\..
-# 2) 키: .env 에 NEBIUS_API_KEY=... (커밋 금지) 또는
+# 2) 키: .env 에 OPENAI_API_KEY=... (03 제안, 기본 GPT) 와, 영상 해설/Nemotron 을 쓰면 NEBIUS_API_KEY=...
+#    (커밋 금지) 또는
+$env:OPENAI_API_KEY = "..."
 $env:NEBIUS_API_KEY = "..."
 # 3) 점검 → 실행
 .venv-sil\Scripts\python run.py --real --check
-.venv-sil\Scripts\python run.py --real                       # 기본: X-5 + 영상 해설 on (= X-6)
+.venv-sil\Scripts\python run.py --real                       # 기본: GPT 제안 + X-5 + 영상 해설 on (= X-6)
+.venv-sil\Scripts\python run.py --real --proposer nemotron    # 03 을 Token Factory Nemotron A 로
 .venv-sil\Scripts\python run.py --real --ablation X-3 --video-explainer off --rounds 2
 ```
 
 | 환경 변수 | 뜻 |
 |---|---|
-| `NEBIUS_API_KEY` | Token Factory 키 (필수, 출력·로그에 남기지 않음) |
-| `NEMOTRON_A_MODEL_ID`, `NEMOTRON_B_MODEL_ID` | 모델 id 덮어쓰기 (기본값 `pipeline/llm_models.yaml`) |
+| `OPENAI_API_KEY` | 03 시나리오 제안이 GPT 일 때 (기본). 출력·로그에 남기지 않음 |
+| `OPENAI_A_MODEL_ID` | GPT 모델 id 덮어쓰기 (기본 `gpt-4o`, 또는 `--proposer-model`) |
+| `NEBIUS_API_KEY` | Token Factory 키. `--proposer nemotron`, `--judge-b nemotron`/`nemotron_b`, 또는 영상 해설/인사이트(Cosmos) 가 켜져 있을 때만 필요. 출력·로그에 남기지 않음 |
+| `NEMOTRON_A_MODEL_ID`, `NEMOTRON_B_MODEL_ID` | Nemotron 모델 id 덮어쓰기 (기본값 `pipeline/llm_models.yaml`) |
 | `COSMOS_MODEL_ID`, `COSMOS_BASE_URL`, `COSMOS_API_KEY` | Cosmos Reason Dedicated Endpoint. 없으면 `nvidia/Nemotron-3.5-Super-VL` 로 대체 |
 | `AV_STACK_ROOT` / `SIM_EVAL_ROOT` | 병합 전 av_stack 위치 |
 | `AV_STACK_PYTHON` | carla 를 import 할 수 있는 python (기본 `av_stack\.venv-tfpp\Scripts\python.exe`) |
@@ -311,7 +316,7 @@ Windows 메모: 경로에 공백이 있어도 된다(subprocess 리스트 인자
 
 ```mermaid
 flowchart LR
-    P["00-02 prior · profile · S1 목표"] --> A["03 Nemotron A<br/>Lightning, thinking off<br/>(실패 사례 + 검증된 영상 메커니즘)"]
+    P["00-02 prior · profile · S1 목표"] --> A["03 시나리오 제안<br/>GPT (기본) 또는 Nemotron A<br/>(실패 사례 + 검증된 영상 메커니즘)"]
     A --> G["04 G-01~03 게이트 + 섭동"]
     SF["space filling"] --> G
     CF["counterfactual 큐"] --> G

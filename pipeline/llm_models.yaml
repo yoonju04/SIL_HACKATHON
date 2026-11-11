@@ -16,8 +16,25 @@ provider:
   timeout_s: 180
   max_retries: 2                        # 429 / 5xx 만 재시도
 
+# 03 시나리오 제안 모델 (Nemotron A 역할). 기본은 OpenAI GPT. --proposer / --proposer-model 로 덮어쓴다.
+# Nemotron B(05b 판정)와 Cosmos 는 여기 영향 없음.
+proposer:
+  default: gpt                          # gpt | nemotron
+  gpt:
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY         # 값을 파일에 쓰지 않는다
+    model: gpt-4o                       # Chat Completions, json_object
+    model_env_override: OPENAI_A_MODEL_ID
+    temperature: 1.0
+    top_p: 0.95
+    max_tokens: 6000
+    response_format: json_object        # 스키마는 프롬프트에 붙이고 engine 이 검증
+    refine:
+      max_tokens: 16000
+      response_format: json_object
+
 roles:
-  A:                                    # 03 시나리오 후보 대량 생성
+  A:                                    # 03 시나리오 후보 대량 생성 (--proposer nemotron 일 때)
     model: nvidia/Nemotron-3_5-Lightning
     model_env_override: NEMOTRON_A_MODEL_ID
     thinking: false                     # chat_template_kwargs.enable_thinking=false (JSON 잘림 방지)

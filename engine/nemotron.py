@@ -1,8 +1,12 @@
-"""03 Nemotron A (scenario candidates) and 05b Nemotron B (code questions) on Token Factory.
+"""03 scenario proposer (Nemotron A or OpenAI GPT) and 05b Nemotron B (code questions).
 
-A: Nemotron-3.5-Lightning, thinking OFF, response_format json_schema built from the scenario space
-   (ranges as minimum/maximum, ids as enum), same schema also pasted into the prompt, English prompt.
-   Optional refine pass (thinking ON, large max_tokens) for boundary-near candidates.
+A: scenario candidates. Backend is selected by --proposer / llm_models.yaml proposer (default: gpt).
+   Nemotron path: Token Factory Nemotron-3.5-Lightning, thinking OFF, response_format json_schema
+   built from the scenario space (ranges as minimum/maximum, ids as enum), same schema also pasted
+   into the prompt on the json_object fallback, English prompt.
+   GPT path: OpenAI Chat Completions (OPENAI_API_KEY), default gpt-4o, response_format json_object
+   with the same schema pasted into the prompt. Prompt, context, parsing and validation are shared.
+   Optional refine pass (Nemotron: thinking ON; GPT: same model, larger max_tokens) for boundary-near candidates.
    A is the only role that sees failures (09 failure_table + accepted 10 explanations).
 B: Nemotron-3-Ultra, thinking ON + medium_effort, whole av_stack source files (with line numbers)
    in context, answers each question from its option list with file:line evidence, repeated 2-3x for a
@@ -407,20 +411,33 @@ def region_item(c: dict, parts: dict, *, metric: str, native, y_scale: float, le
 
 
 def call_a(client, settings: dict, messages: list[dict], schema: dict, tag: str = "A") -> tuple[dict | None, dict]:
-    """Returns (parsed_obj or None, stats). Falls back to json_object if json_schema is rejected (HTTP 400)."""
-    stats = {"schema_errors": 0, "parse_error": None, "truncated": False, "response_format": "json_schema"}
+    """Returns (parsed_obj or None, stats). json_schema first (Nemotron), or json_object when settings say so
+    (GPT default); falls back to json_object if json_schema is rejected (HTTP 400). thinking is passed only when
+    the settings include it (Nemotron); GPT must not send chat_template_kwargs."""
+    prefer = str(settings.get("response_format") or "json_schema")
+    stats = {"schema_errors": 0, "parse_error": None, "truncated": False, "response_format": prefer,
+             "model": settings.get("model"), "backend": settings.get("backend")}
     kw = dict(temperature=settings.get("temperature"), top_p=settings.get("top_p"), max_tokens=settings.get("max_tokens"),
-              thinking=settings.get("thinking"), tag=tag)
+              tag=tag)
+    if settings.get("thinking") is not None:
+        kw["thinking"] = settings["thinking"]
     try:
-        res = client.chat(settings["model"], messages, response_format=json_schema_format("scenario_candidates", schema), **kw)
+        if prefer == "json_object":
+            res = client.chat(settings["model"], _with_schema(messages, schema),
+                              response_format={"type": "json_object"}, **kw)
+        else:
+            res = client.chat(settings["model"], messages,
+                              response_format=json_schema_format("scenario_candidates", schema), **kw)
     except LLMError as e:
-        if "HTTP 400" not in str(e):
+        if prefer == "json_object" or "HTTP 400" not in str(e):
             stats["parse_error"] = str(e)[:200]
             stats["truncated"] = "finish_reason=length" in str(e)
             return None, stats
         stats["response_format"] = "json_object_fallback"
         res = client.chat(settings["model"], _with_schema(messages, schema), response_format={"type": "json_object"}, **kw)
     stats["usage"] = res.usage
+    if getattr(res, "model", None):
+        stats["model"] = res.model
     try:
         obj = extract_json(res.content)
     except ValueError as e:

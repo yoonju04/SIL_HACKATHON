@@ -17,7 +17,7 @@ def test_mock_run_redraws_screen_per_run_and_opens_once(tmp_path, monkeypatch):
     per_run = [s for s in statuses if s and " 끝 (" in s]
     assert len(per_run) == n_runs >= 4
     assert statuses[0].startswith("시작") and statuses[-1] == "완료"
-    assert any("Nemotron A" in s for s in statuses if s)
+    assert any("시나리오 만드는 중" in s for s in statuses if s)
     assert opened == [1]
     assert '<span class="live">완료</span>' in (out / "screen" / "campaign.html").read_text(encoding="utf-8")
 

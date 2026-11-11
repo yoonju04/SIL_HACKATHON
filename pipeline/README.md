@@ -8,7 +8,7 @@ flowchart TD
     PK["00 Prior knowledge<br/>물리 관계·검증 전 가설 PK"] -.-> NA
     SP["01 Safety profile<br/>코드 관측 사실, 근거 포함"] --> HY
     HY["02 Search objectives<br/>S1~S4 + 분석층 A + 회귀 R<br/>(옛 가설 H-01~11 superseded)"] --> NA
-    NA["03 Nemotron A: 시나리오 생성<br/>가설 근거 인용, 실패 few-shot"] --> FE
+    NA["03 시나리오 제안 (GPT 기본 / Nemotron A)<br/>가설 근거 인용, 실패 few-shot"] --> FE
     SS["Scenario space<br/>ODD × 고장"] --> FE
     FE["04 타당성 검사 + 후보 확장<br/>G-01~04, 시드당 섭동 10개"] --> DF & NB
     DF["05a 결정론적 feature<br/>DF-01~05"] --> GP
@@ -46,7 +46,7 @@ flowchart TD
 | | [`02_hypotheses/hypotheses.yaml`](02_hypotheses/hypotheses.yaml) | 패턴 × 프로필로 생성된 가설 (자동 생성). 활성 패턴이 없어 지금은 비어 있음 |
 | | [`02_hypotheses/search_objectives/`](02_hypotheses/search_objectives/) | **S-세트** (새 스키마 초안, 파이프라인 미연결): S1 LQR 인계 경계: 전환 순간 오차 × 조향 포화(H-01+H-04+H-05+H-09), S2 고장 시점·감지 지연(H-02+H-06), S3 자연 MPC 열화(H-10+H-08+H-11, 고장 주입 없음), S4 선택, A 모든 런 공통 전환 기록, R 회귀 검증(H-03 등). H-07 보류. 공통 규칙 `_common.yaml` |
 | | [`engine/hypothesis_tools/`](../engine/hypothesis_tools/) | 가설 생성기 · 시나리오 후보 샘플러 · 예시 입력 |
-| 03 Nemotron A | [`03_nemotron_a/nemotron_a.yaml`](03_nemotron_a/nemotron_a.yaml) | 시나리오 후보 생성 (실패 few-shot 입력) |
+| 03 시나리오 제안 | [`03_nemotron_a/nemotron_a.yaml`](03_nemotron_a/nemotron_a.yaml) | 시나리오 후보 생성 (기본 OpenAI GPT, `--proposer nemotron` 이면 Token Factory; 실패 few-shot 입력) |
 | 04 타당성 검사 + 후보 확장 | [`04_feasibility_expansion/feasibility_expansion.yaml`](04_feasibility_expansion/feasibility_expansion.yaml) | G-01~04 게이트, 섭동·중복 제거 |
 | ↳ Scenario space | [`04_feasibility_expansion/scenario_space.yaml`](04_feasibility_expansion/scenario_space.yaml) | ODD 변수, 고장 F-01~03, 주입 시점 (가설 도구용 팀 템플릿) |
 | ↳ av_stack 고장 목록 | [`04_feasibility_expansion/scenario_space_av_stack.yaml`](04_feasibility_expansion/scenario_space_av_stack.yaml) | 고장 F-01~07 × 시점 × 환경 (루프가 실제로 쓰는 목록, 팀원 sim-eval) |
@@ -62,7 +62,7 @@ flowchart TD
 | ↳ SR 검사 · 화면 | [`engine/sr_checks.py`](../engine/sr_checks.py) · [`engine/dashboard.py`](../engine/dashboard.py) | SR 모니터 v3.1 호출 어댑터 → run_record `sr_*` 필드, 진행 화면 HTML |
 | ↳ SR monitor v3.1 | [`09_monitor/monitor.py`](09_monitor/monitor.py) · [`09_monitor/README.md`](09_monitor/README.md) | SR1~SR6 채점 본체(기준 실행 대비 P-02, R79 방식 횡가속도·jerk). 예외적으로 실행 코드가 이 폴더에 있음 |
 | 10 Video explainer | [`10_video_explainer/video_explainer.yaml`](10_video_explainer/video_explainer.yaml) | 해설할 런 선택, 클립 4 fps, 검증 ±0.5 s, 메커니즘 태그, 피드백 |
-| LLM 모델 | [`llm_models.yaml`](llm_models.yaml) | A Lightning · A_refine · B Ultra x3 · C Cosmos(Dedicated) / Super-VL |
+| LLM 모델 | [`llm_models.yaml`](llm_models.yaml) | 03 proposer (기본 GPT / Nemotron A) · B Ultra x3 · C Cosmos(Dedicated) / Super-VL |
 | 실행 엔진 | [`engine/`](../engine/) · [`run.py`](../run.py) (저장소 루트) | judgment, monitor, scenarios, surrogate(sklearn GP + straddle), llm, nemotron, carla_runner, video, explainer, feedback, fixtures(SYNTHETIC) |
 | 비교 실험 | [`evaluation/ablations.yaml`](evaluation/ablations.yaml) | X-1~6 ablation (+ video_explainer on/off), 경계 추정 지표, mock_suite |
 

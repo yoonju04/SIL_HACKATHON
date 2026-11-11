@@ -1,7 +1,8 @@
-# nemotron_a.yaml — Nemotron A: 시나리오 생성
+# nemotron_a.yaml — 03 시나리오 제안 (기본: OpenAI GPT; --proposer nemotron 이면 Token Factory Nemotron A)
 # 입력: 01 safety profile 관측, 02 가설, scenario_space, 이전 실패 사례(few-shot)
 # 출력: 시나리오 후보 + 근거 → 04 타당성 검사
 # 실패 사례는 A만 본다 (B는 결과 비참조).
+# 백엔드·모델은 pipeline/llm_models.yaml proposer (및 --proposer / --proposer-model) 가 고른다.
 
 meta:
   schema_version: '1.0'
@@ -9,7 +10,7 @@ meta:
   status: template_unverified
 
 nemotron:
-  model: nvidia/Nemotron-3_5-Lightning         # 호출 파라미터의 원본은 pipeline/llm_models.yaml roles.A
+  model: nvidia/Nemotron-3_5-Lightning         # --proposer nemotron 일 때. 호출 파라미터의 원본은 pipeline/llm_models.yaml roles.A
   # temperature: 여기 값(0.7)은 run.py가 읽지 않았다 (integration3 #7에서 제거). 유일한 원본 = pipeline/llm_models.yaml roles.A
   #   (실제 적용값 temperature 1.0, top_p 0.95; engine/llm.py role_settings)
   require_json_schema_validation: true
