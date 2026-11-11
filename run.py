@@ -172,7 +172,7 @@ class Loop:
                  supervisor: str | None = None, gp_target: str | None = None, judge_b: str | None = None,
                  judge_context: str | None = None, judge_fewshot: bool | None = None,
                  rare_type_picks: int | None = None, judge_regression_inputs: str | None = None,
-                 judge_regression_model: str | None = None):
+                 judge_regression_model: str | None = None, rare_type_mode: str | None = None):
         self.mode, self.out, self.ablation, self.video_on, self.seed = mode, Path(out), ablation, video_on, seed
         self.flags = ABLATIONS[ablation]
         if ablation == "X-6":
@@ -247,6 +247,11 @@ class Loop:
         if rare_type_picks is not None:
             ac["enabled"] = int(rare_type_picks) > 0
             ac["picks_per_round"] = int(rare_type_picks)
+        if rare_type_mode is not None:
+            ac["mode"] = rare_type_mode
+        if str(ac.get("mode", "quiet_seeds")) not in ("quiet_seeds", "classifier"):
+            raise SystemExit(f"failure_types acquisition.mode must be quiet_seeds or classifier, not {ac.get('mode')!r}")
+        self._rare_history: list[dict] | None = None
         self.candidates: dict[str, dict] = {}
         self.features_of: dict[str, list[float]] = {}
         self.explanations: dict[str, dict] = {}
@@ -1023,8 +1028,126 @@ class Loop:
             x, names = x + u, names + un
         return x, names
 
+    def rare_quiet_on(self) -> bool:
+        ac = self.ft_cfg.get("acquisition") or {}
+        return bool(ac.get("enabled")) and int(ac.get("picks_per_round", 0) or 0) > 0 \
+            and str(ac.get("mode", "quiet_seeds")) == "quiet_seeds" and self.flags["use_gp"]
+
+    def rare_seed_bands(self) -> dict:
+        from engine import rare_seeds as RS
+        scfg = (self.ft_cfg.get("acquisition") or {}).get("seeds") or {}
+        mw = float(self.cfg["safety_spec"]["evaluation_window"]["min_length_s"])
+        return RS.derived_bands(self.space, scfg, supervisor=self.supervisor, eval_window_min_s=mw)
+
+    def known_rare_runs(self) -> list[dict]:
+        """Rare failure runs (rare_neighbours.types) under this supervisor: saved run records (seeds.rare_neighbours.
+        history, read once) + this campaign's records. Their outcomes are used only to place seeds (targets), never as
+        judge inputs."""
+        from engine import rare_seeds as RS
+        scfg = (self.ft_cfg.get("acquisition") or {}).get("seeds") or {}
+        if self._rare_history is None:
+            pats = list((scfg.get("rare_neighbours") or {}).get("history") or [])
+            self._rare_history = RS.load_records(pats, REPO_ROOT)
+        own = [dict(r, _file="this campaign", parameters=r.get("parameters") or {
+                    k: (self.candidates.get(r.get("scenario_id")) or {}).get(k)
+                    for k in ("route_id", "environment", "fault", "onset_event", "onset_offset_s")})
+               for r in self.records]
+        return RS.known_rare_runs(self._rare_history + own, scfg, self.ft_cfg, supervisor=self.supervisor)
+
+    def rare_seed_candidates(self, round_index: int) -> list[dict]:
+        """quiet_seeds mode: seed candidates for the rare-type slots (engine/rare_seeds.py), added to the round's pool
+        before stage 04 so they pass the same gate / V-03 / dedup and get judge answers + GP predictions."""
+        if not self.rare_quiet_on():
+            return []
+        from engine import rare_seeds as RS
+        scfg = (self.ft_cfg.get("acquisition") or {}).get("seeds") or {}
+        bands = self.rare_seed_bands()
+        rare = self.known_rare_runs()
+        seeds = RS.generate(self.space, self.route_ids, self.fault_pool, scfg, self.rng, bands=bands, rare_runs=rare,
+                            round_index=round_index, speed_step=self.speed_step())
+        seeds = [self.quantize(c) for c in seeds]
+        by = {}
+        for c in seeds:
+            by[c["rare_seed_source"]] = by.get(c["rare_seed_source"], 0) + 1
+        notes = list(bands.get("notes") or [])
+        if "low_friction" in (scfg.get("sources") or RS.SOURCES) and SC.friction_axis(self.space) is None:
+            notes.append("low_friction skipped: this scenario space has no tire_friction_scale axis")
+        self.stats.setdefault("rare_seeds", []).append({"round": round_index, "generated": by, "bands": bands,
+                                                        "known_rare_runs": len(rare), "notes": notes})
+        return seeds
+
     def rare_type_picks(self, pool: list[dict], round_index: int, room: int) -> list[dict]:
-        """laya-judge plan 4: reserve up to acquisition.picks_per_round batch slots (default off) for the candidates
+        ac = self.ft_cfg.get("acquisition") or {}
+        if str(ac.get("mode", "quiet_seeds")) == "quiet_seeds":
+            return self.rare_type_picks_quiet(pool, round_index, room)
+        return self.rare_type_picks_classifier(pool, round_index, room)
+
+    def rare_type_picks_quiet(self, pool: list[dict], round_index: int, room: int) -> list[dict]:
+        """quiet_seeds: up to picks_per_round slots from the pool's rare seeds (source rare_seed) and B proposals
+        (source B), at most seeds.max_picks_per_source per seed source. Rank = 07 level-set boundary score of the
+        active recovery GP (safety_margin by default: its min-over-criteria includes the lane, settle, lat_acc and jerk
+        terms) once the GP is ready, else / for ties the negative normalized distance to the nearest known rare
+        failure. Seeds closer than min_distance_to_run to an already-run point or an earlier pick are skipped (the
+        same rule enforce_diversity applies afterwards, together with the per-fault cap)."""
+        from engine import rare_seeds as RS
+        ac = self.ft_cfg.get("acquisition") or {}
+        scfg = ac.get("seeds") or {}
+        n = min(int(ac.get("picks_per_round", 0) or 0), max(0, room))
+        if not ac.get("enabled", False) or n <= 0 or not pool:
+            return []
+        use_b = "b_proposals" in (scfg.get("sources") or RS.SOURCES)
+        cands = [c for c in pool if c.get("source") == "rare_seed" or (use_b and c.get("source") == "B")]
+        for c in cands:
+            if c.get("source") == "B":
+                c["rare_seed_source"] = "b_proposals"
+        ff = lambda c: SC.numeric_features(c, self.space, self.route_ids, self.fault_pool)[0]
+        rare_feats = []
+        for r in self.known_rare_runs():
+            rc = RS.record_candidate(self.space, r, self.route_ids, self.fault_pool)
+            if rc is not None:
+                rare_feats.append(ff(rc))
+        beta = J.beta_schedule(round_index, self.rounds + 1)
+        ranking = str(scfg.get("ranking", "gp_boundary"))
+        used = "gp_boundary" if ranking == "gp_boundary" and self.gp_ready else "rare_distance"
+        scored = []
+        for i, c in enumerate(cands):
+            d = RS.nearest_rare_distance(ff(c), rare_feats)
+            g = self.acq_score(c, beta) if used == "gp_boundary" else None
+            prim = g if g is not None else (-d if d is not None else 0.0)
+            scored.append((-prim, d if d is not None else 1e9, i, c, g, d))
+        scored.sort(key=lambda t: t[:3])
+        div = self.cfg["orchestrator"]["acquisition"]["diversity"]
+        mdr = float(div.get("min_distance_to_run", 0.0))
+        ran = [ff(self.candidates[r["scenario_id"]]) for r in self.records if r.get("scenario_id") in self.candidates]
+        per_src_max = int(scfg.get("max_picks_per_source", 1) or 0)
+        st = {"round": round_index, "mode": "quiet_seeds", "ranking": used, "n_seeds_in_pool": len(cands),
+              "seeds_in_pool": {}, "picked": []}
+        for c in cands:
+            st["seeds_in_pool"][c["rare_seed_source"]] = st["seeds_in_pool"].get(c["rare_seed_source"], 0) + 1
+        picked, per_src, feats = [], {}, []
+        for _, _, _, c, g, d in scored:
+            if len(picked) >= n:
+                break
+            src = c["rare_seed_source"]
+            if per_src_max > 0 and per_src.get(src, 0) >= per_src_max:
+                continue
+            x = ff(c)
+            if mdr > 0 and any(math.dist(x, r) < mdr for r in ran + feats):
+                continue
+            picked.append(c); feats.append(x); per_src[src] = per_src.get(src, 0) + 1
+            c["selected_by"] = f"rare_type_seed:{src}"
+            c["rare_seed_score"] = {"gp_boundary": None if g is None else round(float(g), 5),
+                                    "nearest_rare_distance": None if d is None else round(float(d), 4)}
+            st["picked"].append({"scenario_id": c["scenario_id"], "seed_source": src, "route_id": c["route_id"],
+                                 "fault": c["fault"], "speed_kmh": c["environment"]["max_speed_kmh"],
+                                 "tire_friction_scale": c["environment"].get(SC.FRICTION),
+                                 "onset_event": c["onset_event"], "onset_offset_s": c["onset_offset_s"],
+                                 "rare_seed_of": c.get("rare_seed_of"), **c["rare_seed_score"]})
+        self.stats.setdefault("rare_type_picks", []).append(st)
+        return picked
+
+    def rare_type_picks_classifier(self, pool: list[dict], round_index: int, room: int) -> list[dict]:
+        """laya-judge plan 4 (acquisition.mode classifier): reserve up to acquisition.picks_per_round batch slots (default off) for the candidates
         with the highest 'rare failure-type probability x epistemic logit variance' under the 05c hierarchical model
         fitted on this campaign's labelled switched runs (labels = run outcomes; they are targets, never judge
         inputs). Logged in stats['rare_type_picks']."""
@@ -1041,7 +1164,7 @@ class Loop:
                 continue
             X.append(self.failure_type_inputs(c)[0])
             Y.append([np.nan if lab[t] is None else float(lab[t]) for t in FT.TYPES])
-        st = {"round": round_index, "n_train": len(X), "picked": []}
+        st = {"round": round_index, "mode": "classifier", "n_train": len(X), "picked": []}
         if len(X) < int(ac.get("min_train_runs", 12)):
             st["note"] = "too few labelled switched runs"
             self.stats.setdefault("rare_type_picks", []).append(st)
@@ -1411,7 +1534,8 @@ class Loop:
                                       int(self.cfg["orchestrator"]["candidate_pool"]["space_filling_per_round"]), self.rng, round_index=rnd,
                                       speed_step=self.speed_step())
                 cf, self.cf_queue = self.cf_queue, []
-                pool = self.stage_04([self.quantize(c) for c in a_c + sf] + cf + self.b_proposals(rnd), rnd)
+                pool = self.stage_04([self.quantize(c) for c in a_c + sf + self.rare_seed_candidates(rnd)] + cf
+                                     + self.b_proposals(rnd), rnd)
                 target = self.batch
             dump(rdir / "03_04_pool.json", [{k: c.get(k) for k in ("scenario_id", "source", "route_id", "environment", "fault",
                                                                     "onset_event", "onset_offset_s", "tags", "evidence_ids",
@@ -1431,7 +1555,10 @@ class Loop:
             else:
                 batch = self.stage_07(pool, gps, rnd)
             batch = self.cap_controls(batch, pool, rnd)
-            dump(rdir / "07_batch.json", [{k: c.get(k) for k in ("scenario_id", "source", "selected_by", "gp_mean", "gp_std")} for c in batch])
+            dump(rdir / "07_batch.json", [{k: c.get(k) for k in ("scenario_id", "source", "selected_by", "gp_mean", "gp_std",
+                                                                  "rare_seed_source", "rare_seed_of", "rare_seed_score")
+                                           if k in c or k in ("scenario_id", "source", "selected_by", "gp_mean", "gp_std")}
+                                          for c in batch])
             self.say(f"[round {rnd}] pool {len(pool)} -> batch {len(batch)} ({self.ablation}, video {'on' if self.video_on else 'off'})")
             self.screen(f"라운드 {rnd}: 시뮬레이션 {len(batch)}개 시작")
             new = self.stage_08_09(batch, rnd, reserve=self.reserve_order(pool, batch, rnd))
@@ -1932,9 +2059,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --judge-context digest: add 2 worked examples per code question from synthetic fault "
                          "modes (05b_judges/fewshot.yaml); default judges.yaml fewshot (off)")
     ap.add_argument("--rare-type-picks", type=int, metavar="N",
-                    help="07: reserve N batch slots per round (0 = off, the default; 1-2 suggested) for the candidates "
-                         "with the highest rare failure-type probability x epistemic uncertainty (05c "
-                         "failure_types.yaml acquisition)")
+                    help="07: reserve N batch slots per round (0 = off, the default; 1-2 suggested) for rare "
+                         "failure-type seeds (05c failure_types.yaml acquisition; --rare-type-mode)")
+    ap.add_argument("--rare-type-mode", choices=("quiet_seeds", "classifier"),
+                    help="with --rare-type-picks N: quiet_seeds (default, failure_types.yaml acquisition.mode) = seeds "
+                         "in the quiet sub-threshold fault region (bias just under the 0.0785 rad rate tick, slow drift, "
+                         "curve entry, low friction, neighbours of known rare failures, B proposals) ranked by the GP "
+                         "boundary score; classifier = the 05c rare-type probability x epistemic (117a724)")
     ap.add_argument("--judge-regression-inputs", choices=("compressed", "per_judge"),
                     help="05b J regression inputs: compressed = per question mean log p across variants + variant std "
                          "+ forward/reverse gap (judges.yaml default); per_judge = every variant's log p (v2)")
@@ -1972,7 +2103,7 @@ def main(argv: list[str] | None = None) -> int:
                 judge_b=args.judge_b, judge_context=args.judge_context,
                 judge_fewshot=None if args.judge_fewshot is None else args.judge_fewshot == "on",
                 rare_type_picks=args.rare_type_picks, judge_regression_inputs=args.judge_regression_inputs,
-                judge_regression_model=args.judge_regression_model)
+                judge_regression_model=args.judge_regression_model, rare_type_mode=args.rare_type_mode)
     loop.insights_next = args.insights == "on"
     loop.open_screen = args.open_screen == "on"
     if args.real and args.cosmos_power == "auto":

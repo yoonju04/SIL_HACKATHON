@@ -219,13 +219,63 @@ so a fine-tune can memorise the key per mode. Only a held-out-mode check tells w
 
 ## 4. Search hook (07, `run.py Loop.rare_type_picks`)
 
-It is off by default. With `--rare-type-picks N` (1–2 suggested), each round the 05c model (`model.method`, default
-hier_bayes) is fitted on the campaign's labelled switched runs once there are at least 12 (`min_train_runs`). N batch
-slots then go to the pool candidates with the highest `weight × max over rare types of P_t(x) × epistemic_t(x)`. The rare
-types are lane_departure, unsettled and lat_acc, and the epistemic term is the logit variance. The picks are labelled
-`selected_by: rare_type_epistemic` and logged in `loop_stats.json rare_type_picks`. They are taken before the
-LCB/level-set slots, like the Nemotron A share. In a mock check (`--mock --judge-b nemotron --rare-type-picks 1`,
-3 rounds), it made 2 `rare_type_epistemic` picks over the 3 rounds.
+It is off by default. `--rare-type-picks N` (1–2 suggested) reserves N batch slots per round, taken before the
+LCB/level-set slots like the Nemotron A share. `acquisition.mode` (or `--rare-type-mode`) picks how they are filled.
+
+### Mode `quiet_seeds` (default, `engine/rare_seeds.py`, config `acquisition.seeds`)
+
+The 05c classifier cannot rank the rare types (3–6 positives each), so "near a rare type" under it is close to random.
+The rare-type slots are therefore seeded where a fault is **quiet for the tight supervisor**: no instant check trips,
+only accumulated tracking error (`tracking_divergence` 0.6 m / 0.35 rad held 0.15 s) can switch, so a late switch hands
+LQR a degraded state. Every bound comes from the code values in `scenario_space_av_stack.yaml supervisor` and
+`09 safety_spec.yaml`, not from guesses:
+
+| source | what it generates | bound and where it comes from |
+|---|---|---|
+| `bias_sub_threshold` | F-04 bias / F-07 intermittent_bias | magnitude 0.06–0.078 rad; upper bound kept under one steer-rate tick = 90 °/s × 0.05 s = 0.0785 rad (clipped there if configured higher) |
+| `slow_drift` | F-05 drift | rate 0.005–0.0157 rad/s; 0.0157 = rate tick / evaluation window min length 5 s, so the offset over the shortest graded window stays under one tick (the per-tick step, ≤ 0.0025 rad, never trips the rate check for any drift in range) |
+| `curve_entry` | either quiet fault at `onset_event: curve_entry`, offset −0.5…0.5 s | `route_onset_exclusions` apply; speed is lowered in 5 km/h steps until a route can grade curve_entry |
+| `low_friction` | either quiet fault at `tire_friction_scale` 0.3–0.6 | friction is a scenario parameter (`run_benchmark --tire-friction-scale`); skipped with a note if the space has no friction axis |
+| `rare_neighbours` | `scenarios.perturb` copies (scale 0.08; route, fault, onset event fixed) of known rare failure runs | lane departure incl. SR4 footprint, unsettled, lat_acc; from `result_8..12/run_records.jsonl` + this campaign, same supervisor profile only |
+| `b_proposals` | the 05b B proposals already in the pool (source B: bias at 0.9 × rate tick, +5 km/h) | reused, not regenerated |
+
+Quiet sources sample speed 25–40 km/h: in result_8..12 (tight), bias 0.06–0.078 rad switched 1/13 times at ≤ 20 km/h
+and 6/7 at ≥ 25 km/h. A run that never switches gets no failure-type label (LQR never acted).
+
+Each source makes `per_source` (4) candidates per round. They join the pool before stage 04, so they pass the same
+gate, V-03 and dedup (0.05) and get judge answers and GP predictions. The N picks are at most one per source
+(`max_picks_per_source`), skip points within `min_distance_to_run` (0.05) of a run point or an earlier pick, and then go
+through `enforce_diversity` with the rest of the batch (the 50 % per-fault cap). Ranking (`seeds.ranking`):
+
+- `gp_boundary` (default): the 07 level-set boundary score on the **active recovery GP target** once the GP is ready.
+  That is `safety_margin` (or `lane_recovery_robustness` with `--gp-target lrr`). `safety_margin` is the minimum over
+  the lane, settle, lat_acc and jerk terms, so its boundary covers the rare types, but jerk can dominate it.
+  `lat_acc_excess_mps2` has a `metric_rules` entry with a GP target, but it is not an active objective, so the loop
+  fits no GP for it. No separate lane-margin or lat_acc GP is fitted for this hook.
+- Fallback and tie-break: the normalized feature distance to the nearest known rare failure run.
+
+Picks are labelled `selected_by: rare_type_seed:<source>`. `loop_stats.json` logs `rare_seeds` (generated per source,
+bands, notes) and `rare_type_picks` (ranking used and each pick's source, fault, speed, friction, onset and scores).
+`07_batch.json` carries `rare_seed_source` / `rare_seed_of`. Under `--real`, seeds with new judge keys add 05b judge
+calls (cached per key).
+
+### Mode `classifier` (117a724)
+
+Each round the 05c model (`model.method`, default hier_bayes) is fitted on the campaign's labelled switched runs once
+there are at least 12 (`min_train_runs`). N slots go to the pool candidates with the highest
+`weight × max over rare types of P_t(x) × epistemic_t(x)` (lane_departure, unsettled, lat_acc; epistemic = logit
+variance), labelled `selected_by: rare_type_epistemic`. Kept for comparison only.
+
+### Jerk labels across campaigns
+
+`type_labels` re-labels every campaign from the raw `metrics.lat_jerk_excess_mps3` with the one limit in this file
+(15 m/s³), so result_8..12 are consistent here: 12 jerk positives among the 97 switched runs (2/2/1/1/6). Never-switched
+runs have no `lat_jerk_excess_mps3`, so counting all `ok` runs also gives 12. The `recovery_labels.lat_jerk_excess`
+stored in the run records were written at run time and are **mixed**. result_8–10 used the old limit of 5 (stored
+positives start at 5.25, 5.78 and 11.95; negatives reach 4.87, 3.13 and 4.37). result_11–12 used 15 (negatives reach
+5.65 and 12.31; positives start at 24.2 and 16.4). Stored primary positives are 42 among the switched runs and 52 among
+the ok runs. Re-labelled at 5, the switched count would be 49. Anything that reads the stored labels mixes the two
+limits; the 05c layer does not.
 
 ## How to enable in a CARLA run
 
@@ -233,7 +283,8 @@ LCB/level-set slots, like the Nemotron A share. In a mock check (`--mock --judge
 python run.py --real --judge-b nemotron \
   --judge-regression-inputs compressed      # already the judges.yaml default; per_judge = old layout
   --judge-regression-model bayes_laplace    # optional: per-answer epistemic in b_cache
-  --rare-type-picks 1                       # optional: 1 slot/round for rare failure types (default off)
+  --rare-type-picks 2                       # optional: 2 slots/round for rare failure types (default off)
+  --rare-type-mode quiet_seeds              # default; classifier = the 117a724 model-based picks
 ```
 
 The failure-type costs, the label rules and the ordinal order are in `pipeline/05c_failure_types/failure_types.yaml`.

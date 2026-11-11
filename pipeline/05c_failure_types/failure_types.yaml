@@ -39,9 +39,44 @@ ordinal:                                        # optional single cumulative-log
   order: [none, jerk_only, lat_acc, unsettled, departed_recovered, unrecovered]
   prior_var: 0.5
 
-acquisition:                                    # 07 hook (run.py Loop.rare_type_picks): rare-type probability x epistemic
+acquisition:                                    # 07 hook (run.py Loop.rare_type_picks)
   enabled: false                                # off by default; run.py --rare-type-picks N turns it on
   picks_per_round: 1                            # reserved batch slots (like B proposals: <= 2)
+  # mode quiet_seeds (default, engine/rare_seeds.py): fill the slots from seeds in the 'quiet sub-threshold fault'
+  #   region, ranked by the recovery GP's level-set boundary score (else distance to known rare failures).
+  # mode classifier (117a724): rare-type probability x epistemic under the 05c model. Kept selectable, but with 3-6
+  #   positives per rare type it cannot rank them (docs/FAILURE_TYPES.md), so its picks are close to random.
+  mode: quiet_seeds                             # quiet_seeds | classifier (run.py --rare-type-mode)
+  # --- classifier mode
   weight: 1.0                                   # score = weight * max_t in rare_types P_t(x) * epistemic_t(x) (logit variance)
   rare_types: [lane_departure, unsettled, lat_acc]
   min_train_runs: 12                            # fit only after this many labelled switched runs
+  # --- quiet_seeds mode (docs/FAILURE_TYPES.md "Rare-type seeds")
+  seeds:
+    sources: [bias_sub_threshold, slow_drift, curve_entry, low_friction, rare_neighbours, b_proposals]
+    per_source: 4                               # candidates generated per source per round (then 04 gate + dedup 0.05)
+    max_picks_per_source: 1                     # the N picks come from different sources
+    speed_kmh: [25.0, 40.0]                     # quiet sources sample here ("higher speed": result_8..12, bias 0.06-0.078
+                                                #   rad at <= 20 km/h switched 1/13 times, at >= 25 km/h 6/7 -> no LQR, no label)
+    bias_sub_threshold:                         # F-04 bias, F-07 intermittent_bias
+      magnitude_rad: [0.06, 0.078]              # upper bound must stay under the rate tick = 90 deg/s x 0.05 s = 0.0785 rad
+      max_tick_frac: 0.995                      #   (scenario_space supervisor block); clipped there if set higher
+    slow_drift:                                 # F-05 drift
+      rate_rad_s_min: null                      # null = drift range minimum (0.005)
+      rate_rad_s_max: null                      # null = rate tick / 09 evaluation_window.min_length_s = 0.0785 / 5 = 0.0157:
+                                                #   the offset accumulated over the shortest graded window stays under one
+                                                #   rate tick, and the per-tick step (<= 0.0025 rad) never trips the check
+    curve_entry: {offset_s: [-0.5, 0.5]}        # quiet fault at onset_event curve_entry (route_onset_exclusions apply;
+                                                #   speed is lowered in speed_step until a route allows curve_entry)
+    low_friction: {tire_friction_scale: [0.3, 0.6]}   # environment.tire_friction_scale (run_benchmark --tire-friction-scale)
+    rare_neighbours:
+      types: [lane_departure, unsettled, lat_acc]
+      include_sr4_footprint: true               # SR4 footprint departure counts as a departure for SEEDING only
+      history: ["result/result_8/run_records.jsonl", "result/result_9/run_records.jsonl",
+                "result/result_10/run_records.jsonl", "result/result_11/run_records.jsonl",
+                "result/result_12/run_records.jsonl"]   # + this campaign's runs; same supervisor profile only
+      neighbours_per_run: 1
+      jitter: 0.08                              # scenarios.perturb scale (route, fault, onset event fixed)
+    ranking: gp_boundary                        # gp_boundary (07 level-set score on the active recovery GP target) |
+                                                #   rare_distance (nearest known rare failure, normalized features).
+                                                #   gp_boundary falls back to rare_distance until the GP is ready.
