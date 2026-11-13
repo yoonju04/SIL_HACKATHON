@@ -149,3 +149,67 @@ def test_ask_requests_merges_and_stub_reads_digest(cfg, bank):
     parsed = J.parse_answers(resp, meta)
     assert set(parsed) == {meta[n]["qid"] for n in rq}
     json.dumps(resp)
+
+
+# ---------------------------------------------------------------- short context
+SHORT_MAX = 1400  # target ~1000 chars; saturate / intermittent carry more params
+
+
+@pytest.mark.parametrize("mode", FAULT_MODES)
+@pytest.mark.parametrize("sup", ("tight", "legacy"))
+def test_short_state_length_and_sections(mode, sup):
+    s = CF.short(AV, _ctx(mode, sup), 0.05)
+    assert 500 < len(s) < SHORT_MAX, (mode, sup, len(s))
+    for tag in ("[scenario]", "[code.supervisor]", "[code.fault_injection]", "[code.switch]"):
+        assert tag in s
+    for reason, _cond in CF.inspect_checks(AV, _ctx(mode, sup)):
+        assert reason in s, (mode, sup, reason)
+
+
+@pytest.mark.parametrize("mode", FAULT_MODES)
+@pytest.mark.parametrize("sup", ("tight", "legacy"))
+def test_short_state_has_no_answer_options_or_outcomes(cfg, bank, mode, sup):
+    """Independence: short state restates code facts only — no option name used as a verdict, no run outcome,
+    no conclusion words, no expected_from_code values."""
+    qs, meta = J.judge_questions(bank, cfg, J.state_views(cfg, "laya"), context="short")
+    reqs = J.make_requests(cfg, "laya", AV, _ctx(mode, sup), SUPERVISOR_PROFILES[sup],
+                           J.questions_for(qs, meta, bank, mode), meta, "short")
+    assert len(reqs) == 1
+    state, rq = reqs[0]
+    by_id = {q["id"]: q for q in bank}
+    opts = sorted({str(o) for n in rq for o in by_id[meta[n]["qid"]]["answer"]})
+    # also every bank option: the state is shared and must stay clean if questions are added
+    all_opts = sorted({str(o) for q in bank for o in q["answer"]})
+    assert _option_hits(state, opts) == [], (mode, sup, _option_hits(state, opts))
+    assert _option_hits(state, all_opts) == [], (mode, sup, _option_hits(state, all_opts))
+    for k in OUTCOME_KEYS:
+        assert k not in state
+    for word in ("fires first", "is caught", "therefore", "so the", "blind spot",
+                 "does not trip", "will not be caught", "expected_from_code"):
+        assert word not in state.lower()
+    assert "def " not in state
+
+
+def test_short_builder_never_reads_a_record():
+    ctx = dict(_ctx("drift"), switch_time=31.2, final_safe_recovery=False,
+               metrics={"pre_switch_max_lateral_error_m": 0.93})
+    d = CF.short(AV, ctx, 0.05)
+    assert "31.2" not in d and "0.93" not in d and "final_safe_recovery" not in d
+
+
+def test_short_focus_variants_point_at_code_sections(cfg, bank):
+    views = J.state_views(cfg, "laya")
+    qs, _ = J.judge_questions(bank, cfg, views, context="short")
+    assert "`code.supervisor`" in qs["J1__focus_supervisor"]["instructions"]
+    assert "`code.switch`" in qs["J4__focus_switch_rev"]["instructions"]
+    assert "`code.fault_injection`" in qs["J8__focus_fault"]["instructions"]
+    # short keeps compact [code.*] labels; it does not rewrite focus to facts.* (that is digest)
+    assert "facts.supervisor" not in qs["J1__focus_supervisor"]["instructions"]
+    ctx = _ctx("bias")
+    reqs = J.make_requests(cfg, "laya", AV, ctx, SUPERVISOR_PROFILES["tight"], qs,
+                           J.judge_questions(bank, cfg, views, context="short")[1], "short")
+    assert len(reqs) == 1 and "[code.supervisor]" in reqs[0][0]
+
+
+def test_short_default_context_is_still_full(cfg):
+    assert cfg.get("context", "full") == "full" and "short" in J.CONTEXTS

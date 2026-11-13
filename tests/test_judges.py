@@ -331,6 +331,77 @@ def test_loop_judge_switch(tmp_path):
     assert gp.judge_b == "gpt" and gp.questions[0]["id"] == "J1" and gp.jev_client.stub
 
 
+def test_lite_variants_are_seven_questions(bank, cfg):
+    """judges_lite: one en_notes each of J1, J3, J4, J7, J2, J5, J6. J3 is dropped when applies_to excludes the mode."""
+    qs, meta = J.judge_questions(bank, cfg, J.state_views(cfg, "laya"), variant_set="lite")
+    assert list(qs) == [f"{q}__en_notes" for q in ("J1", "J3", "J4", "J7", "J2", "J5", "J6")]
+    assert len(qs) == 7 and "J8" not in {m["qid"] for m in meta.values()} and "J9" not in {m["qid"] for m in meta.values()}
+    assert len(J.questions_for(qs, meta, bank, "saturate")) == 7
+    assert len(J.questions_for(qs, meta, bank, "intermittent_bias")) == 7
+    assert len(J.questions_for(qs, meta, bank, "bias")) == 6
+    assert "J3__en_notes" not in J.questions_for(qs, meta, bank, "bias")
+
+
+def test_lite_regression_and_gp_features_without_j8_j9(bank, cfg):
+    """Lite (one variant, no J8/J9): compressed std / order-gap are 0; GP features and summary still work."""
+    qs, meta = J.judge_questions(bank, cfg, J.state_views(cfg, "laya"), variant_set="lite")
+    variants_of = {q: list(v) for q, v in J.judges_map(cfg, "lite").items()}
+    options_of = {q: [str(o) for o in _q(bank, q)["answer"]] for q in variants_of}
+    sources = {q["id"]: q["label_source"] for q in bank}
+    stub = J.StubJev(cfg["backends"]["laya"], bank, meta, seed=0)
+    rows, ents = [], []
+    cases = [("bias", {"magnitude_rad": 0.05}), ("bias", {"magnitude_rad": 0.09}), ("solver_fail", {}),
+             ("drift", {"rate_rad_s": 0.04}), ("saturate", {"level": 0.7, "ramp_s": 0.0, "duration_s": 0.4})] * 3
+    for i, (mode, par) in enumerate(cases):
+        ctx = _ctx(mode, **par)
+        st = J.make_state(cfg, "laya", AV, ctx, SUPERVISOR_PROFILES["tight"])
+        p = J.parse_answers(stub.system_one(st, J.questions_for(qs, meta, bank, mode)), meta)
+        key = J.labels_for(bank, ctx, _rec(switch_time=10.0 + 0.4 * (i % 4)))
+        rows.append((p, key))
+    # J8/J9 are report-only in the full set; they are simply absent here
+    reg = J.JudgeRegression(cfg["regression"], variants_of, options_of, report_only=set(),
+                            variant_specs=cfg.get("variants") or {}).fit(rows)
+    assert "J8" not in reg.report and "J9" not in reg.report
+    for p, key in rows:
+        ents.append({"answers": J.aggregate(p, reg, key, 0.5, sources)})
+    a = ents[1]["answers"]
+    assert "J8" not in a and "J9" not in a and "J1" in a
+    x, names = J.jev_features(a, bank)
+    assert len(x) == len(names) and not any(n.startswith(("J8", "J9")) for n in names)
+    drop = J.constant_columns(ents, bank)
+    _, n2 = J.jev_features(a, bank, drop)
+    assert len(n2) == len(names) - len(drop)
+    s = J.summary(ents, reg)
+    assert s["agreement_with_code"] is None or 0 <= s["agreement_with_code"] <= 1
+    js = a["J1"]["judges"]
+    xr = J._x_row_compressed(js, ["en_notes"], options_of["J1"], 1e-3, cfg["variants"])
+    assert xr[-2] == 0.0 and xr[-1] == 0.0   # one variant: std and forward/reverse gap are constant 0
+
+
+def _run_arg_choices(flag: str) -> tuple:
+    import ast
+    tree = ast.parse((REPO_ROOT / "run.py").read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "add_argument":
+            if node.args and isinstance(node.args[0], ast.Constant) and node.args[0].value == flag:
+                for kw in node.keywords:
+                    if kw.arg == "choices":
+                        return tuple(ast.literal_eval(kw.value))
+    raise AssertionError(f"no choices for {flag}")
+
+
+def test_run_py_parses_short_and_lite_flags(tmp_path):
+    assert _run_arg_choices("--judge-context") == ("full", "digest", "short")
+    assert _run_arg_choices("--judge-variants") == ("full", "lite")
+    from run import Loop
+    lp = Loop(mode="mock", out=tmp_path / "short_lite", ablation="X-5", video_on=False, seed=0, quiet=True,
+              judge_context="short", judge_variants="lite")
+    lp._setup_clients()
+    assert lp.judge_context == "short" and lp.judge_variants == "lite"
+    assert len(lp.jev_questions) == 7 and "J8__en_notes" not in lp.jev_questions
+    assert lp.jev_questions["J1__en_notes"]["instructions"].count("`code") >= 0
+
+
 # ------------------------------------------------------------ live (skipped unless a backend is there)
 def _laya_up(cfg):
     return J.SystemOneClient(cfg["backends"]["laya"], backend="laya").reachable()

@@ -123,7 +123,7 @@ state:
       J6: [fault, takeover]
     fewshot_file: fewshot.yaml                  # --judge-fewshot on: 가짜 고장 모드 풀이 예시 2개씩 (코드 질문만)
 
-context: full                                   # full (기존: backend state_view 의 코드 발췌) | digest. run.py --judge-context
+context: full                                   # full (기존: backend state_view 의 코드 발췌) | digest | short. run.py --judge-context
 fewshot: false                                  # digest 에서만: 풀이 예시 붙이기. run.py --judge-fewshot on|off
 
 judges:                                         # 질문 → 판정자 변형. J3 은 applies_to (intermittent_bias, saturate) 일 때만 → 22~25개
@@ -136,6 +136,15 @@ judges:                                         # 질문 → 판정자 변형. J
   J2: [en_notes, en_notes_rev, focus_supervisor]              # 감지 지연 구간 (라벨 = 실제 결과)
   J5: [en_notes, en_notes_rev, ko]                            # 감지 전 차선 이탈 위험 (라벨 = 실제 결과)
   J6: [en_notes, focus_switch_rev]                            # LQR 첫 명령 속도 제한 (라벨 = 실제 결과)
+
+judges_lite:                                    # --judge-variants lite: 질문당 en_notes 하나, J8·J9 (보고 전용) 제외
+  J1: [en_notes]
+  J3: [en_notes]                                # intermittent_bias, saturate 에만 (applies_to)
+  J4: [en_notes]
+  J7: [en_notes]
+  J2: [en_notes]
+  J5: [en_notes]
+  J6: [en_notes]
 
 variants:                                       # form: choice | noul. focus = 지시문이 가리키는 state 필드
   en_notes:         {form: choice, lang: en, order: forward, focus: [scenario, code]}

@@ -145,17 +145,20 @@ def _focus_text(focus: list[str]) -> str:
     return "Use " + ", ".join(f"`{f}`" for f in focus) + "."
 
 
-def judge_questions(bank: list[dict], layout: dict, views: list[str] | None = None, context: str = "full"
-                    ) -> tuple[dict[str, dict], dict[str, dict]]:
+def judge_questions(bank: list[dict], layout: dict, views: list[str] | None = None, context: str = "full",
+                    variant_set: str = "full") -> tuple[dict[str, dict], dict[str, dict]]:
     """(`questions` map, meta {name: {qid, variant, form, options, keys}}). One question per (question id, variant);
-    names are '<qid>__<variant>' so answers map back. Only ids in layout['judges'] are asked. `views` = code sections
-    present in the state; a focus on a missing section (compact Laya state) falls back to `code`. meta['keys'] maps
-    the wire option key back to the bank option (yes/no choice options are sent as holds / ruled_out / undecided).
-    context 'digest': focus on code sections becomes `facts` (the digest state has no code)."""
+    names are '<qid>__<variant>' so answers map back. Only ids in the selected judges map are asked (`judges` or
+    `judges_lite`, via variant_set). `views` = code sections present in the state; a focus on a missing section
+    (compact Laya state) falls back to `code`. meta['keys'] maps the wire option key back to the bank option
+    (yes/no choice options are sent as holds / ruled_out / undecided).
+    context 'digest': focus on code sections becomes `facts` (the digest state has no code).
+    context 'short': keeps `code.*` focus names; the short state uses the same [code.supervisor] /
+    [code.fault_injection] / [code.switch] section labels as the compact state."""
     qs = {q["id"]: q for q in bank}
     variants = layout["variants"]
     out, meta = {}, {}
-    for qid, vs in (layout.get("judges") or {}).items():
+    for qid, vs in judges_map(layout, variant_set).items():
         q = qs[qid]
         opts = [str(o) for o in q["answer"]]
         yes_no = set(opts) <= {"yes", "no", "unknown"}
@@ -313,7 +316,20 @@ def make_state(cfg: dict, backend: str, av_stack: Path | None, ctx: dict, profil
 
 
 # ---------------------------------------------------------------- digest context (engine/code_facts.py)
-CONTEXTS = ("full", "digest")
+CONTEXTS = ("full", "digest", "short")
+VARIANT_SETS = ("full", "lite")
+VARIANT_SET_KEYS = {"full": "judges", "lite": "judges_lite"}
+
+
+def judges_map(layout: dict, variant_set: str = "full") -> dict:
+    """Question id -> variant name list for this run (`judges` or `judges_lite`)."""
+    if variant_set not in VARIANT_SETS:
+        raise ValueError(f"judge variants must be one of {VARIANT_SETS}, not {variant_set!r}")
+    key = VARIANT_SET_KEYS[variant_set]
+    m = layout.get(key)
+    if not m:
+        raise ValueError(f"judges.yaml is missing {key!r} (needed for --judge-variants {variant_set})")
+    return m
 
 
 def load_fewshot(cfg: dict) -> dict[str, list[dict]]:
@@ -344,14 +360,29 @@ def digest_state(av_stack: Path | None, ctx: dict, profile: dict | None, topics:
     return txt
 
 
+def short_state(av_stack: Path | None, ctx: dict, profile: dict | None, tick_s: float = 0.05) -> str:
+    """Text state of the short context: one compact factual block (engine/code_facts.short) with the same
+    [code.supervisor] / [code.fault_injection] / [code.switch] labels as the compact state. The scenario is a
+    one-line summary (no planner/controller or profile JSON). build_state still runs the independence check."""
+    from engine import code_facts as CF
+    build_state({}, ctx, profile, tick_s)
+    if av_stack is None:
+        return "[scenario]\nfault: %s" % (ctx.get("fault_mode") or "none")
+    return CF.short(av_stack, ctx, tick_s)
+
+
 def make_requests(cfg: dict, backend: str, av_stack: Path | None, ctx: dict, profile: dict | None, questions: dict,
                   meta: dict, context: str = "full", fewshot: bool = False,
                   examples: dict[str, list[dict]] | None = None) -> list[tuple[Any, dict]]:
-    """[(state, questions)] for one scenario. full: one request, make_state (the earlier behaviour). digest: one
-    request per group of questions sharing a topic list (state.digest.topics); with fewshot, one per question id so
-    each carries only its own worked examples (code questions only)."""
+    """[(state, questions)] for one scenario. full: one request, make_state (the earlier behaviour). short: one
+    request, code_facts.short (compact restatement of the same sections, ~1k chars). digest: one request per group
+    of questions sharing a topic list (state.digest.topics); with fewshot, one per question id so each carries only
+    its own worked examples (code questions only)."""
     if context == "full":
         return [(make_state(cfg, backend, av_stack, ctx, profile), questions)]
+    if context == "short":
+        tick = float((cfg.get("state") or {}).get("tick_s", 0.05))
+        return [(short_state(av_stack, ctx, profile, tick), questions)]
     if context != "digest":
         raise ValueError(f"judge context must be one of {CONTEXTS}, not {context!r}")
     st = cfg.get("state") or {}

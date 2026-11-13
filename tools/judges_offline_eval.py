@@ -75,7 +75,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="ask only this many runs (round-robin over fault modes)")
     ap.add_argument("--parallel", type=int, help="concurrent requests (default: backend 'parallel' or 1)")
     ap.add_argument("--analyse-only", action="store_true")
-    ap.add_argument("--context", choices=J.CONTEXTS, help="judge state: full (code excerpts) | digest (engine/code_facts.py); "
+    ap.add_argument("--context", choices=J.CONTEXTS, help="judge state: full (code excerpts) | digest | short (engine/code_facts.py); "
                                                           "default judges.yaml context")
     ap.add_argument("--fewshot", choices=("on", "off"), help="digest only: add the synthetic worked examples "
                                                              "(05b_judges/fewshot.yaml); default judges.yaml fewshot")

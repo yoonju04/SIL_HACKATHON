@@ -1,4 +1,4 @@
-"""Deterministic 'code facts' digest for the 05b judges (laya-judge, --judge-context digest).
+"""Deterministic 'code facts' for the 05b judges (laya-judge): --judge-context digest and short.
 
 A short judge has trouble finding the 5 lines that decide a question inside ~1k tokens of code repeated for 25 judges.
 This module reads the av_stack source with `ast` (nothing is hard-coded that the code or the profile defines) and
@@ -6,9 +6,9 @@ renders, per topic, a few factual lines: thresholds and check order of the super
 mode rewrites MPCOutput, the order of calls in one supervised tick, the LQR takeover rate limit and what it is anchored
 on, and every assignment of the controller latch.
 
-Independence rule (docs/JUDGES.md): a digest states what the code does, never what follows for this scenario. It
-never names an answer option, never compares a fault parameter with a threshold, and never sees a run record
-(the builder takes only the scenario inputs ctx and the av_stack path). tests/test_code_facts.py checks all three.
+Independence rule (docs/JUDGES.md): a digest or short state states what the code does, never what follows for this
+scenario. It never names an answer option, never compares a fault parameter with a threshold, and never sees a run
+record (the builder takes only the scenario inputs ctx and the av_stack path). tests/test_code_facts.py checks this.
 
 Topics (judges.yaml state.digest.topics maps each question id to a list of them):
   supervisor  check order + conditions of MPCSupervisor.inspect with the profile's values substituted, MPC rate limit
@@ -331,3 +331,291 @@ def digest(av: Path, ctx: dict, topics: list[str], tick_s: float = 0.05) -> str:
             lines = [f"(source not available: {type(e).__name__})"]
         parts.append(f"[facts.{t}]\n" + "\n".join(lines))
     return "\n".join(parts)
+
+
+# ---------------------------------------------------------------- short context (--judge-context short)
+# One compact state shared by every question in the request (same as full; unlike digest). Values come from the
+# av_stack source and the supervisor profile (ast); the text only restates code facts, never a conclusion for this
+# scenario. Section labels [code.supervisor] / [code.fault_injection] / [code.switch] match the compact state's
+# views so focus variants keep pointing at a real section.
+_TINY = re.compile(r"\s*\+\s*1e-[0-9]+")
+_SELF = re.compile(r"\b(?:self|output|cfg|config)\.")
+
+
+def inspect_checks(av: Path, ctx: dict) -> list[tuple[str, str]]:
+    """Ordered (reason, condition) of MPCSupervisor.inspect. A disabled profile check still appears, with a
+    '(check disabled in this profile: <field> is None)' condition so every fault mode sees every check."""
+    name = ctx.get("supervisor") or "tight"
+    prof = supervisor_profile(av, name)
+    insp = _method(_class(_tree(str(av / SUP)), "MPCSupervisor"), "inspect")
+    if insp is None:
+        return []
+    subst = {f"cfg.{k}": _fmt(v) for k, v in prof.items()}
+
+    def sub(s: str) -> str:
+        for k, v in sorted(subst.items(), key=lambda kv: -len(kv[0])):
+            s = s.replace(k, v)
+        return s
+
+    def clean(cond: str) -> str:
+        return re.sub(r"\b[0-9.e+-]+ is not None and ", "", cond)
+
+    none_fields = [k for k, v in prof.items() if v is None]
+    checks: list[tuple[str, str]] = []
+
+    def walk(body: list[ast.stmt], guard: list[str], raw_guard: str = "") -> None:
+        for st in body:
+            if isinstance(st, ast.If):
+                ret = next((s for s in st.body if isinstance(s, ast.Return) and isinstance(_const(s.value), str)), None)
+                raw = raw_guard + " " + _src(st.test)
+                cond = clean(sub(_src(st.test)))
+                if ret is not None:
+                    off = [f for f in none_fields if f"cfg.{f} is not None" in raw]
+                    checks.append((str(_const(ret.value)), " and ".join(guard + [cond]) if not off else
+                                   f"(check disabled in this profile: {off[0]} is None)"))
+                walk([s for s in st.body if not isinstance(s, ast.Return)], guard + [cond], raw)
+                walk(st.orelse, guard + [f"not ({cond})"], raw_guard)
+    walk(insp.body, [])
+    return checks
+
+
+def _deadline_ms(av: Path, tick_s: float) -> float:
+    """deadline_ms passed to MPCSupervisor in SupervisedLateral.__init__ (dt * 1000 -> tick_s * 1000)."""
+    init = _method(_class(_tree(str(av / SUP)), "SupervisedLateral"), "__init__")
+    for n in ast.walk(init) if init else []:
+        if isinstance(n, ast.Call) and _src(n.func).endswith("MPCSupervisor"):
+            for kw in n.keywords:
+                if kw.arg == "deadline_ms":
+                    expr = _src(kw.value)
+                    if expr in ("dt * 1000", "1000 * dt"):
+                        return tick_s * 1000.0
+                    v = _const(kw.value)
+                    if isinstance(v, (int, float)):
+                        return float(v)
+    insp_init = _method(_class(_tree(str(av / SUP)), "MPCSupervisor"), "__init__")
+    if insp_init:
+        for a, d in zip(reversed(insp_init.args.args), reversed(insp_init.args.defaults)):
+            if a.arg == "deadline_ms":
+                v = _const(d)
+                if isinstance(v, (int, float)):
+                    return float(v)
+    return tick_s * 1000.0
+
+
+def _literal_compare(av: Path, reason: str) -> float | None:
+    """Numeric threshold compared in the inspect branch that returns `reason` (e.g. stale_output's 0.1 s)."""
+    insp = _method(_class(_tree(str(av / SUP)), "MPCSupervisor"), "inspect")
+    for st in ast.walk(insp) if insp else []:
+        if isinstance(st, ast.If):
+            ret = next((s for s in st.body if isinstance(s, ast.Return) and _const(s.value) == reason), None)
+            if ret is None:
+                continue
+            nums = [n.value for n in ast.walk(st.test) if isinstance(n, ast.Constant) and isinstance(n.value, (int, float))]
+            # skip tiny numeric tolerances (1e-6, 1e-9)
+            nums = [x for x in nums if abs(x) >= 1e-4]
+            if nums:
+                return float(nums[-1])
+    return None
+
+
+def _tidy(s: str) -> str:
+    s = _TINY.sub("", s)
+    s = _SELF.sub("", s)
+    s = s.replace("math.", "").replace("np.", "")
+    s = re.sub(r"\bfloat\(([^)]+)\)", r"\1", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _short_check_phrase(reason: str, cond: str, prof: dict, tick_s: float, deadline_ms: float,
+                        stale_s: float | None) -> str:
+    if "check disabled" in cond:
+        return f"{reason}: disabled in this profile ({cond[1:-1] if cond.startswith('(') else cond})"
+    rate = prof.get("max_steer_rate_dps")
+    if reason == "solver_failure":
+        return f"{reason}: not ok"
+    if reason == "missing_steer":
+        return f"{reason}: steer None"
+    if reason == "nonfinite_output":
+        return f"{reason}: any of steer, s, kappa, stamp, state not finite"
+    if reason == "steer_out_of_range":
+        return f"{reason}: |steer| > max_steer"
+    if reason == "deadline_miss":
+        return f"{reason}: elapsed > {deadline_ms:g} ms"
+    if reason == "stale_output":
+        return f"{reason}: |t - stamp| > {stale_s if stale_s is not None else 0.1:g}"
+    if reason == "stale_sequence":
+        return f"{reason}: seq <= last"
+    if reason == "steer_rate_exceeded" and isinstance(rate, (int, float)):
+        per = math.radians(rate) * tick_s
+        return (f"{reason}: |steer - last_steer| / dt > {rate:g} deg/s "
+                f"(= {rate * tick_s:g} deg / {per:.4f} rad per tick)")
+    if reason == "tracking_divergence":
+        ey, ep, hold = prof.get("max_lateral_error_m"), prof.get("max_heading_error_rad"), prof.get("divergence_hold_s")
+        return (f"{reason}: |e_y| > {_fmt(ey)} m or |e_psi| > {_fmt(ep)} rad held {_fmt(hold)} s; "
+                "one good tick resets the timer")
+    return f"{reason}: {_tidy(cond)}"
+
+
+def _unchanged_fields(fields: list[str]) -> str:
+    """Compact 'seq, stamp, ok, state unchanged', omitting any field the helper/lambda replaces."""
+    replaced = {("stamp" if f == "stamp_s" else f) for f in fields}
+    keep = [f for f in ("seq", "stamp", "ok", "state") if f not in replaced]
+    return ("; " + ", ".join(keep) + " unchanged") if keep else ""
+
+
+def _shift_offset(lam: str | None) -> str:
+    """Second argument of `_shift(value, ...)` in the mode's apply lambda, tidied."""
+    if not lam:
+        return "magnitude"
+    m = re.search(r"_shift\([^,]+,\s*(.+)\)\s*$", _tidy(lam))
+    return m.group(1) if m else "magnitude"
+
+
+def _short_fault_line(av: Path, ctx: dict) -> str:
+    mode = str(ctx.get("fault_mode") or "none")
+    lam = _fault_lambda(av, mode)
+    tree = _tree(str(av / FAULT))
+    cls = _class(tree, "MPCFaultInjector")
+    helper = _method(cls, HELPERS.get(mode, "")) if mode in HELPERS else None
+    fields: list[str] = []
+    bits: list[str] = []
+    if helper is not None:
+        fields = _replaced_fields(helper)
+        if helper.name == "_shift":
+            bits.append(f"steer = mpc_steer + {_shift_offset(lam)}")
+        elif helper.name == "_intermittent":
+            bits.append("on_s / off_s cycle from at_s: during on, steer = mpc_steer + magnitude; during off, unchanged")
+            fields = _replaced_fields(_method(cls, "_shift") or helper)
+        elif helper.name == "_saturate":
+            bits.append("steer goes to sign(magnitude) * level * max_steer, blending over ramp_s (0 = step)")
+        elif helper.name == "_delayed":
+            bits.append("steer, state, s, kappa taken from the command computed magnitude ticks ago; stamp and seq stay the current values")
+            fields = []  # the sentence already names replaced vs kept fields
+        else:
+            bits.append(_tidy(lam or " ; ".join(_tidy(ln) for ln in _body_lines(helper))))
+    elif lam:
+        fields = _replaced_fields(ast.parse(lam))
+        if mode == "solver_fail":
+            bits.append("ok = False, steer = None")
+        elif mode == "stale":
+            bits.append("return the last output from outside the window (whole MPCOutput, seq and stamp included); if none, stamp = t-1")
+            fields = []
+        else:
+            bits.append(_tidy(lam))
+    else:
+        bits.append(f"apply has no entry for {mode}")
+    if fields:
+        bits[-1] = bits[-1] + _unchanged_fields(fields)
+    act = _method(_class(tree, "FaultConfig"), "active")
+    window = "inside the fault window"
+    if act is not None:
+        ret = next((s for s in act.body if isinstance(s, ast.Return)), None)
+        if ret is not None:
+            window = "inside at_s <= t < at_s + duration_s:"
+    return "fault code: " + window + " " + "; ".join(bits)
+
+
+def _deg(v: float) -> str:
+    return f"{math.degrees(float(v)):.1f} deg"
+
+
+def _short_scenario(ctx: dict, tick_s: float) -> str:
+    mode = str(ctx.get("fault_mode") or "none")
+    p = dict(ctx.get("fault_params") or {})
+    onset = ctx.get("onset_event") or ""
+    parts = [mode]
+    if "magnitude_rad" in p and isinstance(p["magnitude_rad"], (int, float)):
+        parts.append(f"+{p['magnitude_rad']:g} rad ({_deg(p['magnitude_rad'])})")
+    elif "rate_rad_s" in p and isinstance(p["rate_rad_s"], (int, float)):
+        parts.append(f"+{p['rate_rad_s']:g} rad/s")
+    if "on_s" in p or "off_s" in p:
+        parts.append(f"on {_fmt(p.get('on_s'))} s / off {_fmt(p.get('off_s'))} s")
+    if mode == "saturate":
+        extra = []
+        if "side" in p:
+            extra.append(f"side {p['side']}")
+        if "magnitude" in p:
+            extra.append(f"magnitude {p['magnitude']:g}")
+        if "level" in p:
+            extra.append(f"level {p['level']:g}")
+        if "ramp_s" in p:
+            extra.append(f"ramp {_fmt(p['ramp_s'])} s")
+        if "duration_s" in p:
+            extra.append(f"duration {_fmt(p['duration_s'])} s")
+        parts.extend(extra)
+    if "delay_ticks" in p:
+        parts.append(f"{p['delay_ticks']} ticks")
+    where = "on MPC output" if mode in ("solver_fail", "stale") else "on MPC steer"
+    line = "fault: " + " ".join(str(x) for x in parts) + f" {where}"
+    if onset:
+        line += f", onset {onset}"
+    line += f", tick {tick_s:g} s"
+    return line
+
+
+def _takeover_rate_dps(av: Path) -> float | None:
+    init = _method(_class(_tree(str(av / SUP)), "SupervisedLateral"), "__init__")
+    for n in ast.walk(init) if init else []:
+        if isinstance(n, ast.Assign) and _src(n.targets[0]) == "self.rate_dps":
+            v = _const(n.value)
+            return float(v) if isinstance(v, (int, float)) else None
+    return None
+
+
+def _active_assignments(av: Path) -> list[tuple[str, str]]:
+    """(method, rhs) for every `self.active = ...` in SupervisedLateral."""
+    cls = _class(_tree(str(av / SUP)), "SupervisedLateral")
+    out = []
+    for fn in (cls.body if cls else []):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        for n in ast.walk(fn):
+            if isinstance(n, ast.Assign) and any(_src(t) == "self.active" for t in n.targets):
+                out.append((fn.name, _src(n.value)))
+    return out
+
+
+def _short_switch(av: Path, tick_s: float) -> str:
+    rate = _takeover_rate_dps(av)
+    rate_s = f"{rate:g} deg/s * dt" if rate is not None else "rate_dps * dt"
+    assigns = _active_assignments(av)
+    back = [f"{m}: active = {v}" for m, v in assigns if m != "__init__" and v in ("'mpc'", '"mpc"')]
+    latch = "never assigned back to mpc" if not back else "also assigned back to mpc in " + ", ".join(back)
+    extras = [v for m, v in assigns if m != "__init__" and v not in ("'lqr'", '"lqr"', "'mpc'", '"mpc"')]
+    extra = ("; if LQR invalid: active = " + str(extras[0]).strip(chr(39)+chr(34))) if extras else ""
+    return ("tick loop: if active == mpc: out = mpc(); out = inject(out); reason = inspect(out); "
+            f"if reason: active = lqr ({latch}{extra}); "
+            f"if active == lqr: steer = clip(lqr_steer, last_applied ± {rate_s})")
+
+
+def short(av: Path, ctx: dict, tick_s: float = 0.05) -> str:
+    """One short factual state for every question of a scenario (~1k characters). `ctx` is judge scenario inputs
+    only (fault_mode, fault_params, onset_event, supervisor); never a run record."""
+    av = Path(av)
+    name = ctx.get("supervisor") or "tight"
+    prof = supervisor_profile(av, name)
+    try:
+        checks = inspect_checks(av, ctx)
+        deadline = _deadline_ms(av, tick_s)
+        stale = _literal_compare(av, "stale_output")
+        phrases = [_short_check_phrase(r, c, prof, tick_s, deadline, stale) for r, c in checks]
+        # first seven checks on one line, rate + tracking on their own (they carry numbers)
+        head, tail = [], []
+        for ph in phrases:
+            name_r = ph.split(":", 1)[0]
+            if name_r in ("steer_rate_exceeded", "tracking_divergence"):
+                tail.append(ph)
+            else:
+                head.append(ph)
+        sup_lines = ["supervisor checks per MPC tick, first match switches to LQR:"]
+        if head:
+            sup_lines.append(" " + " | ".join(head))
+        sup_lines += [" " + t for t in tail]
+        fault = _short_fault_line(av, ctx)
+        switch = _short_switch(av, tick_s)
+        scen = _short_scenario(ctx, tick_s)
+    except (OSError, SyntaxError) as e:
+        return f"[scenario]\n(source not available: {type(e).__name__})"
+    return "\n".join(["[scenario]", scen, "[code.supervisor]", *sup_lines,
+                      "[code.fault_injection]", fault, "[code.switch]", switch])

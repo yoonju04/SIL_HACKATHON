@@ -185,3 +185,32 @@ splits, J7's LOMO accuracy falls from 0.757 to the training majority 0.622, and 
 accuracy cannot change, and with the regression on top Laya only reaches the LOMO majority (0.50 for J1 and J4). A
 soft-target fine-tune recipe (`tools/laya_finetune_data.py` plus `laya-train --loss soft-ce`) is set up; it needs a GPU or a
 long CPU run, and it has not been evaluated.
+
+## 2026-11-13: `--judge-context short` 와 `--judge-variants lite`
+
+Laya(multilingual, mmBERT 인코더)는 질문마다 state 전체를 다시 인코딩합니다. compact `full` state는 약 2,800–3,300자고, 질문 22~25개에 반복되면 고장 모드당 약 7.1만–9.4만 자(실측 Laya 토크나이저 2.8만–3.8만 토큰)가 됩니다. 기존 `--judge-context digest`는 요청을 주제별로 나눌 뿐 크게 줄이지 못합니다.
+
+두 옵션을 추가했습니다. **기본값은 그대로** `full` context, `full` variants 입니다.
+
+| 플래그 | 기본 | 효과 |
+|---|---|---|
+| `--judge-context short` | `full` | `engine/code_facts.py`가 av_stack 소스를 ast로 읽어 약 1,000자짜리 state를 **한 요청**으로 만듭니다. 섹션 이름은 compact와 같이 `[code.supervisor]` / `[code.fault_injection]` / `[code.switch]`라서 focus 변형(`focus_supervisor` 등)은 그대로 그 구역을 가리킵니다. digest처럼 `facts.*`로 바꾸지 않습니다. |
+| `--judge-variants lite` | `full` | `judges.yaml`의 `judges_lite:` — J1, J3, J4, J7, J2, J5, J6 각각 `en_notes` 하나. J8·J9(보고 전용)는 빠집니다. J3는 기존처럼 `applies_to`(intermittent_bias, saturate)일 때만 물어 6 또는 7개입니다. |
+
+**독립성 규칙:** short state는 코드가 하는 일만 짧게 다시 적습니다. 감독기 검사 9개는 고장 모드와 관계없이 모두 남기고, "bias는 속도 검사에 안 걸린다" 같은 결론이나 보기 이름, `expected_from_code`, 실행 결과, GP 예측은 넣지 않습니다. 임계값·조건은 소스와 프로필에서 읽어 숫자로 대입합니다. 정확도가 이 형식에서 나아지는지는 **아직 측정하지 않았습니다.** J 회귀는 state 형식이 바뀌면 다시 맞춰야 하고, 라벨이 `min_labels`(8)보다 적으면 당분간 판정 평균으로 갑니다. lite에서는 변형이 하나라 압축 입력의 변형 표준편차와 정·역순 차이가 0이 되며, `drop_constant`가 GP 열에서 상수를 빼 줍니다. J8·J9가 없어도 보고·GP 입력은 깨지지 않습니다.
+
+**실측** (tight 감독기, 30 km/h, `curve_entry`; 문자 수 = state + 질문 지시문·보기를 질문마다 합산. 대략 토큰 = 문자/4. 괄호는 캐시된 Laya multilingual 토크나이저, 다운로드 없음).
+
+| 고장 모드 | full state | short state | 질문 수 full | 질문 수 lite | full+full 변형 | digest | short+full 변형 | short+lite |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| solver_fail | 2,768 | 995 | 22 | 6 | 70,911 (28,320 tok) | 57,476 (19,511) | 31,905 (10,192) | 8,742 (2,752) |
+| stale | 2,761 | 1,046 | 22 | 6 | 70,757 (28,298) | 59,584 (19,927) | 33,027 (10,412) | 9,048 (2,812) |
+| bias | 2,936 | 1,018 | 22 | 6 | 74,607 (29,794) | 61,592 (20,973) | 32,411 (10,522) | 8,880 (2,842) |
+| drift | 2,938 | 1,024 | 22 | 6 | 74,651 (29,838) | 61,544 (21,035) | 32,543 (10,588) | 8,916 (2,860) |
+| intermittent_bias | 3,106 | 1,122 | 25 | 7 | 89,572 (36,015) | 74,569 (26,346) | 39,972 (13,065) | 11,258 (3,633) |
+| saturate | 3,301 | 1,110 | 25 | 7 | 94,447 (37,690) | 82,315 (28,250) | 39,672 (12,615) | 11,174 (3,507) |
+| output_delay | 3,043 | 1,063 | 22 | 6 | 76,961 (31,004) | 64,650 (22,085) | 33,401 (10,456) | 9,150 (2,824) |
+
+short+lite는 문자 기준으로 원래의 약 12%, Laya 토큰 기준으로 약 9–10%입니다. short만 쓰고 변형을 그대로 두면 약 35–45%(토큰)입니다. digest는 그 사이입니다.
+
+**EN.** New opt-in flags (defaults unchanged): `--judge-context short` builds one ~1,000-character state from the av_stack source via ast (`engine/code_facts.short`) and sends it in a single request, keeping the compact `[code.supervisor]` / `[code.fault_injection]` / `[code.switch]` labels so focus variants still point at a real section (unlike digest, which rewrites focus to `facts.*`). `--judge-variants lite` uses `judges_lite:` (one `en_notes` each for J1, J3, J4, J7, J2, J5, J6; J8 / J9 omitted; J3 only when `applies_to` matches). The short state restates every supervisor check for every fault mode and never carries conclusions, answer-option names, `expected_from_code`, run outcomes or GP predictions. Accuracy on this format is unverified; the J regression should be refit (it falls back to the judge mean until `min_labels`). With lite, compressed-input std and forward/reverse gap are identically 0 and `drop_constant` drops constant GP columns; reports and GP features work without J8 / J9. The table above is tight / 30 km/h / `curve_entry`; characters sum state + question text over questions; token counts are the cached Laya multilingual tokenizer (no download). `chars/4` is a rough overestimate relative to that tokenizer.

@@ -175,6 +175,7 @@ class Loop:
                  quiet: bool = False, no_reaction: bool | None = None, gp_history: list[str] | None = None,
                  supervisor: str | None = None, gp_target: str | None = None, judge_b: str | None = None,
                  judge_context: str | None = None, judge_fewshot: bool | None = None,
+                 judge_variants: str | None = None,
                  rare_type_picks: int | None = None, judge_regression_inputs: str | None = None,
                  judge_regression_model: str | None = None, rare_type_mode: str | None = None,
                  proposer: str | None = None, proposer_model: str | None = None,
@@ -246,8 +247,8 @@ class Loop:
         self.judge_b = str(judge_b or self.cfg["orchestrator"].get("judge_b") or "laya")
         self.judge_model = judge_model
         self.vision_backend = resolve_vision_backend(self.cfg["llm"], vision_backend, self.llm_provider, mode=mode)
-        self._judge_context, self._judge_fewshot = judge_context, judge_fewshot
-        self.judge_context, self.judge_fewshot = "full", False
+        self._judge_context, self._judge_fewshot, self._judge_variants = judge_context, judge_fewshot, judge_variants
+        self.judge_context, self.judge_fewshot, self.judge_variants = "full", False, "full"
         if self.judge_b not in (*JDG.BACKENDS, "nemotron_b"):
             raise SystemExit(f"--judge-b must be laya, jev, nemotron, gpt or nemotron_b, not {self.judge_b!r}")
         # integration3 #6: yes/no as strings, scope (per_scenario | static) and gp_feature defaults
@@ -352,15 +353,20 @@ class Loop:
         self.b_settings = role_settings(llm_cfg, "B")
         if self.judge_b in JDG.BACKENDS:
             jc = self.cfg["judges"]
-            # laya-judge: --judge-context full (code excerpts, default) | digest (engine/code_facts.py facts per question)
+            # laya-judge: --judge-context full (code excerpts, default) | digest | short (engine/code_facts.py)
             self.judge_context = str(self._judge_context or jc.get("context") or "full")
             if self.judge_context not in JDG.CONTEXTS:
                 raise SystemExit(f"--judge-context must be one of {JDG.CONTEXTS}, not {self.judge_context!r}")
             self.judge_fewshot = bool(jc.get("fewshot", False) if self._judge_fewshot is None else self._judge_fewshot)
             if self.judge_fewshot and self.judge_context != "digest":
                 raise SystemExit("--judge-fewshot on needs --judge-context digest")
+            self.judge_variants = str(self._judge_variants or jc.get("variant_set") or "full")
+            if self.judge_variants not in JDG.VARIANT_SETS:
+                raise SystemExit(f"--judge-variants must be one of {JDG.VARIANT_SETS}, not {self.judge_variants!r}")
+            self.jev_judges = JDG.judges_map(jc, self.judge_variants)
             self.jev_questions, self.jev_meta = JDG.judge_questions(self.questions, jc, JDG.state_views(jc, self.judge_b),
-                                                                    context=self.judge_context)
+                                                                    context=self.judge_context,
+                                                                    variant_set=self.judge_variants)
             try:
                 self.jev_client, self.jev_backend = JDG.make_client(
                     self.judge_b, jc, self.mode, self.questions, self.jev_meta,
@@ -826,7 +832,7 @@ class Loop:
                 self.jev_raw[k] = {"parsed": JDG.parse_answers(resp, self.jev_meta), "context": todo[k],
                                    "model": resp.get("model"), "usage": resp.get("usage")}
         qs = {q["id"]: q for q in self.questions}
-        variants_of = {qid: list(v) for qid, v in jc["judges"].items()}
+        variants_of = {qid: list(v) for qid, v in self.jev_judges.items()}
         options_of = {qid: [str(o) for o in qs[qid]["answer"]] for qid in variants_of}
         report_only = {qid for qid in variants_of if qs[qid].get("regress") is False}
         sources = {qid: qs[qid].get("label_source", "code") for qid in variants_of}
@@ -1514,6 +1520,7 @@ class Loop:
                                                         "client": self.jev_backend,
                                                         "judges_per_state": len(self.jev_questions),
                                                         "context": self.judge_context, "fewshot": self.judge_fewshot,
+                                                        "variants": self.judge_variants,
                                                         "regression": {k: (self.cfg["judges"].get("regression") or {}).get(k)
                                                                        for k in ("inputs", "model", "ordinal")}}
                                                        if self.judge_b in JDG.BACKENDS else None),
@@ -2168,9 +2175,15 @@ def main(argv: list[str] | None = None) -> int:
                          "--mock, or (laya/jev/nemotron with no server/key) -> deterministic SYNTHETIC stub")
     ap.add_argument("--judge-model",
                     help="model id for --judge-b gpt (default gpt-4o; overridable by OPENAI_B_MODEL_ID)")
-    ap.add_argument("--judge-context", choices=("full", "digest"),
+    ap.add_argument("--judge-context", choices=("full", "digest", "short"),
                     help="05b judge state (laya / jev / nemotron): full = code excerpts (default, judges.yaml context); "
-                         "digest = short rule-based code-facts digest per question (engine/code_facts.py), no code")
+                         "digest = rule-based code-facts digest per question-group (engine/code_facts.py), no code; "
+                         "short = one compact ~1k-char restatement of the supervisor / fault / switch facts, "
+                         "shared by every question in a single request")
+    ap.add_argument("--judge-variants", choices=("full", "lite"),
+                    help="05b judge variant set (default full = judges.yaml judges, 22-25 questions). "
+                         "lite = judges_lite: one en_notes variant each of J1, J3, J4, J7, J2, J5, J6 (J8 and J9 "
+                         "excluded; J3 only when applies_to matches)")
     ap.add_argument("--judge-fewshot", choices=("on", "off"),
                     help="with --judge-context digest: add 2 worked examples per code question from synthetic fault "
                          "modes (05b_judges/fewshot.yaml); default judges.yaml fewshot (off)")
@@ -2228,6 +2241,7 @@ def main(argv: list[str] | None = None) -> int:
                 gp_history=args.gp_history, supervisor=args.supervisor, gp_target=args.gp_target,
                 judge_b=args.judge_b, judge_context=args.judge_context,
                 judge_fewshot=None if args.judge_fewshot is None else args.judge_fewshot == "on",
+                judge_variants=args.judge_variants,
                 rare_type_picks=args.rare_type_picks, judge_regression_inputs=args.judge_regression_inputs,
                 judge_regression_model=args.judge_regression_model, rare_type_mode=args.rare_type_mode,
                 proposer=args.proposer, proposer_model=args.proposer_model,
