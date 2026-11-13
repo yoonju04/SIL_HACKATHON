@@ -222,7 +222,7 @@ def extract_clip(run_dir: Path, out_dir: Path, *, anchor_s: float, front_frames:
     # (10 fps dense windows around several events). Consecutive indices become one between(), and the terms are
     # split into chunks of SELECT_CHUNK, one ffmpeg call each; chunk files sort in index order (g000_0001, ...).
     for gi, terms in enumerate(_select_chunks(idx, SELECT_CHUNK)):
-        subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(src), "-vf", f"select='{'+'.join(terms)}'", "-vsync", "0",
+        subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(src), "-vf", f"select='{'+'.join(terms)}'", "-fps_mode", "passthrough",   # -vsync was removed in ffmpeg 8+
                         str(tmp / f"f_g{gi:03d}_%04d.png")], check=True)
     frames = sorted(tmp.glob("f_*.png"))
     ftimes = [round(times[i], 3) for i in idx][: len(frames)]

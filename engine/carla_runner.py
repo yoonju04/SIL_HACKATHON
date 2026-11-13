@@ -183,6 +183,10 @@ class CarlaRunner(BaseRunner):
         log = out.parent / (out.name + ".log")
         t0 = time.time()
         env = dict(os.environ)
+        # Windows: stdout redirected to a file defaults to the locale codepage (cp949), which
+        # can't encode the leaderboard's box-drawing result table -> UnicodeEncodeError -> Invalid results
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
         with log.open("w", encoding="utf-8") as fh:
             try:
                 proc = subprocess.run(cmd, cwd=str(self.av_stack), stdout=fh, stderr=subprocess.STDOUT,
